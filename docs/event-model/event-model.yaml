@@ -1,0 +1,126 @@
+# Event model for the shared expenses app - the source of truth.
+#
+# Render and validate with:
+#     .venv/bin/python docs/event-model/generate.py
+#
+# That writes happy-path.d2 (never edit it by hand) and prints a validation
+# report.  Given-when-then specifications live in slice-NN-*.md.
+
+meta:
+  diagram: happy-path
+  # Field lines are padded to this many columns.  Equal-length lines in a
+  # monospace font form a rectangle, and centring a rectangle leaves every line
+  # flush left - this padding is what left-aligns the field lists.
+  columns: 21
+  card: { width: 250, height: 160 }
+
+# ---------------------------------------------------------------- screens
+screens:
+  new-group:
+    title: New group
+    wireframe:
+      - "name      [........]"
+      - "currency  [ GBP  v ]"
+      - ""
+      - "  [ Create group ]"
+  group-setup: { title: Group setup }
+  sign-in:     { title: Sign in / claim }
+  add-expense: { title: Add expense }
+  balances:    { title: Balances }
+  settle-up:   { title: Settle up }
+
+# ---------------------------------------------------------------- commands
+commands:
+  CreateGroup:
+    fields:
+      name: string
+      currency: string
+      createdBy: Guid
+  AddMember: {}
+  InviteMember: {}
+  ClaimMember: {}
+  RecordExpense: {}
+  RecordSettlement: {}
+
+# ---------------------------------------------------------------- events
+events:
+  GroupCreated:
+    fields:
+      groupId: Guid
+      name: string
+      currency: string
+      createdBy: Guid
+  MemberAdded:
+    fields:
+      memberId: Guid
+      displayName: string
+  MemberInvited:
+    fields:
+      memberId: Guid
+      email: string
+  MemberClaimed:
+    fields:
+      memberId: Guid
+      userId: Guid
+  ExpenseRecorded: {}
+  SettlementRecorded: {}
+
+# ---------------------------------------------------------------- read models
+readModels:
+  GroupLedger:
+    fields:
+      members: "Member[]"
+      expenses: "Expense[]"
+      balances: long
+    from:
+      - GroupCreated
+      - MemberAdded
+      - MemberInvited
+      - MemberClaimed
+      - ExpenseRecorded
+      - SettlementRecorded      # emitted later than this slice: drawn dashed
+
+# ---------------------------------------------------------------- slices
+# Order is time order.  Each slice is exactly one pattern.  A command slice
+# emitting several events widens into that many columns.
+slices:
+  - name: Create group
+    pattern: command
+    screen: new-group
+    command: CreateGroup
+    emits: [GroupCreated, MemberAdded, MemberClaimed]
+
+  - name: Add a member
+    pattern: command
+    screen: group-setup
+    command: AddMember
+    emits: [MemberAdded]
+
+  - name: Invite a member
+    pattern: command
+    screen: group-setup
+    command: InviteMember
+    emits: [MemberInvited]
+
+  - name: Claim a slot
+    pattern: command
+    screen: sign-in
+    command: ClaimMember
+    emits: [MemberClaimed]
+
+  - name: Record an expense
+    pattern: command
+    screen: add-expense
+    command: RecordExpense
+    emits: [ExpenseRecorded]
+
+  - name: View balances
+    pattern: view
+    screen: balances
+    readModel: GroupLedger
+
+  - name: Settle up
+    pattern: command
+    screen: settle-up
+    command: RecordSettlement
+    emits: [SettlementRecorded]

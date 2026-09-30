@@ -1,83 +1,158 @@
-# Event model - happy path
-# Lanes: SCREENS / COMMANDS+READ MODELS / EVENT STREAM.  Time runs left to right.
-# Each column is one slice, and every slice is exactly one pattern:
-#   command slice = screen -> command -> event
-#   view slice    = events -> read model -> screen
+# GENERATED from event-model.yaml by generate.py - do not edit.
+#
+# Rows: 1 slice names, 2 SCREENS, 3 READ MODELS, 4 COMMANDS, 5 EVENT STREAM.
+# Read models sit by the screens they feed and commands by the events they emit,
+# so the arrow for either pattern is only ever one row long.
+# Column 1 holds lane labels, slices are separated by a 2px divider column, and
+# every other column is one event slot: time runs left to right.
+
+grid-rows: 5
+horizontal-gap: 22
+vertical-gap: 22
 
 classes: {
-  lane: {
-    style: { fill: "#f6f7f9"; stroke: "#d0d4db"; stroke-dash: 3; stroke-width: 1 }
-  }
   lanelabel: {
-    style: { fill: "#f6f7f9"; stroke-width: 0; font-color: "#6b7280"; bold: true }
+    width: 170; height: 160
+    style: { fill: transparent; stroke-width: 0; font-color: "#6b7280"; bold: true }
   }
-  spacer: { style: { opacity: 0 } }
+  slicename: {
+    width: 250; height: 50
+    style: { fill: transparent; stroke-width: 0; font-color: "#374151"; bold: true }
+  }
+  lgapN: { width: 170;    height: 50;  style: { opacity: 0 } }
+  gapN:  { width: 250; height: 50;  style: { opacity: 0 } }
+  divN:  { width: 2;      height: 50;  style: { fill: "#c9ced8"; stroke-width: 0 } }
+  div:   { width: 2;      height: 160; style: { fill: "#c9ced8"; stroke-width: 0 } }
+  gap:   { width: 250; height: 160; style: { opacity: 0 } }
   screen: {
-    style: { fill: "#fbfbfd"; stroke: "#8c93a0"; stroke-width: 2; border-radius: 6 }
+    width: 250; height: 160
+    style: { font: mono; font-size: 15; fill: "#fbfbfd"; stroke: "#8c93a0"; stroke-width: 2; border-radius: 6 }
   }
   command: {
-    style: { fill: "#4a90d9"; stroke: "#2b6cb0"; font-color: "#ffffff"; border-radius: 6 }
+    width: 250; height: 160
+    style: { font: mono; font-size: 15; fill: "#4a90d9"; stroke: "#2b6cb0"; font-color: "#ffffff"; border-radius: 6 }
   }
   event: {
-    style: { fill: "#f5a623"; stroke: "#c07d12"; font-color: "#1f1f1f"; border-radius: 6 }
+    width: 250; height: 160
+    style: { font: mono; font-size: 15; fill: "#f5a623"; stroke: "#c07d12"; font-color: "#1f1f1f"; border-radius: 6 }
   }
   view: {
-    style: { fill: "#54b054"; stroke: "#357935"; font-color: "#ffffff"; border-radius: 6 }
+    width: 250; height: 160
+    style: { font: mono; font-size: 15; fill: "#54b054"; stroke: "#357935"; font-color: "#ffffff"; border-radius: 6 }
   }
 }
 
-grid-rows: 3
-horizontal-gap: 24
-vertical-gap: 24
+# ===== row 1: slice names =====
+q0: "" { class: lgapN }
+n0: "1 - Create group                        " { class: slicename }
+gpN0_1: "" { class: gapN }
+gpN0_2: "" { class: gapN }
+dvN1: "" { class: divN }
+n1: "2 - Add a member                        " { class: slicename }
+dvN2: "" { class: divN }
+n2: "3 - Invite a member                     " { class: slicename }
+dvN3: "" { class: divN }
+n3: "4 - Claim a slot                        " { class: slicename }
+dvN4: "" { class: divN }
+n4: "5 - Record an expense                   " { class: slicename }
+dvN5: "" { class: divN }
+n5: "6 - View balances                       " { class: slicename }
+dvN6: "" { class: divN }
+n6: "7 - Settle up                           " { class: slicename }
 
-ui: "" { class: lane
-  grid-columns: 8
-  lbl: "SCREENS"            { class: lanelabel }
-  s1:  "New group"          { class: screen }
-  s2:  "Group setup"        { class: screen }
-  s3:  "Group setup"        { class: screen }
-  s4:  "Sign in / claim"    { class: screen }
-  s5:  "Add expense"        { class: screen }
-  s6:  "Balances"           { class: screen }
-  s7:  "Settle up"          { class: screen }
-}
+# ===== row 2: screens =====
+l2: "SCREENS" { class: lanelabel }
+s0: "New group            \n                     \nname      [........] \ncurrency  [ GBP  v ] \n                     \n  [ Create group ]   " { class: screen }
+gp2_0_1: "" { class: gap }
+gp2_0_2: "" { class: gap }
+dv2_1: "" { class: div }
+s1: "Group setup          \n                     \n                     \n                     \n                     \n                     " { class: screen }
+dv2_2: "" { class: div }
+s2: "Group setup          \n                     \n                     \n                     \n                     \n                     " { class: screen }
+dv2_3: "" { class: div }
+s3: "Sign in / claim      \n                     \n                     \n                     \n                     \n                     " { class: screen }
+dv2_4: "" { class: div }
+s4: "Add expense          \n                     \n                     \n                     \n                     \n                     " { class: screen }
+dv2_5: "" { class: div }
+s5: "Balances             \n                     \n                     \n                     \n                     \n                     " { class: screen }
+dv2_6: "" { class: div }
+s6: "Settle up            \n                     \n                     \n                     \n                     \n                     " { class: screen }
 
-mid: "" { class: lane
-  grid-columns: 8
-  lbl: "COMMANDS\n/ READ MODELS" { class: lanelabel }
-  c1:  "CreateGroup"        { class: command }
-  c2:  "AddMember"          { class: command }
-  c3:  "InviteMember"       { class: command }
-  c4:  "ClaimMember"        { class: command }
-  c5:  "RecordExpense"      { class: command }
-  v6:  "GroupLedger"        { class: view }
-  c7:  "RecordSettlement"   { class: command }
-}
+# ===== row 3: read models =====
+l3: "READ MODELS" { class: lanelabel }
+gp3_0: "" { class: gap }
+gp3_0_1: "" { class: gap }
+gp3_0_2: "" { class: gap }
+dv3_1: "" { class: div }
+gp3_1: "" { class: gap }
+dv3_2: "" { class: div }
+gp3_2: "" { class: gap }
+dv3_3: "" { class: div }
+gp3_3: "" { class: gap }
+dv3_4: "" { class: div }
+gp3_4: "" { class: gap }
+dv3_5: "" { class: div }
+rm5: "GroupLedger          \n                     \n- members: Member[]  \n- expenses: Expense[]\n- balances: long     \n                     " { class: view }
+dv3_6: "" { class: div }
+gp3_6: "" { class: gap }
 
-stream: "" { class: lane
-  grid-columns: 8
-  lbl: "EVENT STREAM"       { class: lanelabel }
-  e1:  "GroupCreated"       { class: event }
-  e2:  "MemberAdded"        { class: event }
-  e3:  "MemberInvited"      { class: event }
-  e4:  "MemberClaimed"      { class: event }
-  e5:  "ExpenseRecorded"    { class: event }
-  x6:  ""                   { class: spacer }
-  e7:  "SettlementRecorded" { class: event }
-}
+# ===== row 4: commands =====
+l4: "COMMANDS" { class: lanelabel }
+c0: "CreateGroup          \n                     \n- name: string       \n- currency: string   \n- createdBy: Guid    \n                     " { class: command }
+gp4_0_1: "" { class: gap }
+gp4_0_2: "" { class: gap }
+dv4_1: "" { class: div }
+c1: "AddMember            \n                     \n                     \n                     \n                     \n                     " { class: command }
+dv4_2: "" { class: div }
+c2: "InviteMember         \n                     \n                     \n                     \n                     \n                     " { class: command }
+dv4_3: "" { class: div }
+c3: "ClaimMember          \n                     \n                     \n                     \n                     \n                     " { class: command }
+dv4_4: "" { class: div }
+c4: "RecordExpense        \n                     \n                     \n                     \n                     \n                     " { class: command }
+dv4_5: "" { class: div }
+gp4_5: "" { class: gap }
+dv4_6: "" { class: div }
+c6: "RecordSettlement     \n                     \n                     \n                     \n                     \n                     " { class: command }
 
-# --- command slices: screen -> command -> event
-ui.s1 -> mid.c1 -> stream.e1
-ui.s2 -> mid.c2 -> stream.e2
-ui.s3 -> mid.c3 -> stream.e3
-ui.s4 -> mid.c4 -> stream.e4
-ui.s5 -> mid.c5 -> stream.e5
-ui.s7 -> mid.c7 -> stream.e7
+# ===== row 5: event stream =====
+l5: "EVENT STREAM" { class: lanelabel }
+e0_0: "GroupCreated         \n                     \n- groupId: Guid      \n- name: string       \n- currency: string   \n- createdBy: Guid    " { class: event }
+e0_1: "MemberAdded          \n                     \n- memberId: Guid     \n- displayName: string\n                     \n                     " { class: event }
+e0_2: "MemberClaimed        \n                     \n- memberId: Guid     \n- userId: Guid       \n                     \n                     " { class: event }
+dv5_1: "" { class: div }
+e1_0: "MemberAdded          \n                     \n- memberId: Guid     \n- displayName: string\n                     \n                     " { class: event }
+dv5_2: "" { class: div }
+e2_0: "MemberInvited        \n                     \n- memberId: Guid     \n- email: string      \n                     \n                     " { class: event }
+dv5_3: "" { class: div }
+e3_0: "MemberClaimed        \n                     \n- memberId: Guid     \n- userId: Guid       \n                     \n                     " { class: event }
+dv5_4: "" { class: div }
+e4_0: "ExpenseRecorded      \n                     \n                     \n                     \n                     \n                     " { class: event }
+dv5_5: "" { class: div }
+gp5_5: "" { class: gap }
+dv5_6: "" { class: div }
+e6_0: "SettlementRecorded   \n                     \n                     \n                     \n                     \n                     " { class: event }
 
-# --- view slice: events -> read model -> screen
-stream.e1 -> mid.v6
-stream.e2 -> mid.v6
-stream.e4 -> mid.v6
-stream.e5 -> mid.v6
-stream.e7 -> mid.v6: "loops back" { style.stroke-dash: 4 }
-mid.v6 -> ui.s6
+# --- command slices: screen -> command -> event(s)
+s0 -> c0
+c0 -> e0_0
+c0 -> e0_1
+c0 -> e0_2
+s1 -> c1
+c1 -> e1_0
+s2 -> c2
+c2 -> e2_0
+s3 -> c3
+c3 -> e3_0
+s4 -> c4
+c4 -> e4_0
+s6 -> c6
+c6 -> e6_0
+
+# --- view slices: events -> read model -> screen
+e0_0 -> rm5
+e1_0 -> rm5
+e2_0 -> rm5
+e3_0 -> rm5
+e4_0 -> rm5
+e6_0 -> rm5: "loops back" { style.stroke-dash: 4 }
+rm5 -> s5

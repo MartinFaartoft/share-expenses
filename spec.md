@@ -520,6 +520,29 @@ MemberRenamed(memberId, displayName, by)
 MemberRemoved(memberId, by)
 ```
 
+**Decision: `CreateGroup` emits three events** — `GroupCreated`, `MemberAdded`
+and `MemberClaimed` — seating the creator as an already-claimed member.
+
+Rationale: surfaced by writing the given-when-then specs for the slice. A group
+whose creator is not a member is a meaningless state — they could not be a payer
+or a participant, and the very next action would have to fix it. Emitting all
+three reuses the existing vocabulary instead of adding a "member born claimed"
+special case, and it means the creator's slot can be released (§4) exactly like
+anyone else's.
+
+Consequence: a slice is **not** one command to one event. `AddMember` exists for
+adding *other* people, not for seating the creator.
+
+**Decision: events carry no timestamp.** Marten records the append time as stream
+metadata, so an `at` field would duplicate it. Contrast `paidOn` on an expense,
+which is genuine domain data: the date the expense happened is not the date it was
+recorded. Metadata belongs to the store; domain facts belong in the payload.
+
+Note on enforcement: "a group is created exactly once" is guaranteed by Marten's
+stream semantics and optimistic concurrency — appending `GroupCreated` at expected
+version 0 to a stream that already exists fails — rather than by aggregate
+validation.
+
 Transactions:
 ```
 ExpenseRecorded(expenseId, description, amountMinor, payerMemberId, splitMode,
@@ -675,33 +698,111 @@ container per slice, dagre/elk) was tried and rejected: it reordered the slices
 and destroyed both the lane alignment and the time axis, producing a decent
 flowchart and a useless event model.
 
-Structure: `grid-rows: 3` at the root, one container per lane (SCREENS /
-COMMANDS + READ MODELS / EVENT STREAM), each with `grid-columns: N`. The first
-column holds the lane names; invisible spacers fill cells a slice does not use.
-Rejected alternatives: Mermaid (no real swimlane-over-time support, though it
-renders anywhere with no install), PlantUML (swimlanes flow vertically — wrong
-axis — and needs Java), Miro/Excalidraw (best visually, but not textual).
+Structure — **one flat grid, no nested containers.** `grid-rows: 5` with exactly
+80 children yields 16 columns, filled row-major. Rows, top to bottom: slice names,
+SCREENS, READ MODELS, COMMANDS, EVENT STREAM. Read models sit next to the screens
+they feed and commands next to the events they emit, which keeps the arrow for
+both patterns one row long. Column 1 holds the lane names, slices are separated by
+a 2px divider column, and **every other column is one event slot**, so time runs
+left to right across the whole stream. Every element is 250x160, or 250x50 in the
+slice-name row.
+
+A command emitting several events spreads them horizontally along the stream, so
+the slice grows wider rather than taller — slice 1 emits three events and occupies
+columns 2-4. **D2 grids have no colspan**, so that slice's screen and command sit
+in the first of its three columns rather than spanning all three. This is the one
+visible compromise in the layout.
+
+Four constraints found by rendering rather than by reading documentation, each of
+which silently produces a wrong diagram:
+
+- **Sibling grid containers compute their column widths independently.** Modelling
+  each lane as its own grid container looks correct and holds together only while
+  every cell happens to be the same size. The moment one lane's cell differs, that
+  lane's columns shift out of step with the others. A single flat grid is the only
+  structure that guarantees alignment.
+- **Grid cells stretch to fill their row**, and an explicit `height` does not stop
+  it. So a multi-event slice cannot nest a taller container: it would stretch every
+  other cell in that row. Growing a multi-event slice sideways along the stream
+  sidesteps this entirely, and fits the notation better: the event stream is a
+  time-ordered line, so consecutive events belong side by side.
+- **Fill order is row-major under `grid-rows`**, so children are listed lane by
+  lane. `grid-columns` fills differently when the child count does not divide
+  evenly by the column count — prefer `grid-rows` and keep the grid exactly full.
+- **There is no rowspan either**, so a slice divider has to be one thin cell per
+  row. It reads as a segmented rule rather than a single continuous line — close
+  enough at normal zoom, but it is a compromise, not the intended drawing.
+- **Shape labels centre-align, and markdown blocks size to their content**, so
+  neither gives left-aligned text in a fixed-width cell: an `md` block shrinks to
+  its text and the cell then centres it, ignoring `width`. Padding a plain label
+  with trailing spaces widens its bounding box, so centring that box leaves the
+  visible text at the left. A hack, and the only thing that works.
+- **A shape label has one font and one size, and plain labels are the only thing
+  that respects explicit dimensions.** Uniform cards and per-line styling are
+  therefore mutually exclusive. Fields are `- name: Type` lines in
+  `style.font: mono` under the card's title, left-aligned by padding every line to
+  21 columns: equal-length lines in a monospace font form a rectangle, and
+  centring a rectangle leaves them flush left. That padding is load-bearing, not
+  cosmetic. Making the title alone bold or larger was attempted three ways and is
+  not possible:
+  - `style.bold` / `font-size` apply to the whole label, fields included;
+  - a markdown label supports `**bold**` and headings, but ignores `width` and
+    `height` and sizes to its content — which collapses the grid entirely, and
+    `&nbsp;` padding adds no width to bring it back;
+  - Mathematical Sans-Serif Bold codepoints have no glyphs in the monospace font,
+    so they fall back to another face: not bold, and badly spaced.
+
+  The title is distinguished by position alone.
+- **A fenced code block inside a markdown label paints its own background**,
+  covering the element's fill and leaving white label text unreadable. Use
+  `style.font: mono` on the element instead.
+- **Given-when-then specs cannot live in the grid.** A wide text block dictates its
+  column's width and wrecks the alignment. They live in `slice-NN-*.md` instead,
+  which is a better home anyway: they are test specifications, and they will map
+  to xUnit tests more or less line by line.
 
 Known limitation: a read model consuming many events produces long diagonal
 arrows across the lanes, and it gets noisy quickly. Mitigation when it does: list
 the source events inside the read model box and draw fewer edges. The source of
 truth keeps every edge; the *rendering* is allowed to elide.
 
-**Deferred: a YAML source of truth plus a generator**, mirroring §12's phasing.
-Hand-write D2 until the repetition grates and the model's shape has stabilised,
-then promote YAML and emit both the `.d2` and a validation report. Building the
-generator before the thing it generates exists is how the schema ends up fighting
-the model.
+**Decision: `event-model.yaml` is the source of truth; `happy-path.d2` is
+generated and must never be hand-edited.**
 
-The validations worth having are §13's acceptance test, mechanised:
+```
+.venv/bin/python docs/event-model/generate.py
+d2 --pad 30 docs/event-model/happy-path.d2 docs/event-model/happy-path.png
+```
 
-- every event a read model consumes exists, and is produced by an *earlier* slice
-- every read model is consumed by at least one screen
-- **every event is consumed by at least one read model** — catches events being
-  recorded that nobody ever reads, the most common flaw in a first event model
-- every command produces at least one event
-- later: event names still match the C# record names, so the model cannot
-  silently drift from the code
+Promoted from a deferred plan once the grid reached 80 cells with load-bearing
+padding — past the point where hand-editing is safe. The generated `.d2` was
+verified to render identically to the hand-built version before the switch.
+
+The generator validates before it renders and exits non-zero on any error, so it
+can gate a commit:
+
+- a slice referencing an unknown screen, command, event or read model
+- a command slice that emits nothing, or a view slice that emits something
+- a read model consuming an undefined event
+- a read model that is not shown on any screen
+- an event defined but never emitted
+- **an event not consumed by any read model**
+- a read model consuming an event first emitted in a *later* slice, which is
+  legitimate but is drawn dashed rather than left looking like a normal read
+- the grid not being exactly full, which would make D2 silently reflow it
+
+Still to come: checking event names against the C# record names, so the model
+cannot drift from the code.
+
+The first run earned the exercise. `MemberInvited` was consumed by nothing, which
+means no screen could distinguish a member who has been invited from one who has
+merely been added — exactly the "invited / joined" state §4 depends on. Fixed by
+adding it to `GroupLedger`. That is the check predicted to be most valuable, and
+it was.
+
+Tooling note: the generator needs PyYAML, which macOS's system Python refuses to
+install into (PEP 668), so it runs from a project-local `.venv`, gitignored. It is
+a documentation tool, not application code.
 
 ---
 

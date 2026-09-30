@@ -1,2 +1,6 @@
 # macOS
 .DS_Store
+
+# python venv for the event-model generator (PyYAML; see spec.md section 13)
+.venv/
+__pycache__/
