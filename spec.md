@@ -778,18 +778,40 @@ Promoted from a deferred plan once the grid reached 80 cells with load-bearing
 padding — past the point where hand-editing is safe. The generated `.d2` was
 verified to render identically to the hand-built version before the switch.
 
+**Structure: slices own the elements they introduce.** An element is *declared
+once*, in mapping form with a `name`, at its first appearance in slice order;
+every later appearance is a bare string reference. So fields are written exactly
+once, and a misspelled reference is an undeclared name rather than a silently
+created new element.
+
+**Arrows: none are written.** Intra-slice arrows follow from `pattern` — a
+`command` slice is always screen → command → events, a `view` slice is always
+events → read model → screen — so declaring them would merely restate the
+pattern, and any arrow contradicting it would be a modelling error rather than a
+drawing choice. The only inter-slice arrow is a read model's `reads` list of event
+*type names*: the generator resolves each to the nearest occurrence at or before
+the consuming slice, and dashes it when the only occurrence is later. No ids, no
+endpoints. The same mechanism will serve automation slices (`reads: GroupLedger`)
+without new syntax.
+
 The generator validates before it renders and exits non-zero on any error, so it
 can gate a commit:
 
-- a slice referencing an unknown screen, command, event or read model
-- a command slice that emits nothing, or a view slice that emits something
-- a read model consuming an undefined event
-- a read model that is not shown on any screen
-- an event defined but never emitted
+- a slice with an unknown `pattern`, or with no screen
+- a command slice with no command, no events, or declaring a read model
+- a view slice that emits events, declares a command, or whose read model reads
+  nothing
+- an element referenced before it is declared — which is how typos surface
+- an element redeclared after its first declaration
+- a read model reading an undeclared event
 - **an event not consumed by any read model**
-- a read model consuming an event first emitted in a *later* slice, which is
-  legitimate but is drawn dashed rather than left looking like a normal read
-- the grid not being exactly full, which would make D2 silently reflow it
+- a read model reading an event first emitted in a *later* slice, which is
+  legitimate but is drawn dashed rather than left looking like an ordinary
+  backwards dependency
+- the grid not being exactly full, which D2 silently reflows rather than rejecting
+
+Each of those was confirmed to fire by mutating the model and re-running, rather
+than assumed from reading the code.
 
 Still to come: checking event names against the C# record names, so the model
 cannot drift from the code.

@@ -3,8 +3,24 @@
 # Render and validate with:
 #     .venv/bin/python docs/event-model/generate.py
 #
-# That writes happy-path.d2 (never edit it by hand) and prints a validation
-# report.  Given-when-then specifications live in slice-NN-*.md.
+# happy-path.d2 is generated from this file; never edit it by hand.
+# Given-when-then specifications live in slice-NN-*.md.
+#
+# STRUCTURE
+#   Every slice owns the elements it introduces.  An element is DECLARED once,
+#   in mapping form with a `name`, at its first appearance in slice order; every
+#   later appearance is a bare string reference.  So fields are written exactly
+#   once, and a misspelled reference is an undeclared name rather than a silent
+#   new element.
+#
+# ARROWS - none are written.
+#   Intra-slice arrows are implied by `pattern`:
+#     command : screen -> command -> each event, in listed order
+#     view    : each event in `reads` -> read model -> screen
+#   Inter-slice arrows exist only where a read model consumes events emitted in
+#   other slices, declared as its `reads` list of event type names.  The
+#   generator resolves each name to the nearest occurrence at or before this
+#   slice, and draws it dashed when the only occurrence is later.
 
 meta:
   diagram: happy-path
@@ -14,113 +30,100 @@ meta:
   columns: 21
   card: { width: 250, height: 160 }
 
-# ---------------------------------------------------------------- screens
-screens:
-  new-group:
-    title: New group
-    wireframe:
-      - "name      [........]"
-      - "currency  [ GBP  v ]"
-      - ""
-      - "  [ Create group ]"
-  group-setup: { title: Group setup }
-  sign-in:     { title: Sign in / claim }
-  add-expense: { title: Add expense }
-  balances:    { title: Balances }
-  settle-up:   { title: Settle up }
-
-# ---------------------------------------------------------------- commands
-commands:
-  CreateGroup:
-    fields:
-      name: string
-      currency: string
-      createdBy: Guid
-  AddMember: {}
-  InviteMember: {}
-  ClaimMember: {}
-  RecordExpense: {}
-  RecordSettlement: {}
-
-# ---------------------------------------------------------------- events
-events:
-  GroupCreated:
-    fields:
-      groupId: Guid
-      name: string
-      currency: string
-      createdBy: Guid
-  MemberAdded:
-    fields:
-      memberId: Guid
-      displayName: string
-  MemberInvited:
-    fields:
-      memberId: Guid
-      email: string
-  MemberClaimed:
-    fields:
-      memberId: Guid
-      userId: Guid
-  ExpenseRecorded: {}
-  SettlementRecorded: {}
-
-# ---------------------------------------------------------------- read models
-readModels:
-  GroupLedger:
-    fields:
-      members: "Member[]"
-      expenses: "Expense[]"
-      balances: long
-    from:
-      - GroupCreated
-      - MemberAdded
-      - MemberInvited
-      - MemberClaimed
-      - ExpenseRecorded
-      - SettlementRecorded      # emitted later than this slice: drawn dashed
-
-# ---------------------------------------------------------------- slices
-# Order is time order.  Each slice is exactly one pattern.  A command slice
-# emitting several events widens into that many columns.
 slices:
-  - name: Create group
-    pattern: command
-    screen: new-group
-    command: CreateGroup
-    emits: [GroupCreated, MemberAdded, MemberClaimed]
 
-  - name: Add a member
+  - slice: Create group
     pattern: command
-    screen: group-setup
-    command: AddMember
-    emits: [MemberAdded]
+    screen:
+      name: New group
+      wireframe:
+        - "name      [........]"
+        - "currency  [ GBP  v ]"
+        - ""
+        - "  [ Create group ]"
+    command:
+      name: CreateGroup
+      fields:
+        name: string
+        currency: string
+        createdBy: Guid
+    events:
+      # three events from one command: a group whose creator is not a member is
+      # a meaningless state, so the creator is seated and claimed here
+      - name: GroupCreated
+        fields:
+          groupId: Guid
+          name: string
+          currency: string
+          createdBy: Guid
+      - name: MemberAdded
+        fields:
+          memberId: Guid
+          displayName: string
+      - name: MemberClaimed
+        fields:
+          memberId: Guid
+          userId: Guid
 
-  - name: Invite a member
+  - slice: Add a member
     pattern: command
-    screen: group-setup
-    command: InviteMember
-    emits: [MemberInvited]
+    screen:
+      name: Group setup
+    command:
+      name: AddMember
+    events: [MemberAdded]
 
-  - name: Claim a slot
+  - slice: Invite a member
     pattern: command
-    screen: sign-in
-    command: ClaimMember
-    emits: [MemberClaimed]
+    screen: Group setup
+    command:
+      name: InviteMember
+    events:
+      - name: MemberInvited
+        fields:
+          memberId: Guid
+          email: string
 
-  - name: Record an expense
+  - slice: Claim a slot
     pattern: command
-    screen: add-expense
-    command: RecordExpense
-    emits: [ExpenseRecorded]
+    screen:
+      name: Sign in / claim
+    command:
+      name: ClaimMember
+    events: [MemberClaimed]
 
-  - name: View balances
+  - slice: Record an expense
+    pattern: command
+    screen:
+      name: Add expense
+    command:
+      name: RecordExpense
+    events:
+      - name: ExpenseRecorded
+
+  - slice: View balances
     pattern: view
-    screen: balances
-    readModel: GroupLedger
+    screen:
+      name: Balances
+    readModel:
+      name: GroupLedger
+      fields:
+        members: "Member[]"
+        expenses: "Expense[]"
+        balances: long
+      reads:
+        - GroupCreated
+        - MemberAdded
+        - MemberInvited
+        - MemberClaimed
+        - ExpenseRecorded
+        - SettlementRecorded   # emitted in slice 7: drawn dashed
 
-  - name: Settle up
+  - slice: Settle up
     pattern: command
-    screen: settle-up
-    command: RecordSettlement
-    emits: [SettlementRecorded]
+    screen:
+      name: Settle up
+    command:
+      name: RecordSettlement
+    events:
+      - name: SettlementRecorded
