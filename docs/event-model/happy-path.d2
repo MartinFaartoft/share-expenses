@@ -1,0 +1,83 @@
+# Event model - happy path
+# Lanes: SCREENS / COMMANDS+READ MODELS / EVENT STREAM.  Time runs left to right.
+# Each column is one slice, and every slice is exactly one pattern:
+#   command slice = screen -> command -> event
+#   view slice    = events -> read model -> screen
+
+classes: {
+  lane: {
+    style: { fill: "#f6f7f9"; stroke: "#d0d4db"; stroke-dash: 3; stroke-width: 1 }
+  }
+  lanelabel: {
+    style: { fill: "#f6f7f9"; stroke-width: 0; font-color: "#6b7280"; bold: true }
+  }
+  spacer: { style: { opacity: 0 } }
+  screen: {
+    style: { fill: "#fbfbfd"; stroke: "#8c93a0"; stroke-width: 2; border-radius: 6 }
+  }
+  command: {
+    style: { fill: "#4a90d9"; stroke: "#2b6cb0"; font-color: "#ffffff"; border-radius: 6 }
+  }
+  event: {
+    style: { fill: "#f5a623"; stroke: "#c07d12"; font-color: "#1f1f1f"; border-radius: 6 }
+  }
+  view: {
+    style: { fill: "#54b054"; stroke: "#357935"; font-color: "#ffffff"; border-radius: 6 }
+  }
+}
+
+grid-rows: 3
+horizontal-gap: 24
+vertical-gap: 24
+
+ui: "" { class: lane
+  grid-columns: 8
+  lbl: "SCREENS"            { class: lanelabel }
+  s1:  "New group"          { class: screen }
+  s2:  "Group setup"        { class: screen }
+  s3:  "Group setup"        { class: screen }
+  s4:  "Sign in / claim"    { class: screen }
+  s5:  "Add expense"        { class: screen }
+  s6:  "Balances"           { class: screen }
+  s7:  "Settle up"          { class: screen }
+}
+
+mid: "" { class: lane
+  grid-columns: 8
+  lbl: "COMMANDS\n/ READ MODELS" { class: lanelabel }
+  c1:  "CreateGroup"        { class: command }
+  c2:  "AddMember"          { class: command }
+  c3:  "InviteMember"       { class: command }
+  c4:  "ClaimMember"        { class: command }
+  c5:  "RecordExpense"      { class: command }
+  v6:  "GroupLedger"        { class: view }
+  c7:  "RecordSettlement"   { class: command }
+}
+
+stream: "" { class: lane
+  grid-columns: 8
+  lbl: "EVENT STREAM"       { class: lanelabel }
+  e1:  "GroupCreated"       { class: event }
+  e2:  "MemberAdded"        { class: event }
+  e3:  "MemberInvited"      { class: event }
+  e4:  "MemberClaimed"      { class: event }
+  e5:  "ExpenseRecorded"    { class: event }
+  x6:  ""                   { class: spacer }
+  e7:  "SettlementRecorded" { class: event }
+}
+
+# --- command slices: screen -> command -> event
+ui.s1 -> mid.c1 -> stream.e1
+ui.s2 -> mid.c2 -> stream.e2
+ui.s3 -> mid.c3 -> stream.e3
+ui.s4 -> mid.c4 -> stream.e4
+ui.s5 -> mid.c5 -> stream.e5
+ui.s7 -> mid.c7 -> stream.e7
+
+# --- view slice: events -> read model -> screen
+stream.e1 -> mid.v6
+stream.e2 -> mid.v6
+stream.e4 -> mid.v6
+stream.e5 -> mid.v6
+stream.e7 -> mid.v6: "loops back" { style.stroke-dash: 4 }
+mid.v6 -> ui.s6
