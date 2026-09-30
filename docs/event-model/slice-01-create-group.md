@@ -1,6 +1,6 @@
 # Slice 1 — `CreateGroup`
 
-Pattern: **command**. Screen → command → events.
+Type: **State Change**. Screen → command → events.
 
 | | |
 |---|---|

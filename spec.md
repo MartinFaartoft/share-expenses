@@ -702,7 +702,7 @@ Structure — **one flat grid, no nested containers.** `grid-rows: 5` with exact
 80 children yields 16 columns, filled row-major. Rows, top to bottom: slice names,
 SCREENS, READ MODELS, COMMANDS, EVENT STREAM. Read models sit next to the screens
 they feed and commands next to the events they emit, which keeps the arrow for
-both patterns one row long. Column 1 holds the lane names, slices are separated by
+both slice types one row long. Column 1 holds the lane names, slices are separated by
 a 2px divider column, and **every other column is one event slot**, so time runs
 left to right across the whole stream. Every element is 250x160, or 250x50 in the
 slice-name row.
@@ -784,10 +784,18 @@ every later appearance is a bare string reference. So fields are written exactly
 once, and a misspelled reference is an undeclared name rather than a silently
 created new element.
 
-**Arrows: none are written.** Intra-slice arrows follow from `pattern` — a
-`command` slice is always screen → command → events, a `view` slice is always
-events → read model → screen — so declaring them would merely restate the
-pattern, and any arrow contradicting it would be a modelling error rather than a
+**Slices are typed with the four canonical Event Modeling types**, spelled
+verbatim in the `type` field: `State Change` (a user action that changes state and
+records events), `State Read` (a screen or API response projected from events),
+`Automation` (reacts to a state with no human involved) and `Translation` (an
+integration point where the outside world pushes data in). The last two are
+recognised vocabulary but have no layout yet — the generator errors rather than
+guessing, because their rendering is best designed against a real slice.
+
+**Arrows: none are written.** Intra-slice arrows follow from `type` — a
+`State Change` slice is always screen → command → events, a `State Read` slice is
+always events → read model → screen — so declaring them would merely restate the
+type, and any arrow contradicting it would be a modelling error rather than a
 drawing choice. The only inter-slice arrow is a read model's `reads` list of event
 *type names*: the generator resolves each to the nearest occurrence at or before
 the consuming slice, and dashes it when the only occurrence is later. No ids, no
@@ -797,10 +805,10 @@ without new syntax.
 The generator validates before it renders and exits non-zero on any error, so it
 can gate a commit:
 
-- a slice with an unknown `pattern`, or with no screen
-- a command slice with no command, no events, or declaring a read model
-- a view slice that emits events, declares a command, or whose read model reads
-  nothing
+- a slice with an unknown `type`, a type with no layout yet, or no screen
+- a `State Change` slice with no command, no events, or declaring a read model
+- a `State Read` slice that emits events, declares a command, or whose read
+  model reads nothing
 - an element referenced before it is declared — which is how typos surface
 - an element redeclared after its first declaration
 - a read model reading an undeclared event

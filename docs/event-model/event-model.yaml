@@ -13,10 +13,21 @@
 #   once, and a misspelled reference is an undeclared name rather than a silent
 #   new element.
 #
+# SLICE TYPES - the four canonical Event Modeling types:
+#   State Change  a user action that changes system state, enforcing the business
+#                 rules, and recording what happened as events
+#   State Read    a screen, report or API response projected from stored events
+#   Automation    reacts to a state without human intervention, issuing further
+#                 commands or side effects
+#   Translation   an integration point where the outside world pushes data in,
+#                 mapping foreign data into this domain's language
+#   Automation and Translation are recognised but not yet rendered: the happy path
+#   needs neither, and their layout is best designed against a real slice.
+#
 # ARROWS - none are written.
-#   Intra-slice arrows are implied by `pattern`:
-#     command : screen -> command -> each event, in listed order
-#     view    : each event in `reads` -> read model -> screen
+#   Intra-slice arrows are implied by `type`:
+#     State Change : screen -> command -> each event, in listed order
+#     State Read   : each event in `reads` -> read model -> screen
 #   Inter-slice arrows exist only where a read model consumes events emitted in
 #   other slices, declared as its `reads` list of event type names.  The
 #   generator resolves each name to the nearest occurrence at or before this
@@ -33,7 +44,7 @@ meta:
 slices:
 
   - slice: Create group
-    pattern: command
+    type: State Change
     screen:
       name: New group
       wireframe:
@@ -66,7 +77,7 @@ slices:
           userId: Guid
 
   - slice: Add a member
-    pattern: command
+    type: State Change
     screen:
       name: Group setup
     command:
@@ -74,7 +85,7 @@ slices:
     events: [MemberAdded]
 
   - slice: Invite a member
-    pattern: command
+    type: State Change
     screen: Group setup
     command:
       name: InviteMember
@@ -85,7 +96,7 @@ slices:
           email: string
 
   - slice: Claim a slot
-    pattern: command
+    type: State Change
     screen:
       name: Sign in / claim
     command:
@@ -93,7 +104,7 @@ slices:
     events: [MemberClaimed]
 
   - slice: Record an expense
-    pattern: command
+    type: State Change
     screen:
       name: Add expense
     command:
@@ -102,7 +113,7 @@ slices:
       - name: ExpenseRecorded
 
   - slice: View balances
-    pattern: view
+    type: State Read
     screen:
       name: Balances
     readModel:
@@ -120,7 +131,7 @@ slices:
         - SettlementRecorded   # emitted in slice 7: drawn dashed
 
   - slice: Settle up
-    pattern: command
+    type: State Change
     screen:
       name: Settle up
     command:

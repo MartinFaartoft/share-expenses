@@ -14,7 +14,7 @@ MODEL SHAPE
   appearances are bare string references.
 
 ARROWS
-  None are written in the YAML.  Intra-slice arrows follow from `pattern`, and
+  None are written in the YAML.  Intra-slice arrows follow from `type`, and
   the only inter-slice arrow is a read model's `reads` list, resolved here to the
   nearest occurrence at or before the consuming slice (dashed if only later).
 
@@ -36,7 +36,12 @@ LAYOUT CONSTRAINTS found by rendering, all recorded in spec.md section 13:
 import sys, pathlib, yaml
 
 HERE = pathlib.Path(__file__).resolve().parent
-PATTERNS = ("command", "view")
+STATE_CHANGE, STATE_READ = "State Change", "State Read"
+AUTOMATION, TRANSLATION = "Automation", "Translation"
+# the four canonical Event Modeling slice types
+TYPES = (STATE_CHANGE, STATE_READ, AUTOMATION, TRANSLATION)
+# Automation and Translation are recognised vocabulary but have no layout yet
+RENDERABLE = (STATE_CHANGE, STATE_READ)
 
 
 class Report:
@@ -98,9 +103,13 @@ class Model:
         rep = self.rep
         for i, sl in enumerate(self.slices):
             where = "slice %d (%s)" % (i + 1, sl.get("slice", "?"))
-            pattern = sl.get("pattern")
-            if pattern not in PATTERNS:
-                rep.error("%s has unknown pattern %r" % (where, pattern))
+            stype = sl.get("type")
+            if stype not in TYPES:
+                rep.error("%s has unknown type %r - expected one of: %s"
+                          % (where, stype, ", ".join(TYPES)))
+            elif stype not in RENDERABLE:
+                rep.error("%s is %s %s slice, which is recognised but has no layout yet"
+                          % (where, "an" if stype[0] in "AEIOU" else "a", stype))
 
             sname, sspec = as_element(sl.get("screen"))
             if sname is None:
@@ -108,29 +117,29 @@ class Model:
             else:
                 self._declare("screen", sname, sspec, i, where)
 
-            if pattern == "command":
+            if stype == STATE_CHANGE:
                 cname, cspec = as_element(sl.get("command"))
                 if cname is None:
-                    rep.error("%s is a command slice with no command" % where)
+                    rep.error("%s is a %s slice with no command" % (where, STATE_CHANGE))
                 else:
                     self._declare("command", cname, cspec, i, where)
                 if sl.get("readModel"):
-                    rep.error("%s is a command slice but declares a read model" % where)
+                    rep.error("%s is a %s slice but declares a read model" % (where, STATE_CHANGE))
                 events = sl.get("events") or []
                 if not events:
-                    rep.error("%s is a command slice but emits no events" % where)
+                    rep.error("%s is a %s slice but emits no events" % (where, STATE_CHANGE))
                 for ev in events:
                     ename, espec = as_element(ev)
                     self._declare("event", ename, espec, i, where)
 
-            elif pattern == "view":
+            elif stype == STATE_READ:
                 if sl.get("events"):
-                    rep.error("%s is a view slice but emits events" % where)
+                    rep.error("%s is a %s slice but emits events" % (where, STATE_READ))
                 if sl.get("command"):
-                    rep.error("%s is a view slice but declares a command" % where)
+                    rep.error("%s is a %s slice but declares a command" % (where, STATE_READ))
                 rname, rspec = as_element(sl.get("readModel"))
                 if rname is None:
-                    rep.error("%s is a view slice with no read model" % where)
+                    rep.error("%s is a %s slice with no read model" % (where, STATE_READ))
                 else:
                     self._declare("readModel", rname, rspec, i, where)
                     if not (rspec or {}).get("reads"):
@@ -139,7 +148,7 @@ class Model:
         # reads may name events emitted in a later slice, so check them last
         read_events = set()
         for i, sl in enumerate(self.slices):
-            if sl.get("pattern") != "view":
+            if sl.get("type") != STATE_READ:
                 continue
             rname, rspec = as_element(sl.get("readModel"))
             for ev in ((rspec or {}).get("reads") or []):
@@ -247,10 +256,10 @@ def render(m):
                 sp = m.spec("screen", name)
                 out.append(card("s%d" % i, "screen", name,
                                 wireframe=sp.get("wireframe"), W=W))
-            elif row == 3 and sl.get("pattern") == "view":
+            elif row == 3 and sl.get("type") == STATE_READ:
                 out.append(card("rm%d" % i, "view", name,
                                 fields=m.spec("readModel", name).get("fields"), W=W))
-            elif row == 4 and sl.get("pattern") == "command":
+            elif row == 4 and sl.get("type") == STATE_CHANGE:
                 out.append(card("c%d" % i, "command", name,
                                 fields=m.spec("command", name).get("fields"), W=W))
             else:
@@ -276,18 +285,18 @@ def render(m):
                             fields=m.spec("event", name).get("fields"), W=W))
 
     # intra-slice arrows: implied by pattern, never declared
-    out.append("\n# --- command slices: screen -> command -> event(s)\n")
+    out.append("\n# --- State Change slices: screen -> command -> event(s)\n")
     for i, sl in enumerate(slices):
-        if sl.get("pattern") != "command":
+        if sl.get("type") != STATE_CHANGE:
             continue
         out.append("s%d -> c%d\n" % (i, i))
         for j in range(len(sl.get("events") or [])):
             out.append("c%d -> e%d_%d\n" % (i, i, j))
 
     # inter-slice arrows: a read model's `reads`, resolved by time order
-    out.append("\n# --- view slices: events -> read model -> screen\n")
+    out.append("\n# --- State Read slices: events -> read model -> screen\n")
     for i, sl in enumerate(slices):
-        if sl.get("pattern") != "view":
+        if sl.get("type") != STATE_READ:
             continue
         rname, _ = as_element(sl.get("readModel"))
         for ev in m.spec("readModel", rname).get("reads") or []:
@@ -316,7 +325,7 @@ def main():
             n, _ = as_element(ev)
             first.setdefault(n, i)
     for i, sl in enumerate(model.slices):
-        if sl.get("pattern") != "view":
+        if sl.get("type") != STATE_READ:
             continue
         rname, _ = as_element(sl.get("readModel"))
         for ev in model.spec("readModel", rname).get("reads") or []:

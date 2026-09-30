@@ -132,7 +132,7 @@ gp5_5: "" { class: gap }
 dv5_6: "" { class: div }
 e6_0: "SettlementRecorded   \n                     \n                     \n                     \n                     \n                     " { class: event }
 
-# --- command slices: screen -> command -> event(s)
+# --- State Change slices: screen -> command -> event(s)
 s0 -> c0
 c0 -> e0_0
 c0 -> e0_1
@@ -148,7 +148,7 @@ c4 -> e4_0
 s6 -> c6
 c6 -> e6_0
 
-# --- view slices: events -> read model -> screen
+# --- State Read slices: events -> read model -> screen
 e0_0 -> rm5
 e1_0 -> rm5
 e2_0 -> rm5
