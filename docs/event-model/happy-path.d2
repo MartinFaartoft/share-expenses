@@ -98,11 +98,11 @@ gp3_6: "" { class: gap }
 
 # ===== row 4: commands =====
 l4: "COMMANDS" { class: lanelabel }
-c0: "CreateGroup          \n                     \n- name: string       \n- currency: string   \n- displayName: string\n- createdBy: Guid    " { class: command }
+c0: "CreateGroup          \n                     \n- name: string       \n- currency: string   \n- displayName: string\n- createdBy: UserId  " { class: command }
 gp4_0_1: "" { class: gap }
 gp4_0_2: "" { class: gap }
 dv4_1: "" { class: div }
-c1: "AddMember            \n                     \n                     \n                     \n                     \n                     " { class: command }
+c1: "AddMember            \n                     \n- groupId: GroupId   \n- displayName: string\n- by: UserId         \n                     " { class: command }
 dv4_2: "" { class: div }
 c2: "InviteMember         \n                     \n                     \n                     \n                     \n                     " { class: command }
 dv4_3: "" { class: div }
@@ -116,15 +116,15 @@ c6: "RecordSettlement     \n                     \n                     \n      
 
 # ===== row 5: event stream =====
 l5: "EVENT STREAM" { class: lanelabel }
-e0_0: "GroupCreated         \n                     \n- groupId: Guid      \n- name: string       \n- currency: string   \n- createdBy: Guid    " { class: event }
-e0_1: "MemberAdded          \n                     \n- memberId: Guid     \n- displayName: string\n                     \n                     " { class: event }
-e0_2: "MemberClaimed        \n                     \n- memberId: Guid     \n- userId: Guid       \n                     \n                     " { class: event }
+e0_0: "GroupCreated         \n                     \n- groupId: GroupId   \n- name: string       \n- currency: string   \n- createdBy: UserId  " { class: event }
+e0_1: "MemberAdded          \n                     \n- memberId: MemberId \n- displayName: string\n- by: UserId         \n                     " { class: event }
+e0_2: "MemberClaimed        \n                     \n- memberId: MemberId \n- userId: UserId     \n                     \n                     " { class: event }
 dv5_1: "" { class: div }
-e1_0: "MemberAdded          \n                     \n- memberId: Guid     \n- displayName: string\n                     \n                     " { class: event }
+e1_0: "MemberAdded          \n                     \n- memberId: MemberId \n- displayName: string\n- by: UserId         \n                     " { class: event }
 dv5_2: "" { class: div }
-e2_0: "MemberInvited        \n                     \n- memberId: Guid     \n- email: string      \n                     \n                     " { class: event }
+e2_0: "MemberInvited        \n                     \n- memberId: MemberId \n- email: string      \n                     \n                     " { class: event }
 dv5_3: "" { class: div }
-e3_0: "MemberClaimed        \n                     \n- memberId: Guid     \n- userId: Guid       \n                     \n                     " { class: event }
+e3_0: "MemberClaimed        \n                     \n- memberId: MemberId \n- userId: UserId     \n                     \n                     " { class: event }
 dv5_4: "" { class: div }
 e4_0: "ExpenseRecorded      \n                     \n                     \n                     \n                     \n                     " { class: event }
 dv5_5: "" { class: div }

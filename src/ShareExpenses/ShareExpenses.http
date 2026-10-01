@@ -71,5 +71,32 @@ Content-Type: application/json
   "displayName": "Alice"
 }
 
-### 4. Health
+### 4. Add a placeholder member to the group from step 2. Expect 201 with memberId.
+# Uses step 2's response. That reference syntax is the VS Code REST Client's; in
+# the JetBrains client, replace {{groupId}} with the id from step 2 by hand.
+@groupId = {{createGroup.response.body.$.groupId}}
+POST {{host}}/api/groups/{{groupId}}/members
+Content-Type: application/json
+
+{
+  "displayName": "Bob"
+}
+
+### 5. Rejected: duplicate name (case-insensitive). Expect 400.
+POST {{host}}/api/groups/{{groupId}}/members
+Content-Type: application/json
+
+{
+  "displayName": " bob "
+}
+
+### 6. Unknown group. Expect 404 — the same answer a non-member gets.
+POST {{host}}/api/groups/01a0f734-90c1-761a-87e3-07c09ef9be9f/members
+Content-Type: application/json
+
+{
+  "displayName": "Bob"
+}
+
+### 7. Health
 GET {{host}}/health

@@ -31,7 +31,7 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
         await _postgres.DisposeAsync();
     }
 
-    public HttpClient ClientFor(Guid userId)
+    public HttpClient ClientFor(ShareExpenses.Shared.UserId userId)
     {
         var client = CreateClient();
         client.DefaultRequestHeaders.Add(UserHeader, userId.ToString());

@@ -652,6 +652,13 @@ from different phones at the same restaurant table is the expected case, not an
 edge case — the loser retries. Marten's `FetchForWriting` is the intended
 mechanism.
 
+**Decision (for now): the client retries.** A conflict is answered with 409 and
+nothing else; the client resends, and the rules run against the new state.
+Server-side retry — re-fetch, re-decide, re-append, a few times — was considered
+and deferred: it would be correct rather than a blind overwrite, since the rules
+run again, and would turn most conflicts into one round trip. Kept visible while
+learning; the reminder lives in `Slices/AddMember/Handler.cs`.
+
 ### Event schema evolution
 
 **Decision: additive-only by default.** Adding an optional field to an existing
@@ -791,6 +798,40 @@ have a reason not to.
   holds afterwards (untouched on rejection). `Given()` is the empty stream.
 - **User ids are `Guid`s.** Identity is keyed on `Guid` (`User : IdentityUser<Guid>`)
   because user ids are recorded in events and need a stable, typed shape.
+
+### Typed ids
+
+**Decision: `GroupId`, `MemberId` and `UserId` are distinct types, in code and in
+`event-model.yaml`** — `readonly record struct`s wrapping a `Guid`, hand-written in
+`Shared/Ids.cs`. Later: `ExpenseId`, `SettlementId`.
+
+Rationale: events carry several ids side by side — `MemberClaimed(memberId,
+userId)`, later `MemberClaimReleased(memberId, userId, releasedBy)` and an
+expense's payer and participants. As bare `Guid`s, a swapped pair compiles and
+silently corrupts the ledger. It also makes the decision that every `by` is a
+`UserId` enforced rather than documented.
+
+- **Invisible in storage.** A JSON converter writes each id as a bare Guid, so
+  stored events and documents are exactly what plain `Guid`s would produce. The
+  decision is therefore reversible without touching data. Tested.
+- **Marten, verified by spike on 9.43:** typed ids work in event payloads, folded
+  state (`FetchForWriting`), projected documents — as dictionary keys too — and
+  LINQ (`==`, `Contains`) once registered with `RegisterValueType`. Stream ids are
+  the exception: Marten takes a `Guid`, so stream calls pass `groupId.Value`.
+- **Hand-written, not generated** (Vogen, StronglyTypedId): a handful of types,
+  nothing hidden.
+- **Identity stays on `Guid`**; `ClaimsPrincipal.UserId()` is the single
+  conversion point.
+
+### Who did it: `by` is a `UserId`
+
+**Decision: the actor recorded on an event is the signed-in user, not their member
+slot.** It is the true fact, and it stays true when a claim turns out to be wrong
+and is released (§4) — recording the member slot would attribute an impostor's
+actions to the slot's rightful owner, which is exactly what the activity feed
+exists to expose. It is also consistent with `GroupCreated.createdBy`, which can
+only be a user. Rendering a name means joining user → member through the claim
+events, which the activity feed reads anyway.
 
 ---
 
@@ -970,6 +1011,12 @@ a documentation tool, not application code.
 - **OPEN** Frontend framework and rendering approach. Deferred deliberately.
 - **OPEN** Check event names in `event-model.yaml` against the public event
   records in each slice folder, so the model cannot drift from the code (§12, §13).
+- **OPEN** The "declare once" rule in `event-model.yaml` (§13). An event's fields
+  are written only at its first appearance, but a later slice emitting the same
+  event may fill those fields from a different command — `AddMember(displayName)`
+  vs `CreateGroup(name, currency, displayName)` both emit `MemberAdded`. Discuss
+  whether a re-emitting slice should restate or annotate the event's fields, how
+  the generator should treat that, and what the diagram shows.
 - **DEFERRED** Transactional relay — shortlisted in §4; `LogEmailSender` until then.
 - **DEFERRED** `PeriodClosed` / stream archival, until a stream is actually long.
 - **DEFERRED** Wolverine port (phase 2 above).

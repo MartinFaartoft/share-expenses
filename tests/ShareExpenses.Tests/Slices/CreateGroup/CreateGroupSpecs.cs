@@ -1,3 +1,4 @@
+using ShareExpenses.Shared;
 using ShareExpenses.Slices.CreateGroup;
 using ShareExpenses.Tests.Specs;
 
@@ -9,9 +10,9 @@ namespace ShareExpenses.Tests.Slices.CreateGroup;
 /// </summary>
 public class CreateGroupSpecs
 {
-    private static readonly Guid G1 = Guid.Parse("00000000-0000-0000-0000-0000000000a1");
-    private static readonly Guid M1 = Guid.Parse("00000000-0000-0000-0000-0000000000b1");
-    private static readonly Guid Alice = Guid.Parse("00000000-0000-0000-0000-0000000000c1");
+    private static readonly GroupId G1 = new(Guid.Parse("00000000-0000-0000-0000-0000000000a1"));
+    private static readonly MemberId M1 = new(Guid.Parse("00000000-0000-0000-0000-0000000000b1"));
+    private static readonly UserId Alice = new(Guid.Parse("00000000-0000-0000-0000-0000000000c1"));
 
     // CreateGroup decides against no state: history is the store's business (scenario 4).
     private static readonly DecideSpec<Command> Spec = new((history, command) =>
@@ -28,7 +29,7 @@ public class CreateGroupSpecs
             .When(CreateGroup("Lisbon trip", "GBP", "Alice"))
             .Then(
                 new GroupCreated(G1, "Lisbon trip", "GBP", Alice),
-                new MemberAdded(M1, "Alice"),
+                new MemberAdded(M1, "Alice", Alice),
                 new MemberClaimed(M1, Alice));
 
     [Theory]
@@ -59,11 +60,42 @@ public class CreateGroupSpecs
             .ThenRejected("your name is required");
 
     [Fact]
+    public void S6_rejects_a_group_name_longer_than_100_characters() =>
+        Spec.Given()
+            .When(CreateGroup(new string('x', 101), "GBP", "Alice"))
+            .ThenRejected("name must be at most 100 characters");
+
+    [Fact]
+    public void S7_rejects_a_display_name_longer_than_50_characters() =>
+        Spec.Given()
+            .When(CreateGroup("Lisbon trip", "GBP", new string('x', 51)))
+            .ThenRejected("your name must be at most 50 characters");
+
+    [Fact]
+    public void Limits_are_inclusive_and_measured_after_trimming() =>
+        Spec.Given()
+            .When(CreateGroup($"  {new string('x', 100)}  ", "GBP", $"  {new string('y', 50)}  "))
+            .Then(
+                new GroupCreated(G1, new string('x', 100), "GBP", Alice),
+                new MemberAdded(M1, new string('y', 50), Alice),
+                new MemberClaimed(M1, Alice));
+
+    [Fact]
+    public void Length_counts_visible_characters_not_utf16_units() =>
+        // 50 family emoji: 50 visible characters, 400 UTF-16 code units.
+        Spec.Given()
+            .When(CreateGroup("Lisbon trip", "GBP", string.Concat(Enumerable.Repeat("👩‍👩‍👧", 50))))
+            .Then(
+                new GroupCreated(G1, "Lisbon trip", "GBP", Alice),
+                new MemberAdded(M1, string.Concat(Enumerable.Repeat("👩‍👩‍👧", 50)), Alice),
+                new MemberClaimed(M1, Alice));
+
+    [Fact]
     public void Inputs_are_trimmed_and_currency_upper_cased() =>
         Spec.Given()
             .When(CreateGroup("  Lisbon trip ", " gbp ", " Alice "))
             .Then(
                 new GroupCreated(G1, "Lisbon trip", "GBP", Alice),
-                new MemberAdded(M1, "Alice"),
+                new MemberAdded(M1, "Alice", Alice),
                 new MemberClaimed(M1, Alice));
 }

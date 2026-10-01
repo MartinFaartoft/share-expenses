@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
+using ShareExpenses.Shared;
 using ShareExpenses.Slices.CreateGroup;
 using ShareExpenses.Tests.Infrastructure;
 using ShareExpenses.Tests.Specs;
@@ -11,21 +12,21 @@ namespace ShareExpenses.Tests.Slices.CreateGroup;
 [Collection(AppCollection.Name)]
 public class CreateGroupIntegrationTests(AppFixture app)
 {
-    private readonly Guid _alice = Guid.CreateVersion7();
+    private readonly UserId _alice = UserId.New();
 
     private IDocumentStore Store => app.Services.GetRequiredService<IDocumentStore>();
 
-    private async Task<IReadOnlyList<object>> StreamOf(Guid groupId)
+    private async Task<IReadOnlyList<object>> StreamOf(GroupId groupId)
     {
         await using var session = Store.QuerySession();
-        return (await session.Events.FetchStreamAsync(groupId)).Select(e => e.Data).ToList();
+        return (await session.Events.FetchStreamAsync(groupId.Value)).Select(e => e.Data).ToList();
     }
 
     // Fresh ids per test: the container is shared by every test in the run.
-    private readonly Guid _g1 = Guid.CreateVersion7();
-    private readonly Guid _m1 = Guid.CreateVersion7();
+    private readonly GroupId _g1 = GroupId.New();
+    private readonly MemberId _m1 = MemberId.New();
 
-    private StreamSpec<Command> Spec => new(Store, _g1, async (session, command) =>
+    private StreamSpec<Command> Spec => new(Store, _g1.Value, async (session, command) =>
         await Handler.Handle(session, command, _g1, _m1, default) switch
         {
             Outcome.Created => null,
@@ -40,7 +41,7 @@ public class CreateGroupIntegrationTests(AppFixture app)
             .When(new Command("Lisbon trip", "GBP", "Alice", _alice))
             .Then(
                 new GroupCreated(_g1, "Lisbon trip", "GBP", _alice),
-                new MemberAdded(_m1, "Alice"),
+                new MemberAdded(_m1, "Alice", _alice),
                 new MemberClaimed(_m1, _alice));
 
     [Fact]
@@ -63,7 +64,7 @@ public class CreateGroupIntegrationTests(AppFixture app)
         Assert.Equal(
             [
                 new GroupCreated(body.GroupId, "Lisbon trip", "GBP", _alice),
-                new MemberAdded(body.MemberId, "Alice"),
+                new MemberAdded(body.MemberId, "Alice", _alice),
                 new MemberClaimed(body.MemberId, _alice),
             ],
             await StreamOf(body.GroupId));
@@ -77,7 +78,7 @@ public class CreateGroupIntegrationTests(AppFixture app)
         var body = await response.Content.ReadFromJsonAsync<CreatedBody>();
 
         await using var session = Store.QuerySession();
-        var names = (await session.Events.FetchStreamAsync(body!.GroupId)).Select(e => e.EventTypeName);
+        var names = (await session.Events.FetchStreamAsync(body!.GroupId.Value)).Select(e => e.EventTypeName);
         Assert.Equal(["group_created", "member_added", "member_claimed"], names);
     }
 
@@ -100,5 +101,5 @@ public class CreateGroupIntegrationTests(AppFixture app)
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    private sealed record CreatedBody(Guid GroupId, Guid MemberId);
+    private sealed record CreatedBody(GroupId GroupId, MemberId MemberId);
 }

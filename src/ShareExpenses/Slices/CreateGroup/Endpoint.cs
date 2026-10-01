@@ -1,12 +1,13 @@
 using System.Security.Claims;
 using Marten;
 using ShareExpenses.Infrastructure.Identity;
+using ShareExpenses.Shared;
 
 namespace ShareExpenses.Slices.CreateGroup;
 
 internal sealed record Request(string? Name, string? Currency, string? DisplayName);
 
-internal sealed record Response(Guid GroupId, Guid MemberId);
+internal sealed record Response(GroupId GroupId, MemberId MemberId);
 
 /// <summary><c>POST /groups</c> — the New group screen's submit.</summary>
 internal static class Endpoint
@@ -21,7 +22,7 @@ internal static class Endpoint
     {
         var command = new Command(request.Name, request.Currency, request.DisplayName, user.UserId());
 
-        var outcome = await Handler.Handle(session, command, Guid.CreateVersion7(), Guid.CreateVersion7(), ct);
+        var outcome = await Handler.Handle(session, command, GroupId.New(), MemberId.New(), ct);
 
         return outcome switch
         {

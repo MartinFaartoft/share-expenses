@@ -56,24 +56,25 @@ slices:
         name: string
         currency: string
         displayName: string
-        createdBy: Guid
+        createdBy: UserId
     events:
       # three events from one command: a group whose creator is not a member is
       # a meaningless state, so the creator is seated and claimed here
       - name: GroupCreated
         fields:
-          groupId: Guid
+          groupId: GroupId
           name: string
           currency: string
-          createdBy: Guid
+          createdBy: UserId
       - name: MemberAdded
         fields:
-          memberId: Guid
+          memberId: MemberId
           displayName: string
+          by: UserId
       - name: MemberClaimed
         fields:
-          memberId: Guid
-          userId: Guid
+          memberId: MemberId
+          userId: UserId
 
   - slice: Add a member
     type: State Change
@@ -81,8 +82,12 @@ slices:
       name: Group setup
     command:
       name: AddMember
-    events: [MemberAdded]
-
+      fields:
+        groupId: GroupId
+        displayName: string
+        by: UserId
+    events:  [MemberAdded]
+        
   - slice: Invite a member
     type: State Change
     screen: Group setup
@@ -91,7 +96,7 @@ slices:
     events:
       - name: MemberInvited
         fields:
-          memberId: Guid
+          memberId: MemberId
           email: string
 
   - slice: Claim a slot

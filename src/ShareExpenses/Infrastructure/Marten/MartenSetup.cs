@@ -1,5 +1,6 @@
 using JasperFx;
 using Marten;
+using ShareExpenses.Shared;
 
 namespace ShareExpenses.Infrastructure.Marten;
 
@@ -23,6 +24,12 @@ public static class MartenSetup
                 opts.AutoCreateSchemaObjects = env.IsDevelopment()
                     ? AutoCreate.CreateOrUpdate
                     : AutoCreate.None;
+
+                // Typed ids are bare Guids in JSON; registering them lets LINQ
+                // compare and search them like Guids (spec §12, verified by spike).
+                opts.RegisterValueType(typeof(GroupId));
+                opts.RegisterValueType(typeof(MemberId));
+                opts.RegisterValueType(typeof(UserId));
 
                 // Event types and projections belong to the slices that own them.
                 AllSlices.Register(opts);
