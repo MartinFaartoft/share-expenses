@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Testcontainers.PostgreSql;
+using ShareExpenses.Infrastructure.Identity;
 
 namespace ShareExpenses.Tests.Infrastructure;
 
@@ -38,13 +39,19 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
         return client;
     }
 
+    /// <summary>Every email the app sends, instead of logging it.</summary>
+    public RecordingEmailSender Emails { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
         builder.UseSetting("ConnectionStrings:Postgres", _postgres.GetConnectionString());
         builder.ConfigureTestServices(services =>
+        {
             services.AddAuthentication(HeaderAuthentication.SchemeName)
-                .AddScheme<AuthenticationSchemeOptions, HeaderAuthentication>(HeaderAuthentication.SchemeName, null));
+                .AddScheme<AuthenticationSchemeOptions, HeaderAuthentication>(HeaderAuthentication.SchemeName, null);
+            services.AddSingleton<IEmailSender>(Emails);
+        });
     }
 
     private sealed class HeaderAuthentication(

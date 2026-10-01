@@ -1,6 +1,7 @@
 using Marten;
 using ShareExpenses.Slices.AddMember;
 using ShareExpenses.Slices.CreateGroup;
+using ShareExpenses.Slices.InviteMember;
 
 namespace ShareExpenses;
 
@@ -16,6 +17,7 @@ public static class AllSlices
     {
         CreateGroupSlice.Register(opts);
         AddMemberSlice.Register(opts);
+        InviteMemberSlice.Register(opts);
     }
 
     /// <summary>HTTP endpoints, contributed by the slice that owns them.</summary>
@@ -23,5 +25,6 @@ public static class AllSlices
     {
         CreateGroupSlice.Map(api);
         AddMemberSlice.Map(api);
+        InviteMemberSlice.Map(api);
     }
 }

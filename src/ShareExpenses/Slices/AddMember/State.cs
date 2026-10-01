@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Marten.Schema;
 using ShareExpenses.Shared;
 using ShareExpenses.Slices.CreateGroup;
 
@@ -18,7 +19,12 @@ namespace ShareExpenses.Slices.AddMember;
 ///
 /// Convention methods must be public for Marten's source generator; the type is
 /// internal, so they are not visible outside the assembly.
+///
+/// The alias is required: Marten names a type by its bare class name, and every
+/// slice has a <c>State</c> — without it, two slices collide on <c>ledger.state</c>
+/// and whichever is used second fails at runtime.
 /// </summary>
+[DocumentAlias("add_member_state")]
 internal sealed record State(ImmutableHashSet<UserId> Members, ImmutableHashSet<string> NameKeys)
 {
     public static State Create(GroupCreated _) => new([], []);

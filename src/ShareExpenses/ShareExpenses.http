@@ -75,6 +75,7 @@ Content-Type: application/json
 # Uses step 2's response. That reference syntax is the VS Code REST Client's; in
 # the JetBrains client, replace {{groupId}} with the id from step 2 by hand.
 @groupId = {{createGroup.response.body.$.groupId}}
+# @name addMember
 POST {{host}}/api/groups/{{groupId}}/members
 Content-Type: application/json
 
@@ -98,5 +99,33 @@ Content-Type: application/json
   "displayName": "Bob"
 }
 
-### 7. Health
+### 7. Invite Bob (from step 4). Expect 200 with the invite link; the same link is
+# written to the app log by LogEmailSender. Only the token's hash is stored:
+# compare the link with ledger.mt_events (type member_invited, TokenHash).
+@bobId = {{addMember.response.body.$.memberId}}
+POST {{host}}/api/groups/{{groupId}}/members/{{bobId}}/invite
+Content-Type: application/json
+
+{
+  "email": "bob@example.com"
+}
+
+### 8. Re-invite Bob at another address. Expect 200 and a new link; the old one is retired.
+POST {{host}}/api/groups/{{groupId}}/members/{{bobId}}/invite
+Content-Type: application/json
+
+{
+  "email": "bob@new.example.com"
+}
+
+### 9. Rejected: Alice's own slot has already joined. Expect 400.
+@aliceId = {{createGroup.response.body.$.memberId}}
+POST {{host}}/api/groups/{{groupId}}/members/{{aliceId}}/invite
+Content-Type: application/json
+
+{
+  "email": "alice@example.com"
+}
+
+### 10. Health
 GET {{host}}/health

@@ -1,14 +1,21 @@
 namespace ShareExpenses.Infrastructure.Identity;
 
-/// <summary>Every sign-in email carries a tappable link and a six-digit code (spec §4).</summary>
+/// <summary>
+/// Outgoing email. Every sign-in email carries a tappable link and a six-digit code
+/// (spec §4); every invite email carries the invite link (slice 3).
+/// </summary>
 public interface IEmailSender
 {
     Task SendSignInAsync(string email, string link, string code, CancellationToken ct = default);
+
+    Task SendInviteAsync(
+        string email, string link, string groupName, string inviterName, string memberName,
+        CancellationToken ct = default);
 }
 
 /// <summary>
-/// Development stand-in for a real mail relay: writes the sign-in link and code to
-/// the application log. Must never run in Production — there it would "work"
+/// Development stand-in for a real mail relay: writes each email's link to the
+/// application log. Must never run in Production — there it would "work"
 /// perfectly while silently locking out every real user.
 /// </summary>
 public sealed class LogEmailSender(ILogger<LogEmailSender> logger) : IEmailSender
@@ -16,6 +23,15 @@ public sealed class LogEmailSender(ILogger<LogEmailSender> logger) : IEmailSende
     public Task SendSignInAsync(string email, string link, string code, CancellationToken ct = default)
     {
         logger.LogWarning("Sign-in email for {Email}: link {Link} code {Code}", email, link, code);
+        return Task.CompletedTask;
+    }
+
+    public Task SendInviteAsync(
+        string email, string link, string groupName, string inviterName, string memberName,
+        CancellationToken ct = default)
+    {
+        logger.LogWarning("Invite email for {Email}: {Inviter} invited you to {Group} as {Member}: {Link}",
+            email, inviterName, groupName, memberName, link);
         return Task.CompletedTask;
     }
 }

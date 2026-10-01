@@ -83,7 +83,14 @@ This is the ledger. History *is* the product here — "why is my balance this
 number" is answered by replaying what happened.
 
 **Plain documents, not event-sourced (supporting state):** users, sessions,
-login tokens, invite-token lookups.
+login tokens.
+
+Invite lookups were on this list and moved off it with slice 3: an invite's token
+*hash* is recorded on `MemberInvited`, and the lookup is folded from the group
+stream on demand (§11). The hash is safe to keep forever — a SHA-256 of 256 random
+bits cannot be reversed or guessed, and claims nothing on its own — and keeping it
+in the stream means re-inviting and claiming retire old links with no second
+store to keep in step.
 
 Rationale: these have no interesting history, no invariants worth auditing, and
 high write churn. Event-sourcing a session table produces a firehose of noise
@@ -515,7 +522,7 @@ GroupCreated(name, currency, createdBy)
 GroupRenamed(name, by)
 GroupArchived(by) / GroupUnarchived(by)
 MemberAdded(memberId, displayName, by)
-MemberInvited(memberId, email, by)
+MemberInvited(memberId, email, tokenHash, by)
 MemberClaimed(memberId, userId)
 MemberClaimReleased(memberId, userId, releasedBy)
 MemberRenamed(memberId, displayName, by)
@@ -544,6 +551,18 @@ Note on enforcement: "a group is created exactly once" is guaranteed by Marten's
 stream semantics and optimistic concurrency — appending `GroupCreated` at expected
 version 0 to a stream that already exists fails — rather than by aggregate
 validation.
+
+**Decision: invite emails are recorded in `MemberInvited`, and cannot be erased.**
+Events are immutable, so an email address in the stream stays there; honouring a
+request to be forgotten would mean rewriting the stream or not honouring it.
+Accepted for v1: this is a private app among friends, the address is useful
+history ("Alice invited bob@…"), and the exposure is small. Every backup carries
+the addresses too.
+
+**Invite links expire after 30 days**, measured from the `MemberInvited` append
+time in stream metadata. Enforced where the link is used (viewing and claiming),
+not when inviting; a link is retired earlier by re-inviting the slot or by the
+slot being claimed.
 
 Transactions:
 ```
@@ -591,7 +610,13 @@ the truthful statement anyway.
 | `GroupLedger` | **inline** | members, live expenses, per-member balances |
 | `ActivityFeed` | **inline** | who did what, when |
 | `UserGroups` | **async** (multi-stream) | a user's group list |
-| `InviteLookup` | plain document | token → group + member slot |
+| `InviteLookup` | **live** (folded on each request, nothing stored) | invite landing page: group, slot, inviter |
+
+`InviteLookup` is live deliberately — the third lifecycle. An invite link carries
+its group id (`/invites/{groupId}/{token}`), so looking one up means folding a
+single group stream of a few hundred events: cheap enough to do per request, and
+nothing is stored that could go stale. Scoping the link to the group is what
+makes this possible; a bare token would need a projection across every group.
 
 Rationale for inline on the ledger: the core phone interaction is "add the
 expense, then immediately look at the balances". Inline projections commit in the
@@ -788,6 +813,13 @@ have a reason not to.
   its HTTP mapping.
 - **Event types are registered with explicit stored names** (`group_created`),
   so a class or folder rename can never change what is in the database.
+- **Every slice's `State` carries a unique `[DocumentAlias("<slice>_state")]`.**
+  Marten names a type by its bare class name, so two slices' `State` types
+  collide on `ledger.state` — found by slice 3, where whichever slice was used
+  second failed with a 500. The attribute, not `Schema.For<State>()` in
+  `Register`: registering makes Marten validate the state as a stored document,
+  which demands an `Id` a live-folded state does not have. Enforced by the
+  architecture tests.
 - **Tests per slice:** `<Name>Specs` mirror `slice-NN-*.md` line for line against
   `Decide` alone; `<Name>IntegrationTests` cover what needs a store (e.g. "created
   exactly once") and the HTTP mapping, against a throwaway PostgreSQL container
@@ -1068,6 +1100,22 @@ a documentation tool, not application code.
   Mechanism: an xUnit test that reads the YAML and the `.md` files and reflects
   over the assembly, so `dotnet test` — and therefore the build gate — fails on a
   mismatch. Draft slices are skipped, as in the generator.
+- **OPEN** Capture the group creator's email, so "one email, one slot per group"
+  holds for every slot. Today an email reaches the group stream only through
+  `MemberInvited`, so the creator's slot — seated and claimed by `CreateGroup`
+  without an invite — has no email, and inviting the creator's own address to
+  another slot passes InviteMember's check. Claiming still fails it (a user holds
+  at most one slot), but late and on the invitee's side. Options to weigh:
+  - carry the creator's email on `CreateGroup` (from the session, not typed) into
+    an existing or new event — e.g. an email field on `MemberClaimed`, which
+    would also record the email of everyone who claims via an invite;
+  - record the user's email on every `MemberClaimed`, making "which email holds
+    which slot" a fact of the stream regardless of how the slot was claimed;
+  - look the email up from Identity at decide time — rejected in principle,
+    since it makes the decision depend on state outside the stream.
+  Consequences: more personal data in immutable events (§11, see the decision on
+  emails in events), a schema change to slice 1's events, and InviteMember's rule
+  switching from "invited or joined via invite" to "held by any slot".
 - **OPEN** Optional guardrail: only the *active* slice may change. Finished
   slices are settled code, and an AI agent working on slice N can easily "tidy"
   slice N−2 on the way past. A validation script — runnable by hand, as a
@@ -1088,6 +1136,10 @@ a documentation tool, not application code.
     while building slice 2.
   - Optional means advisory by default: it reports, and the caller decides
     whether to gate on it.
+- **DEFERRED** Crypto-shredding for personal data in events: encrypt each email
+  with a per-person key held outside the stream, and delete the key to erase it.
+  The standard event-sourcing answer to the right to be forgotten; revisit if
+  erasure is ever actually requested (§11).
 - **DEFERRED** Completeness inside composite read model types (`Member[]`), with
   slice 6; values decided from stream state (`source: state`), with slice 4 (§13).
 - **DEFERRED** Transactional relay — shortlisted in §4; `LogEmailSender` until then.

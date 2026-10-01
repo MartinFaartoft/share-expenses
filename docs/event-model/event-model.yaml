@@ -119,16 +119,52 @@ slices:
     events:  [MemberAdded]
         
   - slice: Invite a member
-    draft: true
     type: State Change
-    screen: Group setup
+    screen:
+      name: Invite member
+      inputs:
+        email: string
     command:
       name: InviteMember
+      fields:
+        groupId: { type: GroupId, source: route, stream: true }
+        memberId: { type: MemberId, source: route }
+        email: string
+        # SHA-256 of a random token generated per invite; the raw token is
+        # returned and emailed once, and recorded nowhere
+        tokenHash: { type: string, source: generated }
+        by: { type: UserId, source: session }
     events:
       - name: MemberInvited
         fields:
           memberId: MemberId
           email: string
+          tokenHash: string
+          by: UserId
+
+  - slice: View invite
+    draft: true
+    type: State Read
+    screen:
+      name: Invite landing
+      wireframe:
+        - "Alice invited you to"
+        - "Lisbon trip as Bob"
+        - ""
+        - "  [ Sign me in ]"
+    readModel:
+      # live: folded from the one group stream named in the link, per request
+      name: InviteLookup
+      fields:
+        groupName: { type: string, source: [GroupCreated] }
+        memberName: { type: string, source: [MemberAdded] }
+        invitedBy: { type: string, source: [MemberInvited, MemberAdded] }
+        live: { type: bool, source: [MemberInvited, MemberClaimed] }
+      reads:
+        - GroupCreated
+        - MemberAdded
+        - MemberInvited
+        - MemberClaimed
 
   - slice: Claim a slot
     draft: true

@@ -83,6 +83,29 @@ internal static class SliceRules
         return violations;
     }
 
+    /// <summary>
+    /// Every slice's <c>State</c> carries a unique Marten <c>[DocumentAlias]</c>. Marten
+    /// names a type by its bare class name, so two slices' <c>State</c> types otherwise
+    /// collide — and only fail at runtime, in whichever slice is used second.
+    /// </summary>
+    public static IReadOnlyList<string> StateAliases(ModuleDefinition module, SliceLayout layout)
+    {
+        var states = module.GetTypes()
+            .Where(t => t.Name == "State" && SliceOf(t, layout) is not null)
+            .Select(t => (slice: SliceOf(t, layout)!, alias: t.CustomAttributes
+                .FirstOrDefault(a => a.AttributeType.FullName == "Marten.Schema.DocumentAliasAttribute")
+                ?.ConstructorArguments[0].Value as string))
+            .ToList();
+
+        return states.Where(s => s.alias is null)
+            .Select(s => $"{s.slice}: State has no [DocumentAlias]")
+            .Concat(states.Where(s => s.alias is not null)
+                .GroupBy(s => s.alias)
+                .Where(g => g.Count() > 1)
+                .Select(g => $"{string.Join(", ", g.Select(s => s.slice).Order())}: State alias '{g.Key}' is not unique"))
+            .ToList();
+    }
+
     // ── helpers ────────────────────────────────────────────────────────────────
 
     /// <summary>The slice a type belongs to: the namespace segment directly under the slices root.</summary>

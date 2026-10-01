@@ -24,7 +24,7 @@ public class SliceBoundaryTests
     private static readonly SliceLayout Bad =
         new($"{Fixtures}.Bad.Slices", $"{Fixtures}.Bad.Shared", $"{Fixtures}.Bad.Catalog");
 
-    public static TheoryData<string> Rules => ["PublicSurface", "CrossSliceDependencies", "SharedIsPure", "EntryPointsWired"];
+    public static TheoryData<string> Rules => ["PublicSurface", "CrossSliceDependencies", "SharedIsPure", "EntryPointsWired", "StateAliases"];
 
     private static IReadOnlyList<string> Check(string rule, ModuleDefinition module, SliceLayout layout) => rule switch
     {
@@ -32,6 +32,7 @@ public class SliceBoundaryTests
         "CrossSliceDependencies" => SliceRules.CrossSliceDependencies(module, layout),
         "SharedIsPure" => SliceRules.SharedIsPure(module, layout),
         "EntryPointsWired" => SliceRules.EntryPointsWired(module, layout),
+        "StateAliases" => SliceRules.StateAliases(module, layout),
         _ => throw new ArgumentOutOfRangeException(nameof(rule)),
     };
 
@@ -73,4 +74,13 @@ public class SliceBoundaryTests
                 "Epsilon: no public static EpsilonSlice with Register(StoreOptions) and Map(IEndpointRouteBuilder)",
             ],
             SliceRules.EntryPointsWired(Tests, Bad));
+
+    [Fact]
+    public void Every_slice_state_has_a_unique_marten_alias() =>
+        Assert.Equal(
+            [
+                "Delta, Epsilon: State alias 'shared_state' is not unique",
+                "Gamma: State has no [DocumentAlias]",
+            ],
+            SliceRules.StateAliases(Tests, Bad).Order(StringComparer.Ordinal));
 }

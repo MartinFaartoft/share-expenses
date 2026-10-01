@@ -3,6 +3,7 @@
 // The rules read IL, so these types only need to compile, never to run.
 
 using Marten;
+using Marten.Schema;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 
@@ -12,6 +13,7 @@ namespace ShareExpenses.Tests.Architecture.Fixtures.Good.Slices.Alpha
 {
     public sealed record AlphaHappened(Guid Id);
 
+    [DocumentAlias("alpha_state")]
     internal sealed record State(int Count)
     {
         public State Apply(AlphaHappened _) => this with { Count = Count + 1 };
@@ -29,6 +31,7 @@ namespace ShareExpenses.Tests.Architecture.Fixtures.Good.Slices.Beta
     using ShareExpenses.Tests.Architecture.Fixtures.Good.Slices.Alpha;
 
     // Folding another slice's public event is the intended coupling.
+    [DocumentAlias("beta_state")]
     internal sealed record State(int AlphaCount)
     {
         public State Apply(AlphaHappened _) => this with { AlphaCount = AlphaCount + 1 };
@@ -77,7 +80,7 @@ namespace ShareExpenses.Tests.Architecture.Fixtures.Bad.Slices.Gamma
 
     public record Unsealed(int X);             // public record, not sealed
 
-    internal sealed record State(int X);
+    internal sealed record State(int X);       // no [DocumentAlias]
 
     public static class GammaSlice
     {
@@ -88,6 +91,9 @@ namespace ShareExpenses.Tests.Architecture.Fixtures.Bad.Slices.Gamma
 
 namespace ShareExpenses.Tests.Architecture.Fixtures.Bad.Slices.Delta
 {
+    [DocumentAlias("shared_state")]
+    internal sealed record State(int Y);       // alias also used by Epsilon
+
     internal static class Peek
     {
         public static int Look(Gamma.State state) => state.X;   // another slice's internal
@@ -103,6 +109,9 @@ namespace ShareExpenses.Tests.Architecture.Fixtures.Bad.Slices.Delta
 namespace ShareExpenses.Tests.Architecture.Fixtures.Bad.Slices.Epsilon
 {
     internal sealed record Orphan(int X);      // slice with no entry point
+
+    [DocumentAlias("shared_state")]
+    internal sealed record State(int Z);       // alias also used by Delta
 }
 
 namespace ShareExpenses.Tests.Architecture.Fixtures.Bad.Shared

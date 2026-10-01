@@ -1,5 +1,6 @@
 using Marten;
 using ShareExpenses;
+using ShareExpenses.Infrastructure;
 using ShareExpenses.Infrastructure.Identity;
 using ShareExpenses.Infrastructure.Marten;
 
@@ -10,6 +11,7 @@ var connectionString = builder.Configuration.GetConnectionString("Postgres")
 
 builder.Services.AddLedgerStore(connectionString, builder.Environment);
 builder.Services.AddPasswordlessIdentity(connectionString, builder.Environment);
+builder.Services.AddPublicOrigin(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
 
