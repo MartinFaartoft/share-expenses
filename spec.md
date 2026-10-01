@@ -741,7 +741,8 @@ which silently produces a wrong diagram:
   that respects explicit dimensions.** Uniform cards and per-line styling are
   therefore mutually exclusive. Fields are `- name: Type` lines in
   `style.font: mono` under the card's title, left-aligned by padding every line to
-  21 columns: equal-length lines in a monospace font form a rectangle, and
+  the longest line in the model: equal-length lines in a monospace font form a
+  rectangle, and
   centring a rectangle leaves them flush left. That padding is load-bearing, not
   cosmetic. Making the title alone bold or larger was attempted three ways and is
   not possible:

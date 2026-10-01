@@ -3,7 +3,7 @@
 
     .venv/bin/python docs/event-model/generate.py
 
-Writes <meta.diagram>.d2 next to the YAML and prints a validation report.
+Writes <chapter>.d2 next to the YAML and prints a validation report.
 Exits non-zero if any check fails, so it can gate a commit.
 
 The .d2 output is derived - never edit it by hand.
@@ -27,7 +27,8 @@ LAYOUT CONSTRAINTS found by rendering, all recorded in spec.md section 13:
     their content, which collapses the grid.
   * A plain label has one font and one size, so a card title cannot be bolder or
     larger than its fields.  Title is distinguished by position only.
-  * Every line is padded to meta.columns: equal-length lines in a monospace font
+  * Every line is padded to the longest line in the model: equal-length lines in a
+    monospace font
     form a rectangle, and centring a rectangle leaves them flush left.  This
     padding is load-bearing.
   * No colspan, so a multi-event slice's screen and command sit in the first of
@@ -36,6 +37,10 @@ LAYOUT CONSTRAINTS found by rendering, all recorded in spec.md section 13:
 import sys, pathlib, yaml
 
 HERE = pathlib.Path(__file__).resolve().parent
+
+# Presentation constants - deliberately not in the model file.  The model says
+# what the slices are; how big a card is drawn is this script's business.
+CARD_WIDTH, CARD_HEIGHT = 250, 160
 STATE_CHANGE, STATE_READ = "State Change", "State Read"
 AUTOMATION, TRANSLATION = "Automation", "Translation"
 # the four canonical Event Modeling slice types
@@ -74,9 +79,11 @@ class Model:
     """Resolved model: declarations gathered, references checked, order kept."""
 
     def __init__(self, raw, rep):
-        self.meta = raw["meta"]
+        self.chapter = raw.get("chapter")
         self.slices = raw.get("slices") or []
         self.rep = rep
+        if not (self.chapter or "").strip():
+            rep.error("the model has no `chapter`")
         self.decl = {}          # (kind, name) -> {"slice": i, "spec": {...}}
         self._resolve()
 
@@ -163,6 +170,25 @@ class Model:
 
 
 # --------------------------------------------------------------- rendering
+def pad_width(m):
+    """Widest line anywhere in the model.
+
+    Every card line is padded to this, which is what left-aligns the field lists:
+    equal-length lines in a monospace font form a rectangle, and centring a
+    rectangle leaves every line flush left.  Computed rather than configured, so
+    adding a longer field name cannot silently break the alignment.
+    """
+    widest = 0
+    for (kind, name), d in m.decl.items():
+        spec = d["spec"] or {}
+        widest = max(widest, len(name))
+        for k, v in (spec.get("fields") or {}).items():
+            widest = max(widest, len("- %s: %s" % (k, v)))
+        for raw in spec.get("wireframe") or []:
+            widest = max(widest, len(raw))
+    return widest
+
+
 def card(key, cls, title, fields=None, wireframe=None, W=21):
     lines = [title.ljust(W), " " * W]
     for k, v in (fields or {}).items():
@@ -226,8 +252,8 @@ classes: {
 
 
 def render(m):
-    W = m.meta["columns"]
-    cw, ch = m.meta["card"]["width"], m.meta["card"]["height"]
+    W = pad_width(m)
+    cw, ch = CARD_WIDTH, CARD_HEIGHT
     slices = m.slices
     slots = [max(1, len(sl.get("events") or [])) for sl in slices]
     ncols = 1 + sum(slots) + (len(slices) - 1)
@@ -312,6 +338,13 @@ def render(m):
     return "".join(out), ncols
 
 
+def slug(text):
+    out = "".join(c.lower() if c.isalnum() else "-" for c in text)
+    while "--" in out:
+        out = out.replace("--", "-")
+    return out.strip("-")
+
+
 def main():
     raw = yaml.safe_load((HERE / "event-model.yaml").read_text())
     rep = Report()
@@ -335,11 +368,11 @@ def main():
 
     rc = rep.emit()
     d2, ncols = render(model)
-    target = HERE / ("%s.d2" % model.meta["diagram"])
+    target = HERE / ("%s.d2" % slug(model.chapter or "chapter"))
     target.write_text(d2)
     cells = d2.count("{ class: ")
-    print("wrote  %s  (%d columns x 5 rows = %d cells, %d emitted)"
-          % (target.name, ncols, ncols * 5, cells))
+    print("wrote  %s  (%d columns x 5 rows = %d cells, %d emitted, pad %d)"
+          % (target.name, ncols, ncols * 5, cells, pad_width(model)))
     if cells != ncols * 5:
         print("ERROR  grid is not exactly full - D2 will silently reflow it")
         rc = 1

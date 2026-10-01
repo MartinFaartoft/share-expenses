@@ -1,0 +1,20 @@
+# Local development database. Production runs PostgreSQL directly on the VPS (spec §3).
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: share_expenses
+      POSTGRES_USER: share_expenses
+      POSTGRES_PASSWORD: share_expenses
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U share_expenses -d share_expenses"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  pgdata:

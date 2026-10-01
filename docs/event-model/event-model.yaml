@@ -3,7 +3,10 @@
 # Render and validate with:
 #     .venv/bin/python docs/event-model/generate.py
 #
-# happy-path.d2 is generated from this file; never edit it by hand.
+# The .d2 file is generated from this file, named after the chapter; never edit it
+# by hand.  Card dimensions and the field-padding width are the generator's
+# concern, not the model's: the padding width is computed from the longest line
+# in the model.
 # Given-when-then specifications live in slice-NN-*.md.
 #
 # STRUCTURE
@@ -33,13 +36,7 @@
 #   generator resolves each name to the nearest occurrence at or before this
 #   slice, and draws it dashed when the only occurrence is later.
 
-meta:
-  diagram: happy-path
-  # Field lines are padded to this many columns.  Equal-length lines in a
-  # monospace font form a rectangle, and centring a rectangle leaves every line
-  # flush left - this padding is what left-aligns the field lists.
-  columns: 21
-  card: { width: 250, height: 160 }
+chapter: Happy path
 
 slices:
 
