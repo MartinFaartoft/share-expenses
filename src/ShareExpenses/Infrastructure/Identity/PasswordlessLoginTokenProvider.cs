@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 
-namespace ShareExpenses.Api.Identity;
+namespace ShareExpenses.Infrastructure.Identity;
 
 /// <summary>
 /// Stateless, self-validating sign-in link tokens (spec §4). Its own options type

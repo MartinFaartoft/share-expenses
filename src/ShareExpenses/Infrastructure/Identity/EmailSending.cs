@@ -1,4 +1,4 @@
-namespace ShareExpenses.Api.Identity;
+namespace ShareExpenses.Infrastructure.Identity;
 
 /// <summary>Every sign-in email carries a tappable link and a six-digit code (spec §4).</summary>
 public interface IEmailSender

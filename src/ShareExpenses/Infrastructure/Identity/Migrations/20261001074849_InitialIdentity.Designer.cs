@@ -2,18 +2,21 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
-using ShareExpenses.Api.Identity;
+using ShareExpenses.Infrastructure.Identity;
 
 #nullable disable
 
-namespace ShareExpenses.Api.Identity.Migrations
+namespace ShareExpenses.Infrastructure.Identity.Migrations
 {
     [DbContext(typeof(IdentityDb))]
-    partial class IdentityDbModelSnapshot : ModelSnapshot
+    [Migration("20261001074849_InitialIdentity")]
+    partial class InitialIdentity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

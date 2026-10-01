@@ -474,9 +474,11 @@ The plan is a query, never stored and never an event (see §11).
 
 ### Stream boundary
 
-**Decision: one stream per group.** The stream id is the group id, and the
-`Group` aggregate is rehydrated from it. Members, expenses, corrections and
-settlements are all events on that one stream.
+**Decision: one stream per group.** The stream id is the group id. Members,
+expenses, corrections and settlements are all events on that one stream, and the
+stream is the consistency boundary: every command decides against state
+rehydrated from it, and appends at the version it read. There is no single
+`Group` aggregate class — each slice folds its own state from the stream (§12).
 
 Rationale: aggregate boundaries follow **invariants**, not entities. The standard
 advice — keep aggregates small — would put each expense in its own stream, but
@@ -620,7 +622,11 @@ and is the more instructive option, but it introduces a plan lifecycle —
 proposed / partly paid / superseded / abandoned — to solve a problem that
 self-heals. Revisit if a shifting plan actually bites in practice.
 
-### Invariants the Group aggregate enforces
+### Invariants enforced on the group stream
+
+Each invariant is enforced by the slice whose command it constrains, against that
+slice's own state (§12). The consistency guarantee comes from the stream version,
+not from a shared class, so splitting the checks across slices weakens nothing.
 
 - Expense amount is positive.
 - `exact` split amounts sum exactly to the total.
@@ -633,6 +639,11 @@ self-heals. Revisit if a shifting plan actually bites in practice.
   claimed again.
 - A user holds at most one member slot per group — otherwise their balance
   is ambiguous.
+
+Two of these cut across nearly every slice — "not archived" and "is a current
+member". Each slice folds the few events involved itself. The duplication is a
+handful of lines per slice and is accepted; it is the price of slices that can be
+read, changed and deleted in isolation.
 
 ### Concurrency
 
@@ -663,6 +674,91 @@ deliberate passes over the same code.**
 Rationale: §2 applied honestly. The rework *is* the exercise, not waste — a
 framework is far easier to judge once you have written the code it replaces.
 Phase 2 is a conscious checkpoint, not a backlog item.
+
+### Code structure: vertical slices
+
+**Decision: one folder per event-model slice, and the folder owns everything about
+it** — events, command, state, decision logic, read model, projection and HTTP
+endpoints. Folder and namespace are named after the slice in `event-model.yaml`,
+in PascalCase: `Slices/CreateGroup`, namespace `ShareExpenses.Slices.CreateGroup`.
+
+Rationale: the event model is already cut into slices, so the code should be cut
+the same way. A slice can then be read, changed or deleted as one unit, and a
+diff touching two slice folders is a signal worth noticing in review.
+
+```
+src/ShareExpenses/
+  Program.cs          hosting only
+  AllSlices.cs        the explicit list of slices
+  Infrastructure/     Identity (EF), Marten store setup
+  Shared/             pure, framework-free code used by several slices
+  Slices/<Name>/      one folder per slice
+```
+
+**Decision: a single application project.** A slice owns its endpoint, so it needs
+ASP.NET and Marten; a framework-free domain project would split every slice
+across two projects. Purity is kept where it pays: decision logic is a pure
+function inside the slice, and `Shared/` must not reference ASP.NET, Marten or
+any slice.
+
+**Decision: only events are public.** Every other type in a slice is `internal`.
+The two exceptions are the slice's events and one static entry-point class,
+`<Name>Slice`, exposing `Register(StoreOptions)` and `Map(IEndpointRouteBuilder)`.
+The suffix avoids the namespace `CreateGroup` colliding with a type of the same
+name.
+
+- **An event is owned by the slice that first emits it** — the same rule as
+  "declared once, at first appearance" in `event-model.yaml`. `AddMember` emits
+  `MemberAdded` but does not declare it; it uses `CreateGroup`'s public record.
+- Events are the only coupling between slices, which is exactly what the event
+  model draws.
+
+**Decision: per-slice private state, no shared aggregate.** A state-change slice
+folds only the events it needs — from any slice, since events are public — into
+its own internal state type, and decides with a pure function
+`Decide(state, command) → events | rejection`. `RecordExpense` knows members and
+removals; `RemoveMember` additionally folds balances.
+
+Rationale: a shared `Group` aggregate would be the one fat type every slice
+depends on, which is precisely the coupling the slices exist to avoid. It also
+breaks the "only events are public" rule. The state a command needs is a
+projection of the stream like any other; there is no reason it must be the *same*
+projection for every command.
+
+**Enforcement: `internal` plus an architecture test.** C# has no folder-level
+visibility, so `internal` alone means assembly-wide. A test fails the build when:
+
+- a public type in a slice is anything other than a `sealed record` event or the
+  `<Name>Slice` entry point;
+- a slice depends on another slice's non-public types;
+- `Shared/` depends on a slice, ASP.NET or Marten;
+- a slice namespace has no `<Name>Slice`, or `AllSlices` does not call it.
+
+**Marten constraint, verified by spike rather than assumed:** internal state
+types, internal projected documents, inline projections over them, LINQ queries
+and `FetchForWriting` concurrency conflicts all work. But Marten 9 dispatches
+conventional `Create`/`Apply` methods through a compile-time source generator,
+which silently declines methods that are not `public` — the failure only surfaces
+at runtime, as "no source-generated dispatcher found". So: **types `internal`,
+convention methods `public`**. Their effective visibility is still internal, so
+the rule holds; the architecture test checks types, not members.
+
+Tests reach internal types through `InternalsVisibleTo`. Rejected: private nested
+types in a `static partial class` per slice (compiler-enforced, but untestable
+below HTTP and hostile to Marten's code generation), and a project per slice
+(real enforcement, roughly twenty projects for v1).
+
+**Decision: endpoints are stitched together explicitly.** `AllSlices.cs` calls every
+slice's `Register` and `Map` by name. The full API surface is readable in one
+file, and a missing slice is visible in review — and caught by the architecture
+test. Rejected: reflection-based discovery, which saves one line per slice at the
+cost of knowing what is wired up. (Named `AllSlices`, not `Slices`: a class cannot
+share a name with the `ShareExpenses.Slices` namespace.)
+
+The architecture tests run every rule against the application *and* against
+fixture slices in the test project — one conforming, several deliberately
+violating — so a rule that silently stops firing fails the build instead of
+passing vacuously.
 
 ---
 
@@ -840,6 +936,8 @@ a documentation tool, not application code.
 ## 14. Open questions
 
 - **OPEN** Frontend framework and rendering approach. Deferred deliberately.
+- **OPEN** Check event names in `event-model.yaml` against the public event
+  records in each slice folder, so the model cannot drift from the code (§12, §13).
 - **DEFERRED** Transactional relay — shortlisted in §4; `LogEmailSender` until then.
 - **DEFERRED** `PeriodClosed` / stream archival, until a stream is actually long.
 - **DEFERRED** Wolverine port (phase 2 above).

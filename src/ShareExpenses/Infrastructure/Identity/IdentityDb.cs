@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
-namespace ShareExpenses.Api.Identity;
+namespace ShareExpenses.Infrastructure.Identity;
 
 /// <summary>
 /// EF Core, strictly confined to identity (spec §4): users, logins and the
