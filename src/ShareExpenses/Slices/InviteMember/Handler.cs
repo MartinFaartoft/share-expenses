@@ -14,9 +14,7 @@ internal abstract record Outcome
 
     public sealed record Invalid(string Reason) : Outcome;
 
-    public sealed record GroupNotFound : Outcome;
-
-    public sealed record MemberNotFound : Outcome;
+    public sealed record NotFound(string Reason) : Outcome;
 
     public sealed record Conflict : Outcome;
 }
@@ -42,10 +40,8 @@ internal static class Handler
 
         switch (Decider.Decide(state, command))
         {
-            case Decision.Rejected { Reason: Decider.GroupNotFound }:
-                return new Outcome.GroupNotFound();
-            case Decision.Rejected { Reason: Decider.MemberNotFound }:
-                return new Outcome.MemberNotFound();
+            case Decision.Rejected { Kind: Rejection.NotFound } rejected:
+                return new Outcome.NotFound(rejected.Reason);
             case Decision.Rejected rejected:
                 return new Outcome.Invalid(rejected.Reason);
             case Decision.Accepted accepted:

@@ -45,10 +45,8 @@ internal static class Endpoint
                 return Results.Ok(new Response(link));
             case Outcome.Invalid i:
                 return Results.Problem(i.Reason, statusCode: StatusCodes.Status400BadRequest);
-            case Outcome.GroupNotFound:
-                return NotFound(Decider.GroupNotFound);
-            case Outcome.MemberNotFound:
-                return NotFound(Decider.MemberNotFound);
+            case Outcome.NotFound n:
+                return NotFound(n.Reason);
             case Outcome.Conflict:
                 return Results.Problem(
                     "the group changed while you were inviting; please try again",

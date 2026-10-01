@@ -7,9 +7,11 @@ namespace ShareExpenses.Tests.Specs;
 /// <c>slice-NN-*.md</c> specifications:
 /// <code>
 /// Spec.Given(pastEvents).When(command).Then(newEvents);
-/// Spec.Given().When(command).ThenRejected("reason");
+/// Spec.Given().When(command).ThenRejected("reason");      // the command is invalid
+/// Spec.Given().When(command).ThenNotFound("reason");      // its target does not exist (for this actor)
 /// </code>
-/// <c>Given()</c> with no arguments is the empty stream.
+/// <c>Given()</c> with no arguments is the empty stream. The kind of rejection is
+/// checked as well as its wording: it decides the HTTP status.
 /// </summary>
 /// <param name="decide">Folds the history into the slice's state and decides the command.</param>
 internal sealed class DecideSpec<TCommand>(Func<IReadOnlyList<object>, TCommand, Decision> decide)
@@ -30,11 +32,15 @@ internal sealed class DecideSpec<TCommand>(Func<IReadOnlyList<object>, TCommand,
             Assert.Equal(expected, ((Decision.Accepted)decision).Events);
         }
 
-        public void ThenRejected(string reason)
+        public void ThenRejected(string reason) => ThenRefused(reason, Rejection.Invalid);
+
+        public void ThenNotFound(string reason) => ThenRefused(reason, Rejection.NotFound);
+
+        private void ThenRefused(string reason, Rejection kind)
         {
             if (decision is Decision.Accepted accepted)
                 Assert.Fail($"Expected rejection '{reason}', but got events: {string.Join(", ", accepted.Events)}");
-            Assert.Equal(reason, ((Decision.Rejected)decision).Reason);
+            Assert.Equal(new Decision.Rejected(reason, kind), decision);
         }
     }
 }

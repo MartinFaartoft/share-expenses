@@ -657,9 +657,9 @@ the truthful statement anyway.
 | `GroupLedger` | **inline** | members, live expenses, per-member balances |
 | `ActivityFeed` | **inline** | who did what, when |
 | `UserGroups` | **async** (multi-stream) | a user's group list |
-| `InviteLookup` | **live** (folded on each request, nothing stored) | invite landing page: group, slot, inviter |
+| `InviteReadModel` | **live** (folded on each request, nothing stored) | invite landing page: group, slot, inviter |
 
-`InviteLookup` is live deliberately — the third lifecycle. An invite link carries
+`InviteReadModel` is live deliberately — the third lifecycle. An invite link carries
 its group id (`/invites/{groupId}#{token}`), so looking one up means folding a
 single group stream of a few hundred events: cheap enough to do per request, and
 nothing is stored that could go stale. Scoping the link to the group is what
@@ -860,21 +860,53 @@ have a reason not to.
   its HTTP mapping.
 - **Event types are registered with explicit stored names** (`group_created`),
   so a class or folder rename can never change what is in the database.
+- **Naming: every slice folds a `State`; a read slice's output is its read model.**
+  A slice's `State` is whatever it folds from the stream — what a decide function
+  decides against, or what a read slice reads from (Emmett likewise uses
+  `evolve`/state for both). A state-read slice's `Reader` then turns its `State`
+  into the **read model** named in `event-model.yaml`, which is exactly what the
+  screen receives, named `<Thing>ReadModel` (e.g. `InviteReadModel`). The two
+  differ whenever the answer depends on query inputs: ViewInvite's state holds
+  every open invite, hash and deadline; its read model is the one invite a token
+  selects, at the current time. Event Modeling draws only the events and the read
+  model — the state in between is an implementation detail. "View" is not used in
+  code: Event Modeling and Marten use it as a synonym for read model, so a type
+  named `View` that is *not* the read model invites confusion (tried briefly, and
+  reverted for that reason). `Projection` is reserved for the process — a
+  projection class, such as `GroupLedger`'s inline projection in slice 7.
 - **Every slice's `State` carries a unique `[DocumentAlias("<slice>_state")]`.**
   Marten names a type by its bare class name, so two slices' `State` types
   collide on `ledger.state` — found by slice 3, where whichever slice was used
   second failed with a 500. The attribute, not `Schema.For<State>()` in
-  `Register`: registering makes Marten validate the state as a stored document,
+  `Register`: registering makes Marten validate the type as a stored document,
   which demands an `Id` a live-folded state does not have. Enforced by the
   architecture tests.
 - **Tests per slice:** `<Name>Specs` mirror `slice-NN-*.md` line for line against
   `Decide` alone; `<Name>IntegrationTests` cover what needs a store (e.g. "created
   exactly once") and the HTTP mapping, against a throwaway PostgreSQL container
   (Testcontainers), never the development database.
-- **Specs read as `Given(...).When(...).Then(...)` / `.ThenRejected(reason)`.**
-  `DecideSpec` runs a scenario against `Decide`; `StreamSpec` runs the same shape
-  against a real stream — Given appends the history, Then asserts what the stream
-  holds afterwards (untouched on rejection). `Given()` is the empty stream.
+- **Specs read as `Given(...).When(...).Then(...)` / `.ThenRejected(reason)` /
+  `.ThenNotFound(reason)`.**
+  `DecideSpec` runs a scenario against `Decide`; `ReadSpec` against a read slice's
+  pure read; `StreamSpec` runs the same shape against a real stream — Given appends
+  the history, Then asserts what the stream holds afterwards (untouched on
+  rejection). `Given()` is the empty stream.
+- **Rejections are typed, never matched by wording.** `Decision.Reject(reason)` is
+  an invalid command (400); `Decision.NotFound(reason)` is a target that does not
+  exist for this actor (404). Handlers branch on the kind, so rewording a message
+  cannot change an HTTP status; specs assert both the wording and the kind.
+- **One test fold for every slice:** `Fold.Of<State>(history)` drives the state's
+  `Create`/`Apply` methods by the same convention Marten uses. Stricter than Marten
+  on purpose — an event the state has no method for throws unless the spec lists
+  it in `ignoring:`, so a state cannot fall behind a new event silently.
+- **Deliberately not extracted (yet):** the handler skeleton (fetch → decide →
+  append → save → 409) and the per-slice outcome-to-HTTP mapping still repeat in
+  each slice. That repetition is what Phase 2 (§12) exists to measure: port to
+  Wolverine's aggregate handler workflow once slice 5 makes four state-change
+  slices, and compare. Other frameworks' answers, for reference: Marten's
+  `WriteToAggregate`; Emmett's `CommandHandler` + `DeciderSpecification`;
+  Eventuous's `CommandService` with `On<Cmd>().InState(...)`; Equinox's
+  `Transact` — all a generic runner around a pure decide, plus typed errors.
 - **User ids are `Guid`s.** Identity is keyed on `Guid` (`User : IdentityUser<Guid>`)
   because user ids are recorded in events and need a stable, typed shape.
 

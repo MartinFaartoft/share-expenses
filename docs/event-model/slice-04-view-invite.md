@@ -5,7 +5,7 @@ Type: **State Read**. Events → read model → screen.
 | | |
 |---|---|
 | Screen | Invite landing ("Alice invited you to Lisbon trip as Bob — [Sign me in]") |
-| Read model | `InviteLookup` — **live**: folded from one group stream per request, nothing stored |
+| Read model | `InviteReadModel` — **live**: folded from one group stream per request, nothing stored |
 | Query | `ViewInvite(groupId, token, now)` — group from the route, token from the link's fragment, the clock |
 | Code | `src/ShareExpenses/Slices/ViewInvite/` |
 | Endpoint | `POST /api/invites/{groupId}/lookup`, body `{ "token": "…" }` — no sign-in |

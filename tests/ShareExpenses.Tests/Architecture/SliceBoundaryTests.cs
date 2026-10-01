@@ -79,8 +79,8 @@ public class SliceBoundaryTests
     public void Every_slice_state_has_a_unique_marten_alias() =>
         Assert.Equal(
             [
-                "Delta, Epsilon: State alias 'shared_state' is not unique",
-                "Gamma: State has no [DocumentAlias]",
+                "Delta.State, Epsilon.State: alias 'shared_state' is not unique",
+                "Gamma.State has no [DocumentAlias]",
             ],
             SliceRules.StateAliases(Tests, Bad).Order(StringComparer.Ordinal));
 }

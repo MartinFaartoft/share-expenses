@@ -44,22 +44,10 @@ public class InviteMemberSpecs
         new MemberAdded(M2, "Bob", Alice),
     ];
 
-    private static readonly DecideSpec<Command> Spec = new((history, command) => Decider.Decide(Fold(history), command));
-
-    /// <summary>
-    /// Folds history with the same Create/Apply methods Marten calls. MemberInvited is
-    /// skipped, as Marten skips events the State has no Apply for; anything else
-    /// unknown throws, so a new event in a Given forces the State to be considered.
-    /// </summary>
-    private static State? Fold(IReadOnlyList<object> history) =>
-        history.Aggregate((State?)null, (state, e) => e switch
-        {
-            GroupCreated created => State.Create(created),
-            MemberAdded added => state!.Apply(added),
-            MemberClaimed claimed => state!.Apply(claimed),
-            MemberInvited => state,
-            _ => throw new InvalidOperationException($"InviteMember's State does not fold {e.GetType().Name}"),
-        });
+    // MemberInvited is ignored on purpose: no address is in the stream, so the state
+    // has nothing to take from it — the guards use looked-up values instead.
+    private static readonly DecideSpec<Command> Spec = new((history, command) =>
+        Decider.Decide(Fold.Of<State>(history, ignoring: typeof(MemberInvited)), command));
 
     private static Command InviteMember(
         MemberId member, string? email, UserId by, UserId? emailHolder = null, params MemberId[] invitedTo) =>
@@ -75,19 +63,19 @@ public class InviteMemberSpecs
     public void S2_the_group_must_exist() =>
         Spec.Given()
             .When(InviteMember(M2, "bob@example.com", Alice))
-            .ThenRejected("group not found");
+            .ThenNotFound("group not found");
 
     [Fact]
     public void S3_only_members_of_the_group_may_invite() =>
         Spec.Given(Lisbon)
             .When(InviteMember(M2, "bob@example.com", Mallory))
-            .ThenRejected("group not found");
+            .ThenNotFound("group not found");
 
     [Fact]
     public void S4_the_slot_must_exist_in_the_group() =>
         Spec.Given(Lisbon)
             .When(InviteMember(M9, "bob@example.com", Alice))
-            .ThenRejected("member not found");
+            .ThenNotFound("member not found");
 
     [Fact]
     public void S5_a_slot_that_has_already_joined_cannot_be_invited() =>
@@ -168,7 +156,7 @@ public class InviteMemberSpecs
     public void A_non_member_learns_nothing_from_validation() =>
         Spec.Given(Lisbon)
             .When(InviteMember(M9, "not-an-email", Mallory))
-            .ThenRejected("group not found");
+            .ThenNotFound("group not found");
 
     [Fact]
     public void Any_member_may_invite_and_is_recorded_as_the_actor() =>

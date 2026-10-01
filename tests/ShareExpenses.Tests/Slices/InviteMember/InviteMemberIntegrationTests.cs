@@ -45,8 +45,7 @@ public class InviteMemberIntegrationTests(AppFixture app)
         {
             Outcome.Invited => null,
             Outcome.Invalid i => i.Reason,
-            Outcome.GroupNotFound => Decider.GroupNotFound,
-            Outcome.MemberNotFound => Decider.MemberNotFound,
+            Outcome.NotFound n => n.Reason,
             var other => throw new InvalidOperationException($"Unhandled outcome {other}"),
         });
 

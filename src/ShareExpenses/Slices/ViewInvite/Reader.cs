@@ -6,8 +6,11 @@ namespace ShareExpenses.Slices.ViewInvite;
 /// <param name="Now">The clock, passed in so reading stays pure and testable.</param>
 internal sealed record Query(GroupId GroupId, string? Token, DateTimeOffset Now);
 
-/// <summary>The read model <c>InviteLookup</c>: what the landing page shows.</summary>
-internal sealed record InviteLookup(string GroupName, string MemberName, string InvitedBy);
+/// <summary>
+/// The read model, as in <c>event-model.yaml</c>: exactly what the landing page
+/// receives. Selected from the slice's <see cref="State"/> by <see cref="Reader"/>.
+/// </summary>
+internal sealed record InviteReadModel(string GroupName, string MemberName, string InvitedBy);
 
 /// <summary>Specs: <c>docs/event-model/slice-04-view-invite.md</c>.</summary>
 internal static class Reader
@@ -17,7 +20,7 @@ internal static class Reader
     /// expired, superseded or used all read as null: the caller says "not found".
     /// </summary>
     /// <param name="state">The group's state, or null if its stream does not exist.</param>
-    public static InviteLookup? Read(State? state, Query query)
+    public static InviteReadModel? Read(State? state, Query query)
     {
         if (state is null || string.IsNullOrEmpty(query.Token))
             return null;
@@ -32,7 +35,7 @@ internal static class Reader
         if (found is not { } invite || query.Now >= invite.Value.ExpiresAt)
             return null;
 
-        return new InviteLookup(
+        return new InviteReadModel(
             state.GroupName,
             state.SlotNames[invite.Key],
             state.SlotNames[invite.Value.InvitedBy]);

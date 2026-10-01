@@ -21,7 +21,7 @@ internal static class Decider
     {
         // Membership first: a non-member learns nothing, not even from validation.
         if (state is null || !state.Members.Contains(command.By))
-            return Decision.Reject(GroupNotFound);
+            return Decision.NotFound(GroupNotFound);
 
         var name = command.DisplayName?.Trim() ?? "";
         if (name.Length == 0)

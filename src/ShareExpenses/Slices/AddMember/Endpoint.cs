@@ -24,7 +24,7 @@ internal static class Endpoint
         CancellationToken ct)
     {
         if (!GroupId.TryParse(groupId, out var id))
-            return NotFound();
+            return NotFound(Decider.GroupNotFound);
 
         var outcome = await Handler.Handle(session, new Command(id, request.DisplayName, user.UserId()), MemberId.New(), ct);
 
@@ -32,13 +32,13 @@ internal static class Endpoint
         {
             Outcome.Added a => Results.Created($"{http.Request.Path}/{a.MemberId}", new Response(a.MemberId)),
             Outcome.Invalid i => Results.Problem(i.Reason, statusCode: StatusCodes.Status400BadRequest),
-            Outcome.NotFound => NotFound(),
+            Outcome.NotFound n => NotFound(n.Reason),
             Outcome.Conflict => Results.Problem(
                 "the group changed while you were adding; please try again", statusCode: StatusCodes.Status409Conflict),
             _ => throw new InvalidOperationException($"Unhandled outcome {outcome}"),
         };
     }
 
-    private static IResult NotFound() =>
-        Results.Problem(Decider.GroupNotFound, statusCode: StatusCodes.Status404NotFound);
+    private static IResult NotFound(string reason) =>
+        Results.Problem(reason, statusCode: StatusCodes.Status404NotFound);
 }

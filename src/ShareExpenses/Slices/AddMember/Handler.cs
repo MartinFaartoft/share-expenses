@@ -12,7 +12,7 @@ internal abstract record Outcome
 
     public sealed record Invalid(string Reason) : Outcome;
 
-    public sealed record NotFound : Outcome;
+    public sealed record NotFound(string Reason) : Outcome;
 
     public sealed record Conflict : Outcome;
 }
@@ -27,8 +27,8 @@ internal static class Handler
 
         switch (Decider.Decide(stream.Aggregate, command, memberId))
         {
-            case Decision.Rejected { Reason: Decider.GroupNotFound }:
-                return new Outcome.NotFound();
+            case Decision.Rejected { Kind: Rejection.NotFound } rejected:
+                return new Outcome.NotFound(rejected.Reason);
             case Decision.Rejected rejected:
                 return new Outcome.Invalid(rejected.Reason);
             case Decision.Accepted accepted:

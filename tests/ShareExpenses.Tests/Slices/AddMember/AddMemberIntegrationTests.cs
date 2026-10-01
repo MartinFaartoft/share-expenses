@@ -39,7 +39,7 @@ public class AddMemberIntegrationTests(AppFixture app)
         {
             Outcome.Added => null,
             Outcome.Invalid i => i.Reason,
-            Outcome.NotFound => Decider.GroupNotFound,
+            Outcome.NotFound n => n.Reason,
             var other => throw new InvalidOperationException($"Unhandled outcome {other}"),
         });
 

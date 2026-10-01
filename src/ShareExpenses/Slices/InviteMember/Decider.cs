@@ -51,10 +51,10 @@ internal static class Decider
     {
         // Membership first: a non-member learns nothing, not even from validation.
         if (state is null || !state.Members.ContainsKey(command.By))
-            return Decision.Reject(GroupNotFound);
+            return Decision.NotFound(GroupNotFound);
 
         if (!state.Slots.TryGetValue(command.MemberId, out var slot))
-            return Decision.Reject(MemberNotFound);
+            return Decision.NotFound(MemberNotFound);
         if (slot.Claimed)
             return Decision.Reject("member has already joined");
 

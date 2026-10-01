@@ -11,8 +11,11 @@ namespace ShareExpenses.Slices.ViewInvite;
 internal sealed record OpenInvite(string TokenHash, DateTimeOffset ExpiresAt, MemberId InvitedBy);
 
 /// <summary>
-/// The group as the invite landing page needs it, folded <em>live</em> from one group
-/// stream per request (spec §11): nothing is stored. No stream means no state.
+/// What this slice folds from the group stream (spec §12 naming: every slice folds a
+/// <c>State</c>). Not the read model: it holds every open invite, hash and deadline,
+/// and <see cref="Reader"/> selects the one read model the query asks for —
+/// <see cref="InviteReadModel"/>, the shape the screen receives. Folded <em>live</em>
+/// from one group stream per request (spec §11): nothing is stored. No stream, no state.
 ///
 /// Only the newest invite per unclaimed slot is open; re-inviting replaces it and
 /// claiming closes it. Expiry is not folded — it depends on the clock, so the query

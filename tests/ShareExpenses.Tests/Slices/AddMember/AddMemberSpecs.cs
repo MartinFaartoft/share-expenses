@@ -34,20 +34,7 @@ public class AddMemberSpecs
     /// <summary>The next member slot the handler would be given; pinned per scenario.</summary>
     private MemberId _next = M2;
 
-    private DecideSpec<Command> Spec => new((history, command) => Decider.Decide(Fold(history), command, _next));
-
-    /// <summary>
-    /// Folds history with the same Create/Apply methods Marten calls. Unknown events
-    /// throw, so a new event in a Given forces this fold — and the State — to be updated.
-    /// </summary>
-    private static State? Fold(IReadOnlyList<object> history) =>
-        history.Aggregate((State?)null, (state, e) => e switch
-        {
-            GroupCreated created => State.Create(created),
-            MemberAdded added => state!.Apply(added),
-            MemberClaimed claimed => state!.Apply(claimed),
-            _ => throw new InvalidOperationException($"AddMember's State does not fold {e.GetType().Name}"),
-        });
+    private DecideSpec<Command> Spec => new((history, command) => Decider.Decide(Fold.Of<State>(history), command, _next));
 
     private static Command AddMember(string? displayName, UserId by) => new(G1, displayName, by);
 
@@ -70,19 +57,19 @@ public class AddMemberSpecs
     public void S3_the_group_must_exist() =>
         Spec.Given()
             .When(AddMember("Bob", Alice))
-            .ThenRejected("group not found");
+            .ThenNotFound("group not found");
 
     [Fact]
     public void S4_only_members_of_the_group_may_add() =>
         Spec.Given(Lisbon)
             .When(AddMember("Bob", Mallory))
-            .ThenRejected("group not found");
+            .ThenNotFound("group not found");
 
     [Fact]
     public void S5_an_unclaimed_placeholder_confers_no_membership() =>
         Spec.Given([.. Lisbon, new MemberAdded(M2, "Bob", Alice)])
             .When(AddMember("Carol", Bob))
-            .ThenRejected("group not found");
+            .ThenNotFound("group not found");
 
     [Theory]
     [InlineData("   ")]
@@ -118,7 +105,7 @@ public class AddMemberSpecs
     public void A_non_member_learns_nothing_from_validation() =>
         Spec.Given(Lisbon)
             .When(AddMember("   ", Mallory))
-            .ThenRejected("group not found");
+            .ThenNotFound("group not found");
 
     [Fact]
     public void The_limit_is_inclusive_and_measured_after_trimming() =>

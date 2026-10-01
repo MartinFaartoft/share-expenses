@@ -41,23 +41,10 @@ public class ViewInviteSpecs
         new MemberInvited(M2, H1, Day(30), Alice),
     ];
 
-    private static readonly InviteLookup BobByAlice = new("Lisbon trip", "Bob", "Alice");
+    private static readonly InviteReadModel BobByAlice = new("Lisbon trip", "Bob", "Alice");
 
-    private static readonly ReadSpec<Query, InviteLookup> Spec = new((history, query) => Reader.Read(Fold(history), query));
-
-    /// <summary>
-    /// Folds history with the same Create/Apply methods Marten calls. Unknown events
-    /// throw, so a new event in a Given forces the State to be considered.
-    /// </summary>
-    private static State? Fold(IReadOnlyList<object> history) =>
-        history.Aggregate((State?)null, (state, e) => e switch
-        {
-            GroupCreated created => State.Create(created),
-            MemberAdded added => state!.Apply(added),
-            MemberClaimed claimed => state!.Apply(claimed),
-            MemberInvited invited => state!.Apply(invited),
-            _ => throw new InvalidOperationException($"ViewInvite's State does not fold {e.GetType().Name}"),
-        });
+    private static readonly ReadSpec<Query, InviteReadModel> Spec =
+        new((history, query) => Reader.Read(Fold.Of<State>(history), query));
 
     private static Query ViewInvite(string? token, DateTimeOffset at) => new(G1, token, at);
 
@@ -128,11 +115,11 @@ public class ViewInviteSpecs
                 new MemberInvited(M2, H2, Day(30), Carol),
             ])
             .When(ViewInvite(T2, at: Day(1)))
-            .Then(new InviteLookup("Lisbon trip", "Bob", "Carol"));
+            .Then(new InviteReadModel("Lisbon trip", "Bob", "Carol"));
 
     [Fact]
     public void Each_open_invite_answers_only_to_its_own_token() =>
         Spec.Given([.. Lisbon, new MemberAdded(M3, "Carol", Alice), new MemberInvited(M3, H2, Day(30), Alice)])
             .When(ViewInvite(T2, at: Day(1)))
-            .Then(new InviteLookup("Lisbon trip", "Carol", "Alice"));
+            .Then(new InviteReadModel("Lisbon trip", "Carol", "Alice"));
 }

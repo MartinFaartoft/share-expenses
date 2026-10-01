@@ -173,7 +173,7 @@ slices:
       # live: folded from the one group stream named in the link, per request.
       # Shows an invite only if its token matches and it is open and unexpired;
       # anything else is a plain "not found".
-      name: InviteLookup
+      name: InviteReadModel
       fields:
         groupName: { type: string, source: [GroupCreated] }
         memberName: { type: string, source: [MemberAdded] }
