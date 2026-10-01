@@ -1,4 +1,5 @@
 using Marten;
+using ShareExpenses.Slices.CreateGroup;
 
 namespace ShareExpenses;
 
@@ -12,10 +13,12 @@ public static class AllSlices
     /// <summary>Event types and projections, contributed by the slice that owns them.</summary>
     public static void Register(StoreOptions opts)
     {
+        CreateGroupSlice.Register(opts);
     }
 
     /// <summary>HTTP endpoints, contributed by the slice that owns them.</summary>
     public static void Map(IEndpointRouteBuilder api)
     {
+        CreateGroupSlice.Map(api);
     }
 }

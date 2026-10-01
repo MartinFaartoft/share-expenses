@@ -45,8 +45,9 @@ slices:
     screen:
       name: New group
       wireframe:
-        - "name      [........]"
-        - "currency  [ GBP  v ]"
+        - "name       [........]"
+        - "currency   [ GBP  v ]"
+        - "your name  [........]"
         - ""
         - "  [ Create group ]"
     command:
@@ -54,6 +55,7 @@ slices:
       fields:
         name: string
         currency: string
+        displayName: string
         createdBy: Guid
     events:
       # three events from one command: a group whose creator is not a member is

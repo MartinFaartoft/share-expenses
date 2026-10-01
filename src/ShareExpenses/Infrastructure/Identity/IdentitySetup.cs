@@ -20,7 +20,7 @@ public static class IdentitySetup
 
         services.Configure<PasswordlessLoginTokenProviderOptions>(_ => { });
         services
-            .AddIdentityCore<IdentityUser>(o => o.User.RequireUniqueEmail = true)
+            .AddIdentityCore<User>(o => o.User.RequireUniqueEmail = true)
             .AddEntityFrameworkStores<IdentityDb>()
             .AddSignInManager()
             .AddDefaultTokenProviders() // includes EmailTokenProvider for the six-digit code

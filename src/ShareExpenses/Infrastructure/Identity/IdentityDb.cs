@@ -10,8 +10,14 @@ namespace ShareExpenses.Infrastructure.Identity;
 /// data-protection key ring, in its own <c>identity</c> schema. Never joined to
 /// domain data — Marten owns the event store and projections.
 /// </summary>
+/// <summary>
+/// A login identity. Guid-keyed because user ids are recorded in domain events
+/// (<c>createdBy</c>, <c>MemberClaimed.userId</c>) and must have a stable, typed shape.
+/// </summary>
+public sealed class User : IdentityUser<Guid>;
+
 public sealed class IdentityDb(DbContextOptions<IdentityDb> options)
-    : IdentityDbContext<IdentityUser>(options), IDataProtectionKeyContext
+    : IdentityDbContext<User, IdentityRole<Guid>, Guid>(options), IDataProtectionKeyContext
 {
     public const string Schema = "identity";
 

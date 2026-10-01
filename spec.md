@@ -760,6 +760,38 @@ fixture slices in the test project — one conforming, several deliberately
 violating — so a rule that silently stops firing fails the build instead of
 passing vacuously.
 
+### Anatomy of a state-change slice
+
+Set by `CreateGroup`, the first slice built; later slices follow it unless they
+have a reason not to.
+
+| File | Visibility | Contents |
+|---|---|---|
+| `Events.cs` | public | the events this slice owns, as `sealed record`s |
+| `<Name>Slice.cs` | public | `Register` (event types, projections) and `Map` |
+| `Decider.cs` | internal | `Command`, state (if any), pure `Decide` returning `Decision` |
+| `Handler.cs` | internal | fetch → decide → append → save; returns a slice-local `Outcome` |
+| `Endpoint.cs` | internal | request/response records; maps `Outcome` to HTTP |
+
+- **Ids are generated in the endpoint and passed in**, so `Decide` and `Handler`
+  are deterministic and tests can pin them. Ids are `Guid.CreateVersion7()`.
+- **`Decision` (in `Shared/`) is the decide result; `Outcome` is per slice.**
+  Every slice decides the same way, but what can go wrong *after* deciding —
+  a stream collision, a concurrency conflict — differs per slice, and so does
+  its HTTP mapping.
+- **Event types are registered with explicit stored names** (`group_created`),
+  so a class or folder rename can never change what is in the database.
+- **Tests per slice:** `<Name>Specs` mirror `slice-NN-*.md` line for line against
+  `Decide` alone; `<Name>IntegrationTests` cover what needs a store (e.g. "created
+  exactly once") and the HTTP mapping, against a throwaway PostgreSQL container
+  (Testcontainers), never the development database.
+- **Specs read as `Given(...).When(...).Then(...)` / `.ThenRejected(reason)`.**
+  `DecideSpec` runs a scenario against `Decide`; `StreamSpec` runs the same shape
+  against a real stream — Given appends the history, Then asserts what the stream
+  holds afterwards (untouched on rejection). `Given()` is the empty stream.
+- **User ids are `Guid`s.** Identity is keyed on `Guid` (`User : IdentityUser<Guid>`)
+  because user ids are recorded in events and need a stable, typed shape.
+
 ---
 
 ## 13. Next step: an event modeling session

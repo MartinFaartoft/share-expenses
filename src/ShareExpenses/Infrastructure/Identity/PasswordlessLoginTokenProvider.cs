@@ -12,8 +12,8 @@ namespace ShareExpenses.Infrastructure.Identity;
 public sealed class PasswordlessLoginTokenProvider(
     IDataProtectionProvider dataProtectionProvider,
     IOptions<PasswordlessLoginTokenProviderOptions> options,
-    ILogger<DataProtectorTokenProvider<IdentityUser>> logger)
-    : DataProtectorTokenProvider<IdentityUser>(dataProtectionProvider, options, logger)
+    ILogger<DataProtectorTokenProvider<User>> logger)
+    : DataProtectorTokenProvider<User>(dataProtectionProvider, options, logger)
 {
     public const string ProviderName = "PasswordlessLogin";
     public const string Purpose = "passwordless-login";
