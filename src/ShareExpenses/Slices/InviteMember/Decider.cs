@@ -4,6 +4,7 @@ namespace ShareExpenses.Slices.InviteMember;
 
 /// <summary>The command, as in <c>event-model.yaml</c>. Inputs are raw; deciding validates them.</summary>
 /// <param name="TokenHash">Hash of the token generated for this invite; see <see cref="InviteToken"/>.</param>
+/// <param name="Now">The clock, read by the caller, so deciding stays pure and testable.</param>
 /// <param name="EmailHolder">
 /// Looked up: the user whose account email is <paramref name="Email"/>, if any.
 /// </param>
@@ -21,6 +22,7 @@ internal sealed record Command(
     MemberId MemberId,
     string? Email,
     string TokenHash,
+    DateTimeOffset Now,
     UserId By,
     UserId? EmailHolder = null,
     IReadOnlySet<MemberId>? InvitedTo = null);
@@ -35,6 +37,12 @@ internal static class Decider
     public const string GroupNotFound = "group not found";
 
     public const string MemberNotFound = "member not found";
+
+    /// <summary>
+    /// How long a new invite link lives. Applied once, when inviting, and recorded on
+    /// the event as a deadline: changing this does not move links already sent.
+    /// </summary>
+    public static readonly TimeSpan InviteLifetime = TimeSpan.FromDays(30);
 
     private const int MaxEmailLength = 254;
 
@@ -68,7 +76,8 @@ internal static class Decider
         if (openElsewhere is not null)
             return Decision.Reject($"that email is already invited as {openElsewhere.Name}");
 
-        return Decision.Accept(new MemberInvited(command.MemberId, command.TokenHash, command.By));
+        return Decision.Accept(new MemberInvited(
+            command.MemberId, command.TokenHash, command.Now + InviteLifetime, command.By));
     }
 
     /// <summary>Trimmed; case kept — the local part is technically case-sensitive.</summary>

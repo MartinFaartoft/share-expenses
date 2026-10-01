@@ -40,8 +40,9 @@
 #   A field is `name: Type`, or a mapping when it needs more than a type.
 #   Shapes are declared once, like every element.  Sources sit on the field:
 #     screen      `inputs:` - what the user types or picks
-#     command     `source:` screen (default) | route | session | generated | lookup
-#                           (lookup: read from outside the stream to feed a
+#     command     `source:` screen (default) | route | session | generated | clock | lookup
+#                           (clock: the current time, passed in so deciding stays
+#                           pure; lookup: read from outside the stream to feed a
 #                           guard; may never feed an event field)
 #                 `feeds:`  [Event.field, ...] - event fields it fills that are
 #                           NOT already same-named (same name feeds implicitly)
@@ -51,6 +52,9 @@
 #     event       a type only.  Where an event's values come from depends on the
 #                 slice emitting it, so that lives on that slice's command.
 #     read model  `source:` [Event, ...] - the events the field is built from
+#     query       on a State Read slice: `query:` {input: {type, source}} - what
+#                 selects the data shown; source: route | session | clock |
+#                 fragment (after '#' in a link; never sent to a server in a URL)
 #   The generator checks that every field of every emitted event is fed by
 #   exactly one command field, with the same type; that every screen-sourced
 #   command field is an input of its screen; and that every read model field
@@ -138,6 +142,8 @@ slices:
         # SHA-256 of a random token generated per invite; the raw token is
         # returned and emailed once, and recorded nowhere
         tokenHash: { type: string, source: generated }
+        # the link's deadline is decided now and recorded: expiresAt = now + 30 days
+        now: { type: DateTimeOffset, source: clock, feeds: [MemberInvited.expiresAt] }
         by: { type: UserId, source: session }
         # guards (spec §11): may be stale; the claim enforces one user, one slot
         emailHolder: { type: "UserId?", source: lookup }     # Identity: account with this email
@@ -147,10 +153,10 @@ slices:
         fields:
           memberId: MemberId
           tokenHash: string
+          expiresAt: DateTimeOffset
           by: UserId
 
   - slice: View invite
-    draft: true
     type: State Read
     screen:
       name: Invite landing
@@ -159,14 +165,20 @@ slices:
         - "Lisbon trip as Bob"
         - ""
         - "  [ Sign me in ]"
+    query:
+      groupId: { type: GroupId, source: route }
+      token: { type: string, source: fragment }    # matched against tokenHash
+      now: { type: DateTimeOffset, source: clock } # live while now < expiresAt
     readModel:
-      # live: folded from the one group stream named in the link, per request
+      # live: folded from the one group stream named in the link, per request.
+      # Shows an invite only if its token matches and it is open and unexpired;
+      # anything else is a plain "not found".
       name: InviteLookup
       fields:
         groupName: { type: string, source: [GroupCreated] }
         memberName: { type: string, source: [MemberAdded] }
-        invitedBy: { type: string, source: [MemberInvited, MemberAdded] }
-        live: { type: bool, source: [MemberInvited, MemberClaimed] }
+        # MemberInvited.by -> the inviter's claim -> that slot's name
+        invitedBy: { type: string, source: [MemberInvited, MemberClaimed, MemberAdded] }
       reads:
         - GroupCreated
         - MemberAdded

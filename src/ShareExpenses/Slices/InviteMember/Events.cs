@@ -8,9 +8,13 @@ namespace ShareExpenses.Slices.InviteMember;
 /// <summary>
 /// A member slot was invited, by user <paramref name="By"/>. <paramref name="TokenHash"/>
 /// is the SHA-256 of the invite link's token — never the token itself. The newest
-/// invite for a slot is the live one.
+/// invite for a slot is the live one, until <paramref name="ExpiresAt"/>.
+///
+/// <paramref name="ExpiresAt"/> is a deadline decided when inviting, recorded as a
+/// domain fact (spec §11): changing the invite lifetime later does not move the
+/// deadline of links already sent.
 ///
 /// Deliberately no email address: personal data stays out of the immutable ledger.
 /// The address lives in the erasable <see cref="InviteDelivery"/> document (spec §3, §11).
 /// </summary>
-public sealed record MemberInvited(MemberId MemberId, string TokenHash, UserId By);
+public sealed record MemberInvited(MemberId MemberId, string TokenHash, DateTimeOffset ExpiresAt, UserId By);

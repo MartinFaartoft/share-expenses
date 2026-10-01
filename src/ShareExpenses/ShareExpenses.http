@@ -111,6 +111,7 @@ Content-Type: application/json
 }
 
 ### 8. Re-invite Bob at another address. Expect 200 and a new link; the old one is retired.
+
 POST {{host}}/api/groups/{{groupId}}/members/{{bobId}}/invite
 Content-Type: application/json
 
@@ -127,5 +128,16 @@ Content-Type: application/json
   "email": "alice@example.com"
 }
 
-### 10. Health
+### 10. View the invite from step 8, as the landing page does — no sign-in needed.
+# The link is {{host}}/invites/{groupId}#{token}; the page sends the part after '#'.
+# Paste that token below. Expect 200 { groupName, memberName, invitedBy }.
+# Try step 7's token too: 404, it was retired by step 8.
+POST {{host}}/api/invites/{{groupId}}/lookup
+Content-Type: application/json
+
+{
+  "token": "paste-the-token-after-#-here"
+}
+
+### 11. Health
 GET {{host}}/health

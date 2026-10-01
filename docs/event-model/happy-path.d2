@@ -12,7 +12,7 @@ vertical-gap: 22
 
 classes: {
   lanelabel: {
-    width: 170; height: 160
+    width: 170; height: 202
     style: { fill: transparent; stroke-width: 0; font-color: "#6b7280"; bold: true }
   }
   slicename: {
@@ -22,22 +22,22 @@ classes: {
   lgapN: { width: 170;    height: 50;  style: { opacity: 0 } }
   gapN:  { width: 277; height: 50;  style: { opacity: 0 } }
   divN:  { width: 2;      height: 50;  style: { fill: "#c9ced8"; stroke-width: 0 } }
-  div:   { width: 2;      height: 160; style: { fill: "#c9ced8"; stroke-width: 0 } }
-  gap:   { width: 277; height: 160; style: { opacity: 0 } }
+  div:   { width: 2;      height: 202; style: { fill: "#c9ced8"; stroke-width: 0 } }
+  gap:   { width: 277; height: 202; style: { opacity: 0 } }
   screen: {
-    width: 277; height: 160
+    width: 277; height: 202
     style: { font: mono; font-size: 15; fill: "#fbfbfd"; stroke: "#8c93a0"; stroke-width: 2; border-radius: 6 }
   }
   command: {
-    width: 277; height: 160
+    width: 277; height: 202
     style: { font: mono; font-size: 15; fill: "#4a90d9"; stroke: "#2b6cb0"; font-color: "#ffffff"; border-radius: 6 }
   }
   event: {
-    width: 277; height: 160
+    width: 277; height: 202
     style: { font: mono; font-size: 15; fill: "#f5a623"; stroke: "#c07d12"; font-color: "#1f1f1f"; border-radius: 6 }
   }
   view: {
-    width: 277; height: 160
+    width: 277; height: 202
     style: { font: mono; font-size: 15; fill: "#54b054"; stroke: "#357935"; font-color: "#ffffff"; border-radius: 6 }
   }
 }
@@ -52,7 +52,7 @@ n1: "2 - Add a member                        " { class: slicename }
 dvN2: "" { class: divN }
 n2: "3 - Invite a member                     " { class: slicename }
 dvN3: "" { class: divN }
-n3: "4 - View invite (draft)                 " { class: slicename }
+n3: "4 - View invite                         " { class: slicename }
 dvN4: "" { class: divN }
 n4: "5 - Claim a slot (draft)                " { class: slicename }
 dvN5: "" { class: divN }
@@ -92,7 +92,7 @@ gp3_1: "" { class: gap }
 dv3_2: "" { class: div }
 gp3_2: "" { class: gap }
 dv3_3: "" { class: div }
-rm3: "InviteLookup                 \n                             \n- groupName: string          \n- memberName: string         \n- invitedBy: string          \n- live: bool                 " { class: view }
+rm3: "InviteLookup                 \n                             \n- groupName: string          \n- memberName: string         \n- invitedBy: string          \n> groupId: GroupId (url)     \n> token: string (frg)        \n> now: DateTimeOffset (clk)  " { class: view }
 dv3_4: "" { class: div }
 gp3_4: "" { class: gap }
 dv3_5: "" { class: div }
@@ -110,7 +110,7 @@ gp4_0_2: "" { class: gap }
 dv4_1: "" { class: div }
 c1: "AddMember                    \n                             \n- groupId: GroupId (url)     \n- displayName: string        \n- by: UserId (ses)           \n- memberId: MemberId (gen)   " { class: command }
 dv4_2: "" { class: div }
-c2: "InviteMember                 \n                             \n- groupId: GroupId (url)     \n- memberId: MemberId (url)   \n- email: string              \n- tokenHash: string (gen)    \n- by: UserId (ses)           \n- emailHolder: UserId? (lku) \n- invitedTo: MemberId[] (lku)" { class: command }
+c2: "InviteMember                 \n                             \n- groupId: GroupId (url)     \n- memberId: MemberId (url)   \n- email: string              \n- tokenHash: string (gen)    \n- now: DateTimeOffset (clk)  \n- by: UserId (ses)           \n- emailHolder: UserId? (lku) \n- invitedTo: MemberId[] (lku)" { class: command }
 dv4_3: "" { class: div }
 gp4_3: "" { class: gap }
 dv4_4: "" { class: div }
@@ -130,7 +130,7 @@ e0_2: "MemberClaimed                \n                             \n- memberId:
 dv5_1: "" { class: div }
 e1_0: "MemberAdded                  \n                             \n- memberId: MemberId         \n- displayName: string        \n- by: UserId                 \n                             " { class: event }
 dv5_2: "" { class: div }
-e2_0: "MemberInvited                \n                             \n- memberId: MemberId         \n- tokenHash: string          \n- by: UserId                 \n                             " { class: event }
+e2_0: "MemberInvited                \n                             \n- memberId: MemberId         \n- tokenHash: string          \n- expiresAt: DateTimeOffset  \n- by: UserId                 " { class: event }
 dv5_3: "" { class: div }
 gp5_3: "" { class: gap }
 dv5_4: "" { class: div }

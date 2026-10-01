@@ -42,6 +42,12 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
     /// <summary>Every email the app sends, instead of logging it.</summary>
     public RecordingEmailSender Emails { get; } = new();
 
+    /// <summary>
+    /// The app's clock. Starts at the real time; a test that moves it must restore it
+    /// (the fixture is shared by every test in the run).
+    /// </summary>
+    public TestClock Clock { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
@@ -51,6 +57,7 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
             services.AddAuthentication(HeaderAuthentication.SchemeName)
                 .AddScheme<AuthenticationSchemeOptions, HeaderAuthentication>(HeaderAuthentication.SchemeName, null);
             services.AddSingleton<IEmailSender>(Emails);
+            services.AddSingleton<TimeProvider>(Clock);
         });
     }
 

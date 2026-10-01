@@ -524,7 +524,7 @@ GroupCreated(name, currency, createdBy)
 GroupRenamed(name, by)
 GroupArchived(by) / GroupUnarchived(by)
 MemberAdded(memberId, displayName, by)
-MemberInvited(memberId, tokenHash, by)
+MemberInvited(memberId, tokenHash, expiresAt, by)
 MemberClaimed(memberId, userId)
 MemberClaimReleased(memberId, userId, releasedBy)
 MemberRenamed(memberId, displayName, by)
@@ -548,6 +548,13 @@ adding *other* people, not for seating the creator.
 metadata, so an `at` field would duplicate it. Contrast `paidOn` on an expense,
 which is genuine domain data: the date the expense happened is not the date it was
 recorded. Metadata belongs to the store; domain facts belong in the payload.
+
+The same line runs the other way: **metadata never drives a domain decision.** A
+rule that needs a time reads it from the payload. A *deadline* is such a fact —
+`MemberInvited.expiresAt` — because it was decided when the event happened; it
+is not a copy of the append time, and it does not move if a setting changes
+later. "When was it recorded" stays metadata, fit for display (the activity feed)
+but not for rules.
 
 Note on enforcement: "a group is created exactly once" is guaranteed by Marten's
 stream semantics and optimistic concurrency — appending `GroupCreated` at expected
@@ -580,10 +587,29 @@ rejects an address with an open invite on another slot. A changed-away address i
 free again; one still in use is caught early. Email change itself is not a v1
 feature (with magic links the address *is* the login), but nothing depends on that.
 
-**Invite links expire after 30 days**, measured from the `MemberInvited` append
-time in stream metadata. Enforced where the link is used (viewing and claiming),
-not when inviting; a link is retired earlier by re-inviting the slot or by the
-slot being claimed.
+**Invite links expire after 30 days, recorded as a deadline on the event:**
+InviteMember decides `expiresAt = now + 30 days` (the clock passed in, so
+deciding stays pure) and `MemberInvited` carries it. A link is live while
+`now < expiresAt`. Enforced where the link is used (viewing and claiming); a link
+is retired earlier by re-inviting the slot or by the slot being claimed.
+Shortening the lifetime later affects only new invites — links already sent keep
+the deadline their email promised.
+
+**Invite links carry the token in the URL fragment** —
+`/invites/{groupId}#{token}`. Browsers never send a fragment to a server, so the
+token, a live secret for 30 days, stays out of reverse-proxy logs and server logs —
+no server-side component can log it even by accident, which is a structural
+guarantee where log scrubbing is a config that can regress. The landing page reads
+it client-side and sends it in a POST body. Prefetchers fetch the page without the
+fragment, so they consume nothing.
+
+What the fragment does **not** buy, lest anyone rely on it: the token is still kept
+in browser history and bookmarks, and synced to the browser account, exactly as a
+query string would be. `Referer` is a weak win too — fragments are never sent in
+it, but the default `strict-origin-when-cross-origin` policy already strips path and
+query cross-origin. Logs are the reason, and reason enough. Scripts that report
+`location.href` (analytics, error reporting) *do* see the fragment, so one must be
+scrubbed explicitly if ever added.
 
 Transactions:
 ```
@@ -634,7 +660,7 @@ the truthful statement anyway.
 | `InviteLookup` | **live** (folded on each request, nothing stored) | invite landing page: group, slot, inviter |
 
 `InviteLookup` is live deliberately — the third lifecycle. An invite link carries
-its group id (`/invites/{groupId}/{token}`), so looking one up means folding a
+its group id (`/invites/{groupId}#{token}`), so looking one up means folding a
 single group stream of a few hundred events: cheap enough to do per request, and
 nothing is stored that could go stale. Scoping the link to the group is what
 makes this possible; a bare token would need a projection across every group.
@@ -1162,6 +1188,11 @@ a documentation tool, not application code.
     the link, reversing slice 3's "emailed *and* returned" decision.
 - **DEFERRED** Completeness inside composite read model types (`Member[]`), with
   slice 6; values decided from stream state (`source: state`), with slice 4 (§13).
+- **DEFERRED** Rate limiting the unauthenticated invite lookup
+  (`POST /api/invites/{groupId}/lookup`, slice 4). Guessing a 256-bit token is
+  hopeless, but each request folds a group stream, so the endpoint is a cheap way
+  to load the server. Add ASP.NET's per-IP rate limiter together with the
+  sign-in endpoints (§4), so one limiter policy is designed for both.
 - **DEFERRED** Transactional relay — shortlisted in §4; `LogEmailSender` until then.
 - **DEFERRED** `PeriodClosed` / stream archival, until a stream is actually long.
 - **DEFERRED** Wolverine port (phase 2 above).

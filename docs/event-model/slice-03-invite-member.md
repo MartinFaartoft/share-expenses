@@ -5,7 +5,7 @@ Type: **State Change**. Screen → command → events.
 | | |
 |---|---|
 | Screen | Invite member (modelled; no frontend yet) |
-| Command | `InviteMember(groupId, memberId, email, tokenHash, by)` + looked up: `emailHolder`, `invitedTo` |
+| Command | `InviteMember(groupId, memberId, email, tokenHash, now, by)` + looked up: `emailHolder`, `invitedTo` |
 | Events | `MemberInvited` |
 | Also writes | `InviteDelivery` — plain document, the address the invite went to |
 | Code | `src/ShareExpenses/Slices/InviteMember/` |
@@ -21,7 +21,9 @@ erasable document (spec §3, §11).
 
 ## Specifications
 
-`h0`, `h1` are hashes of pinned tokens. Lookups are written `WITH`: they come from
+`h0`, `h1` are hashes of pinned tokens. Every command is issued at `t0`, so a new
+invite's deadline is `t0+30d`; `…` is an earlier invite's deadline, which deciding
+never reads. Lookups are written `WITH`: they come from
 outside the stream (Identity, and `InviteDelivery`) and feed guards, not
 invariants. Unless stated otherwise, every scenario starts from:
 
@@ -35,7 +37,7 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 ```
 1 - invites a placeholder member
     WHEN   InviteMember(g1, m2, "bob@example.com", alice)
-    THEN   MemberInvited(m2, h1, alice)
+    THEN   MemberInvited(m2, h1, t0+30d, alice)
 
 2 - the group must exist
     GIVEN  (empty stream)
@@ -59,13 +61,13 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
     THEN   rejected - email is not a valid address
 
 7 - re-inviting replaces the previous invite
-    GIVEN  ... AND MemberInvited(m2, h0, alice)
+    GIVEN  ... AND MemberInvited(m2, h0, …, alice)
     WITH   invitedTo(bob@example.com) = {m2}
     WHEN   InviteMember(g1, m2, "bob@example.com", alice)
-    THEN   MemberInvited(m2, h1, alice)
+    THEN   MemberInvited(m2, h1, t0+30d, alice)
 
 8 - an address with an open invite cannot be invited to another slot
-    GIVEN  ... AND MemberAdded(m3, "Bobby", alice) AND MemberInvited(m2, h0, alice)
+    GIVEN  ... AND MemberAdded(m3, "Bobby", alice) AND MemberInvited(m2, h0, …, alice)
     WITH   invitedTo(bob@example.com) = {m2}
     WHEN   InviteMember(g1, m3, "BOB@example.com", alice)
     THEN   rejected - that email is already invited as Bob
@@ -83,16 +85,16 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
     THEN   rejected - alice@example.com has already joined as Alice
 
 11 - an invite to a slot since claimed no longer holds its address
-    GIVEN  ... AND MemberInvited(m2, h0, alice) AND MemberClaimed(m2, bob)
+    GIVEN  ... AND MemberInvited(m2, h0, …, alice) AND MemberClaimed(m2, bob)
            AND MemberAdded(m3, "Bobby", alice)
     WITH   invitedTo(bob@example.com) = {m2}, emailHolder(bob@example.com) = none
     WHEN   InviteMember(g1, m3, "bob@example.com", alice)
-    THEN   MemberInvited(m3, h1, alice)
+    THEN   MemberInvited(m3, h1, t0+30d, alice)
 
 12 - an account outside the group is no obstacle
     WITH   emailHolder(carol@example.com) = carol
     WHEN   InviteMember(g1, m2, "carol@example.com", alice)
-    THEN   MemberInvited(m2, h1, alice)
+    THEN   MemberInvited(m2, h1, t0+30d, alice)
 ```
 
 Scenario 11 is the "Bob changed his address" case: his account no longer answers
@@ -117,11 +119,17 @@ would apply.
   only once membership is established.
 - **The token.** 32 random bytes, base64url. Only its SHA-256 (`tokenHash`) is
   recorded; the raw token exists in the response and the email, nowhere else. The
-  link is `{App:PublicOrigin}/invites/{groupId}/{token}`.
+  link is `{App:PublicOrigin}/invites/{groupId}#{token}`: the token rides in the
+  URL *fragment*, which browsers never send to a server, so it stays out of proxy
+  logs and `Referer` headers. The landing page reads it client-side and posts it
+  (slice 4).
 - **Email** is trimmed and kept in its original case. "Plausibly an email": at
   most 254 characters, exactly one `@` with something on both sides, no
   whitespace. Real validation is delivery.
-- **Expiry** (30 days) is checked where the link is used, not here.
+- **Expiry** is decided here and recorded: `expiresAt = now + 30 days`, on the
+  event (spec §11). It is a deadline, a domain fact — not the append time, which
+  stays Marten metadata. Changing the lifetime later never moves the deadline of
+  links already sent. It is *enforced* where the link is used (slices 4 and 5).
 - **Re-inviting** overwrites the slot's `InviteDelivery` and retires the previous
   link: the newest `MemberInvited` for a slot is the live one.
 - **Email is sent after the save.** If sending fails, the response is still 200

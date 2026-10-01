@@ -27,6 +27,7 @@ public class InviteMemberIntegrationTests(AppFixture app)
     private readonly UserId _alice = UserId.New();
     private readonly UserId _mallory = UserId.New();
     private static readonly string H1 = InviteToken.Hash("t1");
+    private static readonly DateTimeOffset T0 = new(2026, 10, 1, 12, 0, 0, TimeSpan.Zero);
 
     private IDocumentStore Store => app.Services.GetRequiredService<IDocumentStore>();
 
@@ -54,13 +55,13 @@ public class InviteMemberIntegrationTests(AppFixture app)
     [Fact]
     public Task S1_invites_a_placeholder_member() =>
         Spec.Given(Lisbon)
-            .When(new Command(_g1, _m2, "bob@example.com", H1, _alice))
-            .Then(new MemberInvited(_m2, H1, _alice));
+            .When(new Command(_g1, _m2, "bob@example.com", H1, T0, _alice))
+            .Then(new MemberInvited(_m2, H1, T0.AddDays(30), _alice));
 
     [Fact]
     public Task S2_the_group_must_exist() =>
         Spec.Given()
-            .When(new Command(_g1, _m2, "bob@example.com", H1, _alice))
+            .When(new Command(_g1, _m2, "bob@example.com", H1, T0, _alice))
             .ThenRejected("group not found");
 
     // ── Lookups for real: InviteDelivery and Identity ─────────────────────────────
@@ -107,7 +108,7 @@ public class InviteMemberIntegrationTests(AppFixture app)
         Assert.Equal((bob.Value, "bob@new.example.com"), (delivery.Id, delivery.Email));
 
         // The delivery is keyed to the latest invite: its link, and its event.
-        Assert.Equal(InviteToken.Hash(link[(link.LastIndexOf('/') + 1)..]), delivery.TokenHash);
+        Assert.Equal(InviteToken.Hash(TokenOf(link)), delivery.TokenHash);
         Assert.Equal(delivery.TokenHash, Assert.IsType<MemberInvited>((await StreamOf(groupId)).Last()).TokenHash);
     }
 
@@ -119,7 +120,7 @@ public class InviteMemberIntegrationTests(AppFixture app)
         var (groupId, bob) = await GroupWithPlaceholder("Bob");
 
         var link = await LinkFrom(await Invite(_alice, groupId, bob, "  Bob@Example.com "));
-        var token = link[(link.LastIndexOf('/') + 1)..];
+        var token = TokenOf(link);
 
         await using var session = Store.QuerySession();
         var delivery = await session.LoadAsync<InviteDelivery>(bob.Value);
@@ -144,7 +145,8 @@ public class InviteMemberIntegrationTests(AppFixture app)
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var link = await LinkFrom(response);
-        Assert.Matches($"^http://localhost/invites/{groupId}/[A-Za-z0-9_-]{{43}}$", link);
+        // The token rides in the fragment, so no server ever receives it in a URL.
+        Assert.Matches($"^http://localhost/invites/{groupId}#[A-Za-z0-9_-]{{43}}$", link);
         Assert.Equal(
             new SentInvite("Bob@Example.com", link, "Lisbon trip", "Alice", "Bob"),
             Assert.Single(app.Emails.Invites, e => e.Link.Contains(groupId.ToString())));
@@ -260,6 +262,8 @@ public class InviteMemberIntegrationTests(AppFixture app)
 
     private static async Task<string> LinkFrom(HttpResponseMessage response) =>
         (await response.Content.ReadFromJsonAsync<InvitedBody>())!.Link;
+
+    private static string TokenOf(string link) => link[(link.IndexOf('#') + 1)..];
 
     private async Task<IReadOnlyList<object>> StreamOf(GroupId groupId)
     {

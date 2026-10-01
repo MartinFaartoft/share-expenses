@@ -28,6 +28,13 @@ public class InviteMemberSpecs
     private static readonly string H0 = InviteToken.Hash("t0");
     private static readonly string H1 = InviteToken.Hash("t1");
 
+    /// <summary>"Now" for every scenario; a new invite expires 30 days later.</summary>
+    private static readonly DateTimeOffset T0 = new(2026, 10, 1, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset T30 = T0.AddDays(30);
+
+    /// <summary>The deadline of some earlier invite in a Given; deciding never reads it.</summary>
+    private static readonly DateTimeOffset Earlier = T0.AddDays(20);
+
     /// <summary>The group as slice 1 leaves it, plus a placeholder "Bob".</summary>
     private static readonly object[] Lisbon =
     [
@@ -56,13 +63,13 @@ public class InviteMemberSpecs
 
     private static Command InviteMember(
         MemberId member, string? email, UserId by, UserId? emailHolder = null, params MemberId[] invitedTo) =>
-        new(G1, member, email, H1, by, emailHolder, invitedTo.ToHashSet());
+        new(G1, member, email, H1, T0, by, emailHolder, invitedTo.ToHashSet());
 
     [Fact]
     public void S1_invites_a_placeholder_member() =>
         Spec.Given(Lisbon)
             .When(InviteMember(M2, "bob@example.com", Alice))
-            .Then(new MemberInvited(M2, H1, Alice));
+            .Then(new MemberInvited(M2, H1, T30, Alice));
 
     [Fact]
     public void S2_the_group_must_exist() =>
@@ -113,17 +120,17 @@ public class InviteMemberSpecs
     public void S6_accepts_an_address_of_exactly_254_characters_after_trimming() =>
         Spec.Given(Lisbon)
             .When(InviteMember(M2, "  " + new string('b', 242) + "@example.com ", Alice))
-            .Then(new MemberInvited(M2, H1, Alice));
+            .Then(new MemberInvited(M2, H1, T30, Alice));
 
     [Fact]
     public void S7_re_inviting_replaces_the_previous_invite() =>
-        Spec.Given([.. Lisbon, new MemberInvited(M2, H0, Alice)])
+        Spec.Given([.. Lisbon, new MemberInvited(M2, H0, Earlier, Alice)])
             .When(InviteMember(M2, "bob@example.com", Alice, invitedTo: M2))
-            .Then(new MemberInvited(M2, H1, Alice));
+            .Then(new MemberInvited(M2, H1, T30, Alice));
 
     [Fact]
     public void S8_an_address_with_an_open_invite_cannot_be_invited_to_another_slot() =>
-        Spec.Given([.. Lisbon, new MemberAdded(M3, "Bobby", Alice), new MemberInvited(M2, H0, Alice)])
+        Spec.Given([.. Lisbon, new MemberAdded(M3, "Bobby", Alice), new MemberInvited(M2, H0, Earlier, Alice)])
             .When(InviteMember(M3, "BOB@example.com", Alice, invitedTo: M2))
             .ThenRejected("that email is already invited as Bob");
 
@@ -144,18 +151,18 @@ public class InviteMemberSpecs
         Spec.Given(
             [
                 .. Lisbon,
-                new MemberInvited(M2, H0, Alice),
+                new MemberInvited(M2, H0, Earlier, Alice),
                 new MemberClaimed(M2, Bob),
                 new MemberAdded(M3, "Bobby", Alice),
             ])
             .When(InviteMember(M3, "bob@example.com", Alice, emailHolder: null, invitedTo: M2))
-            .Then(new MemberInvited(M3, H1, Alice));
+            .Then(new MemberInvited(M3, H1, T30, Alice));
 
     [Fact]
     public void S12_an_account_outside_the_group_is_no_obstacle() =>
         Spec.Given(Lisbon)
             .When(InviteMember(M2, "carol@example.com", Alice, emailHolder: Carol))
-            .Then(new MemberInvited(M2, H1, Alice));
+            .Then(new MemberInvited(M2, H1, T30, Alice));
 
     [Fact]
     public void A_non_member_learns_nothing_from_validation() =>
@@ -167,11 +174,11 @@ public class InviteMemberSpecs
     public void Any_member_may_invite_and_is_recorded_as_the_actor() =>
         Spec.Given([.. Lisbon, new MemberAdded(M3, "Carol", Alice), new MemberClaimed(M3, Bob)])
             .When(InviteMember(M2, "bob@example.com", Bob))
-            .Then(new MemberInvited(M2, H1, Bob));
+            .Then(new MemberInvited(M2, H1, T30, Bob));
 
     [Fact]
     public void A_delivery_for_a_slot_no_longer_in_the_group_is_ignored() =>
         Spec.Given(Lisbon)
             .When(InviteMember(M2, "bob@example.com", Alice, invitedTo: M9))
-            .Then(new MemberInvited(M2, H1, Alice));
+            .Then(new MemberInvited(M2, H1, T30, Alice));
 }

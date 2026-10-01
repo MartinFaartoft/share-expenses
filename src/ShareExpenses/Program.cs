@@ -1,4 +1,5 @@
 using Marten;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using ShareExpenses;
 using ShareExpenses.Infrastructure;
 using ShareExpenses.Infrastructure.Identity;
@@ -12,6 +13,9 @@ var connectionString = builder.Configuration.GetConnectionString("Postgres")
 builder.Services.AddLedgerStore(connectionString, builder.Environment);
 builder.Services.AddPasswordlessIdentity(connectionString, builder.Environment);
 builder.Services.AddPublicOrigin(builder.Configuration, builder.Environment);
+
+// The clock, injected so time-dependent decisions (invite deadlines) stay testable.
+builder.Services.TryAddSingleton(TimeProvider.System);
 
 var app = builder.Build();
 

@@ -20,7 +20,9 @@ FIELDS AND WHERE THEIR VALUES COME FROM (information completeness)
   Events declare shape only: where an event's values come from depends on which
   slice emits it, so that is written on the emitting slice's command instead.
     screen inputs     what the user types, `inputs:` on the screen
-    command fields    `source`: screen (default), route, session, generated, lookup
+    command fields    `source`: screen (default), route, session, generated,
+                      clock (the current time, passed in so deciding stays pure),
+                      lookup
                       (read from outside the stream to feed a guard; never
                       allowed to feed an event field);
                       `feeds`: event fields it fills beyond the same-named ones
@@ -29,6 +31,10 @@ FIELDS AND WHERE THEIR VALUES COME FROM (information completeness)
                       `uses: "<text>"` when its value goes somewhere other than
                       an event, e.g. a plain document or an email
     read model fields `source`: the events the field is built from
+    State Read query `query:` {input: {type, source}} - what selects the shown
+                      data; source: route, session, fragment (after '#' in a
+                      link, never sent to a server in a URL), clock.  Drawn on
+                      the read model card as `> input: Type (tag)`
   Every field of every emitted event must be fed by exactly one command field,
   and every screen-sourced command field must be an input of its screen.
   Slices marked `draft: true` are not yet refined and skip these checks.
@@ -62,8 +68,9 @@ HERE = pathlib.Path(__file__).resolve().parent
 # what the slices are; how big a card is drawn is this script's business.
 CARD_WIDTH, CARD_HEIGHT = 250, 160
 # a padded line of W monospace characters at font-size 15 needs ~9px each plus
-# the card's inner margin; cards widen past CARD_WIDTH only when a line needs it
-CHAR_PX, CARD_MARGIN_PX = 9, 16
+# the card's inner margin; cards widen past CARD_WIDTH only when a line needs it,
+# and grow past CARD_HEIGHT only when the longest card needs it
+CHAR_PX, CARD_MARGIN_PX, LINE_PX = 9, 16, 17
 STATE_CHANGE, STATE_READ = "State Change", "State Read"
 AUTOMATION, TRANSLATION = "Automation", "Translation"
 # the four canonical Event Modeling slice types
@@ -72,17 +79,23 @@ TYPES = (STATE_CHANGE, STATE_READ, AUTOMATION, TRANSLATION)
 RENDERABLE = (STATE_CHANGE, STATE_READ)
 
 # where a command field's value comes from; `screen` is the default.  `lookup`
-# is read from outside the stream by the handler (e.g. Identity) to feed a guard.
-COMMAND_SOURCES = ("screen", "route", "session", "generated", "lookup")
+# is read from outside the stream by the handler (e.g. Identity) to feed a guard;
+# `clock` is the current time, read by the caller so deciding stays pure.
+COMMAND_SOURCES = ("screen", "route", "session", "generated", "lookup", "clock")
+# where a State Read slice's query inputs come from.  `fragment` is the part of a
+# link after '#': read by the page itself, never sent to a server in a URL.
+QUERY_SOURCES = ("route", "session", "fragment", "clock")
 # the keys a field mapping may carry, per element kind
 FIELD_KEYS = {
     "command": {"type", "source", "feeds", "stream", "uses"},
     "readModel": {"type", "source"},
     "event": {"type"},
     "screen": {"type"},
+    "query": {"type", "source"},
 }
-# drawn after a command field's type when it is not typed on the screen
-SOURCE_TAGS = {"route": "url", "session": "ses", "generated": "gen", "lookup": "lku"}
+# drawn after a field's type when it is not typed on the screen
+SOURCE_TAGS = {"route": "url", "session": "ses", "generated": "gen", "lookup": "lku",
+               "clock": "clk", "fragment": "frg"}
 
 
 class Report:
@@ -212,6 +225,28 @@ class Model:
     # ---------------------------------------------------------- fields
     def _parse_fields(self):
         """Normalise every declared field list to {name: {type, source, feeds, stream}}."""
+        self.queries = {}       # slice index -> {input: {type, source}}
+        for i, sl in enumerate(self.slices):
+            raw = sl.get("query")
+            if raw is None:
+                continue
+            where = "slice %d (%s)" % (i + 1, sl.get("slice", "?"))
+            if sl.get("type") != STATE_READ:
+                self.rep.error("%s: only a %s slice has a `query`; a %s slice's inputs "
+                               "are its command's fields" % (where, STATE_READ, STATE_CHANGE))
+                continue
+            if not isinstance(raw, dict):
+                self.rep.error("%s: `query` must be a mapping of input: {type, source}" % where)
+                continue
+            parsed = {}
+            for fname, fv in raw.items():
+                if not isinstance(fv, dict) or "source" not in fv:
+                    self.rep.error("%s: query input %s needs a type and a source" % (where, fname))
+                    continue
+                f = self._parse_field("query", where, fname, fv)
+                if f is not None:
+                    parsed[fname] = f
+            self.queries[i] = parsed
         for (kind, name), d in self.decl.items():
             key = "inputs" if kind == "screen" else "fields"
             raw = (d["spec"] or {}).get(key) or {}
@@ -268,6 +303,11 @@ class Model:
             if not isinstance(f["source"], list):
                 rep.error("%s: field %s: `source` must be a list of events" % (where, fname))
                 f["source"] = []
+        elif kind == "query":
+            f["source"] = fv.get("source")
+            if f["source"] not in QUERY_SOURCES:
+                rep.error("%s: query input %s has source %r - expected one of: %s"
+                          % (where, fname, f["source"], ", ".join(QUERY_SOURCES)))
         return f
 
     def _check_sources(self):
@@ -294,6 +334,10 @@ class Model:
             elif sl.get("type") == STATE_READ:
                 rname, _ = as_element(sl.get("readModel"))
                 self._check_read_model(where, rname, draft)
+                if not draft and i not in self.queries:
+                    self.rep.error("%s: %s has no `query` - list the inputs that select what it "
+                                   "shows (e.g. the group id from the route), or `query: {}` "
+                                   "if it needs none" % (where, rname))
 
         for (kind, name), fields in self.fields.items():
             if kind == "screen":
@@ -391,6 +435,23 @@ def card_fields(m, kind, name):
     return [field_line(n, f) for n, f in m.fields.get((kind, name), {}).items()]
 
 
+def query_lines(m, i):
+    """A State Read slice's query inputs, drawn under its read model's fields as `> name`."""
+    return ["> %s" % field_line(n, f)[2:] for n, f in m.queries.get(i, {}).items()]
+
+
+def longest_card(m):
+    """Most body lines on any card (fields, inputs, wireframe, query inputs)."""
+    most = 0
+    for (kind, name), d in m.decl.items():
+        most = max(most, len(card_fields(m, kind, name)) + len((d["spec"] or {}).get("wireframe") or []))
+    for i, sl in enumerate(m.slices):
+        rname, _ = as_element(sl.get("readModel"))
+        if rname:
+            most = max(most, len(card_fields(m, "readModel", rname)) + len(query_lines(m, i)))
+    return most
+
+
 def pad_width(m):
     """Widest line anywhere in the model.
 
@@ -407,6 +468,9 @@ def pad_width(m):
             widest = max(widest, len(line))
         for raw in spec.get("wireframe") or []:
             widest = max(widest, len(raw))
+    for i in m.queries:
+        for line in query_lines(m, i):
+            widest = max(widest, len(line))
     return widest
 
 
@@ -473,7 +537,8 @@ classes: {
 
 def render(m):
     W = pad_width(m)
-    cw, ch = max(CARD_WIDTH, W * CHAR_PX + CARD_MARGIN_PX), CARD_HEIGHT
+    cw = max(CARD_WIDTH, W * CHAR_PX + CARD_MARGIN_PX)
+    ch = max(CARD_HEIGHT, (2 + longest_card(m)) * LINE_PX + 2 * CARD_MARGIN_PX)
     slices = m.slices
     slots = [max(1, len(sl.get("events") or [])) for sl in slices]
     ncols = 1 + sum(slots) + (len(slices) - 1)
@@ -506,7 +571,7 @@ def render(m):
                                 wireframe=sp.get("wireframe"), W=W))
             elif row == 3 and sl.get("type") == STATE_READ:
                 out.append(card("rm%d" % i, "view", name,
-                                lines=card_fields(m, "readModel", name), W=W))
+                                lines=card_fields(m, "readModel", name) + query_lines(m, i), W=W))
             elif row == 4 and sl.get("type") == STATE_CHANGE:
                 out.append(card("c%d" % i, "command", name,
                                 lines=card_fields(m, "command", name), W=W))

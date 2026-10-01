@@ -25,19 +25,22 @@ internal static class Endpoint
     private static async Task<IResult> Handle(
         string groupId, string memberId, Request request, ClaimsPrincipal user,
         IDocumentSession session, IEmailDirectory directory, IEmailSender email, PublicOrigin origin,
-        ILoggerFactory loggers, HttpContext http, CancellationToken ct)
+        TimeProvider clock, ILoggerFactory loggers, HttpContext http, CancellationToken ct)
     {
         if (!GroupId.TryParse(groupId, out var group))
             return NotFound(Decider.GroupNotFound);
         var member = MemberId.TryParse(memberId, out var parsed) ? parsed : MemberId.From(Guid.Empty);
 
         var (token, tokenHash) = InviteToken.Generate();
-        var command = new Command(group, member, request.Email, tokenHash, user.UserId());
+        var command = new Command(group, member, request.Email, tokenHash, clock.GetUtcNow(), user.UserId());
 
         switch (await Handler.Handle(session, directory, command, ct))
         {
             case Outcome.Invited invited:
-                var link = $"{origin.For(http.Request)}/invites/{group}/{token}";
+                // The token goes in the fragment: browsers never send it to a server,
+                // so it stays out of proxy and server logs. Not out of browser history or
+                // bookmarks — a fragment is stored and synced like any other part of a URL.
+                var link = $"{origin.For(http.Request)}/invites/{group}#{token}";
                 await SendEmail(email, loggers, command, link, invited, ct);
                 return Results.Ok(new Response(link));
             case Outcome.Invalid i:
