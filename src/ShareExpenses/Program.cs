@@ -19,6 +19,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 AllSlices.Map(app.MapGroup("/api"));
+app.MapDevSignIn();
 
 app.MapGet("/health", async (IQuerySession marten, IdentityDb identity, CancellationToken ct) =>
 {

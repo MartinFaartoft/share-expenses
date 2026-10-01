@@ -1,0 +1,75 @@
+### Exercise the API by hand.
+#
+# ── Setup ────────────────────────────────────────────────────────────────────
+#   1. Start the database (from the repo root):
+#        docker compose up -d --wait
+#   2. Start the app over HTTPS (the auth cookie is Secure, so plain HTTP won't sign in):
+#        dotnet run --project src/ShareExpenses --launch-profile https
+#   3. Run the requests below top to bottom. The VS Code REST Client and the
+#      JetBrains HTTP Client both keep the sign-in cookie between requests.
+#
+#   Dev certificate expires 2026-11-13. If HTTPS fails, renew it:
+#        dotnet dev-certs https --clean && dotnet dev-certs https --trust
+#
+# ── Inspecting the data ──────────────────────────────────────────────────────
+#   Open a psql shell (from the repo root):
+#        docker compose exec postgres psql -U share_expenses -d share_expenses
+#
+#   Inside psql (\x auto gives one-field-per-line output for wide rows, \q quits):
+#        \dn                      -- schemas: ledger (Marten), identity (EF)
+#        \dt ledger.*             -- event store tables
+#
+#        -- the event stream, in order
+#        select seq_id, stream_id, version, type, data, timestamp
+#        from ledger.mt_events order by seq_id;
+#
+#        -- one row per stream (per group)
+#        select id, version, created from ledger.mt_streams;
+#
+#        -- events for one group, pretty-printed
+#        select version, type, jsonb_pretty(data)
+#        from ledger.mt_events where stream_id = '<groupId>' order by version;
+#
+#        -- users
+#        select "Id", "Email" from identity."AspNetUsers";
+#
+#   Or run a single query without opening a shell:
+#        docker compose exec postgres psql -U share_expenses -d share_expenses \
+#          -c "select seq_id, type, data from ledger.mt_events order by seq_id;"
+
+@host = https://localhost:7194
+@email = alice@example.com
+
+### 1. Sign in (Development only — stand-in for the magic link). Sets the cookie.
+# @name signIn
+POST {{host}}/dev/sign-in
+Content-Type: application/json
+
+{
+  "email": "{{email}}"
+}
+
+### 2. Create a group. Expect 201 with groupId and memberId.
+# Then check ledger.mt_events: group_created, member_added, member_claimed.
+# @name createGroup
+POST {{host}}/api/groups
+Content-Type: application/json
+
+{
+  "name": "Lisbon trip",
+  "currency": "GBP",
+  "displayName": "Alice"
+}
+
+### 3. Rejected: unknown currency. Expect 400 with the reason, and no new events.
+POST {{host}}/api/groups
+Content-Type: application/json
+
+{
+  "name": "Lisbon trip",
+  "currency": "XYZ",
+  "displayName": "Alice"
+}
+
+### 4. Health
+GET {{host}}/health
