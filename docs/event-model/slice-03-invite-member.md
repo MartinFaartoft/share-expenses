@@ -5,20 +5,25 @@ Type: **State Change**. Screen → command → events.
 | | |
 |---|---|
 | Screen | Invite member (modelled; no frontend yet) |
-| Command | `InviteMember(groupId, memberId, email, tokenHash, by)` |
+| Command | `InviteMember(groupId, memberId, email, tokenHash, by)` + looked up: `emailHolder`, `invitedTo` |
 | Events | `MemberInvited` |
+| Also writes | `InviteDelivery` — plain document, the address the invite went to |
 | Code | `src/ShareExpenses/Slices/InviteMember/` |
 | Endpoint | `POST /api/groups/{groupId}/members/{memberId}/invite` |
 
-Ties an email address to one member slot and issues a link that lets whoever
-holds it claim that slot (spec §4: the invite binds the slot, and the token is the
-capability). The link is both emailed and returned in the response, so it can be
-shared in a group chat as well.
+Issues a link that lets whoever holds it claim one member slot (spec §4: the
+invite binds the slot, and the token is the capability), and emails it. The link
+is also returned in the response, so it can be shared in a group chat.
+
+**No email address enters the ledger.** `MemberInvited` records the slot, the
+token's hash and the actor. The address goes into `InviteDelivery`, a plain,
+erasable document (spec §3, §11).
 
 ## Specifications
 
-`h0`, `h1` are hashes of pinned tokens. Unless stated otherwise, every scenario
-starts from:
+`h0`, `h1` are hashes of pinned tokens. Lookups are written `WITH`: they come from
+outside the stream (Identity, and `InviteDelivery`) and feed guards, not
+invariants. Unless stated otherwise, every scenario starts from:
 
 ```
 GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
@@ -30,82 +35,98 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 ```
 1 - invites a placeholder member
     WHEN   InviteMember(g1, m2, "bob@example.com", alice)
-    THEN   MemberInvited(m2, "bob@example.com", h1, alice)
+    THEN   MemberInvited(m2, h1, alice)
 
-2 - trims the email and keeps its case
-    WHEN   InviteMember(g1, m2, "  Bob@Example.com ", alice)
-    THEN   MemberInvited(m2, "Bob@Example.com", h1, alice)
-
-3 - the group must exist
+2 - the group must exist
     GIVEN  (empty stream)
     WHEN   InviteMember(g1, m2, "bob@example.com", alice)
     THEN   rejected - group not found
 
-4 - only members of the group may invite
+3 - only members of the group may invite
     WHEN   InviteMember(g1, m2, "bob@example.com", mallory)
     THEN   rejected - group not found
 
-5 - the slot must exist in the group
+4 - the slot must exist in the group
     WHEN   InviteMember(g1, m9, "bob@example.com", alice)
     THEN   rejected - member not found
 
-6 - a slot that has already joined cannot be invited
+5 - a slot that has already joined cannot be invited
     WHEN   InviteMember(g1, m1, "alice@example.com", alice)
     THEN   rejected - member has already joined
 
-7 - rejects an address that is not plausibly an email
+6 - rejects an address that is not plausibly an email
     WHEN   InviteMember(g1, m2, "bob", alice)
     THEN   rejected - email is not a valid address
 
-8 - re-inviting replaces the previous invite
-    GIVEN  ... AND MemberInvited(m2, "bob@old.com", h0, alice)
-    WHEN   InviteMember(g1, m2, "bob@new.com", alice)
-    THEN   MemberInvited(m2, "bob@new.com", h1, alice)
+7 - re-inviting replaces the previous invite
+    GIVEN  ... AND MemberInvited(m2, h0, alice)
+    WITH   invitedTo(bob@example.com) = {m2}
+    WHEN   InviteMember(g1, m2, "bob@example.com", alice)
+    THEN   MemberInvited(m2, h1, alice)
 
-9 - an email cannot be invited to two slots
-    GIVEN  ... AND MemberAdded(m3, "Bobby", alice)
-           AND MemberInvited(m2, "bob@example.com", h0, alice)
+8 - an address with an open invite cannot be invited to another slot
+    GIVEN  ... AND MemberAdded(m3, "Bobby", alice) AND MemberInvited(m2, h0, alice)
+    WITH   invitedTo(bob@example.com) = {m2}
     WHEN   InviteMember(g1, m3, "BOB@example.com", alice)
     THEN   rejected - that email is already invited as Bob
 
-10 - re-inviting the same slot with the same email is fine
-    GIVEN  ... AND MemberInvited(m2, "bob@example.com", h0, alice)
-    WHEN   InviteMember(g1, m2, "bob@example.com", alice)
-    THEN   MemberInvited(m2, "bob@example.com", h1, alice)
-
-11 - an email that has joined cannot be invited to another slot
-    GIVEN  ... AND MemberInvited(m2, "bob@example.com", h0, alice)
-           AND MemberClaimed(m2, bob)
-           AND MemberAdded(m3, "Bobby", alice)
+9 - the address of a user already in the group cannot be invited
+    GIVEN  ... AND MemberClaimed(m2, bob) AND MemberAdded(m3, "Bobby", alice)
+    WITH   emailHolder(bob@example.com) = bob
     WHEN   InviteMember(g1, m3, "bob@example.com", alice)
     THEN   rejected - bob@example.com has already joined as Bob
+
+10 - including the creator's
+    GIVEN  ... AND MemberAdded(m3, "Bobby", alice)
+    WITH   emailHolder(alice@example.com) = alice
+    WHEN   InviteMember(g1, m3, "alice@example.com", alice)
+    THEN   rejected - alice@example.com has already joined as Alice
+
+11 - an invite to a slot since claimed no longer holds its address
+    GIVEN  ... AND MemberInvited(m2, h0, alice) AND MemberClaimed(m2, bob)
+           AND MemberAdded(m3, "Bobby", alice)
+    WITH   invitedTo(bob@example.com) = {m2}, emailHolder(bob@example.com) = none
+    WHEN   InviteMember(g1, m3, "bob@example.com", alice)
+    THEN   MemberInvited(m3, h1, alice)
+
+12 - an account outside the group is no obstacle
+    WITH   emailHolder(carol@example.com) = carol
+    WHEN   InviteMember(g1, m2, "carol@example.com", alice)
+    THEN   MemberInvited(m2, h1, alice)
 ```
+
+Scenario 11 is the "Bob changed his address" case: his account no longer answers
+to bob@example.com, so the old address is free. Had he not changed it, scenario 9
+would apply.
 
 ## Notes
 
+- **Invariants vs guards.** "One user, one slot per group" is an invariant: it
+  protects the ledger, is keyed on `UserId`, and is enforced at claim time against
+  the stream. "One address, one slot" is a *guard*: it saves the inviter from a
+  mistake that the claim would otherwise reject later, on the invitee's side. Guards
+  may use data from outside the stream (spec §11); a stale lookup can only let a
+  mistake through to claim time, never corrupt the ledger.
+- **Lookups:** `emailHolder` is the account whose *current* address this is
+  (Identity, case-insensitive); `invitedTo` is the slots whose latest
+  `InviteDelivery` went to this address (case-insensitive). Deciding ignores
+  deliveries for slots that have since been claimed.
 - **Order of checks:** membership, then the slot, then the email. A non-member
-  gets `group not found` whatever else is wrong, so they learn nothing — over HTTP,
-  404 for a missing group, a non-member and a malformed group id alike. Once
-  membership is established, `member not found` (also 404) reveals nothing new.
+  gets `group not found` whatever else is wrong. Over HTTP: 404 for a missing
+  group, a non-member and a malformed group id alike; `member not found` (404)
+  only once membership is established.
 - **The token.** 32 random bytes, base64url. Only its SHA-256 (`tokenHash`) is
   recorded; the raw token exists in the response and the email, nowhere else. The
-  link is `{App:PublicOrigin}/invites/{groupId}/{token}` — scoped to the group, so
-  looking it up folds one stream (spec §11).
-- **Email** is trimmed, kept in its original case in the event, and compared
-  case-insensitively. "Plausibly an email": at most 254 characters, exactly one
-  `@` with something on both sides, no whitespace. Real validation is delivery.
-- **One email, one slot.** An email held by another slot — invited or already
-  joined through an invite — is rejected, naming that slot, so the inviter can see
-  what happened. The rejection would otherwise surface later and more confusingly,
-  at claim time, on the invitee's side. Known gap: the group creator's slot has no
-  recorded email (spec §14, OPEN).
-- **Expired invites still hold their email.** Expiry (30 days) is checked where
-  the link is used, so deciding never needs the clock; the inviter re-invites the
-  named slot instead.
-- **Re-inviting** retires the previous link: the newest `MemberInvited` for a slot
-  is the live one. That half of scenario 8 is tested where links are used.
+  link is `{App:PublicOrigin}/invites/{groupId}/{token}`.
+- **Email** is trimmed and kept in its original case. "Plausibly an email": at
+  most 254 characters, exactly one `@` with something on both sides, no
+  whitespace. Real validation is delivery.
+- **Expiry** (30 days) is checked where the link is used, not here.
+- **Re-inviting** overwrites the slot's `InviteDelivery` and retires the previous
+  link: the newest `MemberInvited` for a slot is the live one.
 - **Email is sent after the save.** If sending fails, the response is still 200
-  with the link and the failure is logged: the invite happened, delivery did not.
+  with the link and the failure is logged. A transactional outbox would make
+  delivery retry on transient failures (spec §14, DEFERRED).
 
 ## Deferred to the slices that introduce the events
 

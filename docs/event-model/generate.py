@@ -20,10 +20,14 @@ FIELDS AND WHERE THEIR VALUES COME FROM (information completeness)
   Events declare shape only: where an event's values come from depends on which
   slice emits it, so that is written on the emitting slice's command instead.
     screen inputs     what the user types, `inputs:` on the screen
-    command fields    `source`: screen (default), route, session, generated;
+    command fields    `source`: screen (default), route, session, generated, lookup
+                      (read from outside the stream to feed a guard; never
+                      allowed to feed an event field);
                       `feeds`: event fields it fills beyond the same-named ones
                       (a field always feeds same-named fields of emitted events);
-                      `stream: true` when it only selects the stream
+                      `stream: true` when it only selects the stream;
+                      `uses: "<text>"` when its value goes somewhere other than
+                      an event, e.g. a plain document or an email
     read model fields `source`: the events the field is built from
   Every field of every emitted event must be fed by exactly one command field,
   and every screen-sourced command field must be an input of its screen.
@@ -57,6 +61,9 @@ HERE = pathlib.Path(__file__).resolve().parent
 # Presentation constants - deliberately not in the model file.  The model says
 # what the slices are; how big a card is drawn is this script's business.
 CARD_WIDTH, CARD_HEIGHT = 250, 160
+# a padded line of W monospace characters at font-size 15 needs ~9px each plus
+# the card's inner margin; cards widen past CARD_WIDTH only when a line needs it
+CHAR_PX, CARD_MARGIN_PX = 9, 16
 STATE_CHANGE, STATE_READ = "State Change", "State Read"
 AUTOMATION, TRANSLATION = "Automation", "Translation"
 # the four canonical Event Modeling slice types
@@ -64,17 +71,18 @@ TYPES = (STATE_CHANGE, STATE_READ, AUTOMATION, TRANSLATION)
 # Automation and Translation are recognised vocabulary but have no layout yet
 RENDERABLE = (STATE_CHANGE, STATE_READ)
 
-# where a command field's value comes from; `screen` is the default
-COMMAND_SOURCES = ("screen", "route", "session", "generated")
+# where a command field's value comes from; `screen` is the default.  `lookup`
+# is read from outside the stream by the handler (e.g. Identity) to feed a guard.
+COMMAND_SOURCES = ("screen", "route", "session", "generated", "lookup")
 # the keys a field mapping may carry, per element kind
 FIELD_KEYS = {
-    "command": {"type", "source", "feeds", "stream"},
+    "command": {"type", "source", "feeds", "stream", "uses"},
     "readModel": {"type", "source"},
     "event": {"type"},
     "screen": {"type"},
 }
 # drawn after a command field's type when it is not typed on the screen
-SOURCE_TAGS = {"route": "url", "session": "ses", "generated": "gen"}
+SOURCE_TAGS = {"route": "url", "session": "ses", "generated": "gen", "lookup": "lku"}
 
 
 class Report:
@@ -235,7 +243,7 @@ class Model:
             rep.error("%s: field %s has unknown key(s) %s - expected: %s"
                       % (where, fname, ", ".join(extra), ", ".join(sorted(FIELD_KEYS[kind]))))
 
-        f = {"type": fv["type"], "source": None, "feeds": [], "stream": False}
+        f = {"type": fv["type"], "source": None, "feeds": [], "stream": False, "uses": None}
         if kind == "command":
             f["source"] = fv.get("source", "screen")
             if f["source"] not in COMMAND_SOURCES:
@@ -250,6 +258,10 @@ class Model:
             if not isinstance(f["stream"], bool):
                 rep.error("%s: field %s: `stream` must be true or false" % (where, fname))
                 f["stream"] = False
+            f["uses"] = fv.get("uses")
+            if f["uses"] is not None and not (isinstance(f["uses"], str) and f["uses"].strip()):
+                rep.error("%s: field %s: `uses` must say where the value goes, as text" % (where, fname))
+                f["uses"] = None
         elif kind == "readModel":
             src = fv.get("source") or []
             f["source"] = [src] if isinstance(src, str) else src
@@ -324,9 +336,13 @@ class Model:
                     rep.warn("%s: %s lists %s in `feeds`, which it already feeds by name" % (where, src, t))
                 else:
                     targets.append((e, ef))
-            if not targets and not f["stream"]:
-                rep.error("%s: %s feeds no event field - list targets in `feeds`, or mark it "
-                          "`stream: true` if it only selects the stream" % (where, src))
+            if not targets and not f["stream"] and not f["uses"] and f["source"] != "lookup":
+                rep.error("%s: %s feeds no event field - list targets in `feeds`, mark it "
+                          "`stream: true` if it only selects the stream, or say in `uses` where "
+                          "else its value goes" % (where, src))
+            if f["source"] == "lookup" and targets:
+                rep.error("%s: %s is looked up from outside the stream, so it may only feed a "
+                          "guard, never an event field" % (where, src))
             for e, ef in targets:
                 feeders.setdefault((e, ef), []).append(n)
                 if evfields[e][ef]["type"] != f["type"]:
@@ -457,7 +473,7 @@ classes: {
 
 def render(m):
     W = pad_width(m)
-    cw, ch = CARD_WIDTH, CARD_HEIGHT
+    cw, ch = max(CARD_WIDTH, W * CHAR_PX + CARD_MARGIN_PX), CARD_HEIGHT
     slices = m.slices
     slots = [max(1, len(sl.get("events") or [])) for sl in slices]
     ncols = 1 + sum(slots) + (len(slices) - 1)

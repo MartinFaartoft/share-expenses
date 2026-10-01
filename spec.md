@@ -83,14 +83,16 @@ This is the ledger. History *is* the product here — "why is my balance this
 number" is answered by replaying what happened.
 
 **Plain documents, not event-sourced (supporting state):** users, sessions,
-login tokens.
+login tokens, invite deliveries (the address an invite was sent to).
 
-Invite lookups were on this list and moved off it with slice 3: an invite's token
-*hash* is recorded on `MemberInvited`, and the lookup is folded from the group
-stream on demand (§11). The hash is safe to keep forever — a SHA-256 of 256 random
-bits cannot be reversed or guessed, and claims nothing on its own — and keeping it
-in the stream means re-inviting and claiming retire old links with no second
-store to keep in step.
+Invite *lookups* were on this list and moved off it with slice 3: an invite's
+token *hash* is recorded on `MemberInvited`, and the lookup is folded from the
+group stream on demand (§11). The hash is safe to keep forever — a SHA-256 of 256
+random bits cannot be reversed or guessed, and claims nothing on its own — and
+keeping it in the stream means re-inviting and claiming retire old links with no
+second store to keep in step. The invite's email address went the other way: it
+is personal data, so it lives in the erasable `InviteDelivery` document and never
+enters the ledger.
 
 Rationale: these have no interesting history, no invariants worth auditing, and
 high write churn. Event-sourcing a session table produces a firehose of noise
@@ -522,7 +524,7 @@ GroupCreated(name, currency, createdBy)
 GroupRenamed(name, by)
 GroupArchived(by) / GroupUnarchived(by)
 MemberAdded(memberId, displayName, by)
-MemberInvited(memberId, email, tokenHash, by)
+MemberInvited(memberId, tokenHash, by)
 MemberClaimed(memberId, userId)
 MemberClaimReleased(memberId, userId, releasedBy)
 MemberRenamed(memberId, displayName, by)
@@ -552,12 +554,31 @@ stream semantics and optimistic concurrency — appending `GroupCreated` at expe
 version 0 to a stream that already exists fails — rather than by aggregate
 validation.
 
-**Decision: invite emails are recorded in `MemberInvited`, and cannot be erased.**
-Events are immutable, so an email address in the stream stays there; honouring a
-request to be forgotten would mean rewriting the stream or not honouring it.
-Accepted for v1: this is a private app among friends, the address is useful
-history ("Alice invited bob@…"), and the exposure is small. Every backup carries
-the addresses too.
+**Decision: no email address enters the ledger.** `MemberInvited` records the
+slot, the token's hash and the actor; the address the invite went to lives in the
+`InviteDelivery` plain document (§3), and a user's current address lives only in
+Identity. Events are immutable, so personal data in them could never be corrected
+or erased; keeping it out removes the problem rather than managing it, and email
+changes stay an account matter instead of an event on every group the user is in.
+Cost accepted: the ledger cannot answer "which address was this invite sent to" —
+`InviteDelivery` can, for as long as it is kept.
+
+**Decision: invariants use only the stream; guards may use lookups.** An
+*invariant* protects the ledger and must always hold — "one user holds at most
+one slot per group" is keyed on `UserId`, enforced at claim time, inside the
+stream's transaction. A *guard* saves a person from a mistake that an invariant
+would otherwise reject later and less helpfully — "one address, one slot" at
+invite time is one. Guards may read data outside the stream (Identity,
+`InviteDelivery`), passed into `Decide` as looked-up command fields so deciding
+stays pure. Such lookups can be stale or race; the worst outcome is a mistake
+reaching the invariant, never a corrupt ledger.
+
+This resolves the creator's email and email changes together: InviteMember asks
+Identity which account *currently* owns the address and rejects it if that user
+holds a slot — the creator included, whatever address they use today — and
+rejects an address with an open invite on another slot. A changed-away address is
+free again; one still in use is caught early. Email change itself is not a v1
+feature (with magic links the address *is* the login), but nothing depends on that.
 
 **Invite links expire after 30 days**, measured from the `MemberInvited` append
 time in stream metadata. Enforced where the link is used (viewing and claiming),
@@ -1100,22 +1121,6 @@ a documentation tool, not application code.
   Mechanism: an xUnit test that reads the YAML and the `.md` files and reflects
   over the assembly, so `dotnet test` — and therefore the build gate — fails on a
   mismatch. Draft slices are skipped, as in the generator.
-- **OPEN** Capture the group creator's email, so "one email, one slot per group"
-  holds for every slot. Today an email reaches the group stream only through
-  `MemberInvited`, so the creator's slot — seated and claimed by `CreateGroup`
-  without an invite — has no email, and inviting the creator's own address to
-  another slot passes InviteMember's check. Claiming still fails it (a user holds
-  at most one slot), but late and on the invitee's side. Options to weigh:
-  - carry the creator's email on `CreateGroup` (from the session, not typed) into
-    an existing or new event — e.g. an email field on `MemberClaimed`, which
-    would also record the email of everyone who claims via an invite;
-  - record the user's email on every `MemberClaimed`, making "which email holds
-    which slot" a fact of the stream regardless of how the slot was claimed;
-  - look the email up from Identity at decide time — rejected in principle,
-    since it makes the decision depend on state outside the stream.
-  Consequences: more personal data in immutable events (§11, see the decision on
-  emails in events), a schema change to slice 1's events, and InviteMember's rule
-  switching from "invited or joined via invite" to "held by any slot".
 - **OPEN** Optional guardrail: only the *active* slice may change. Finished
   slices are settled code, and an AI agent working on slice N can easily "tidy"
   slice N−2 on the way past. A validation script — runnable by hand, as a
@@ -1136,10 +1141,25 @@ a documentation tool, not application code.
     while building slice 2.
   - Optional means advisory by default: it reports, and the caller decides
     whether to gate on it.
-- **DEFERRED** Crypto-shredding for personal data in events: encrypt each email
-  with a per-person key held outside the stream, and delete the key to erase it.
-  The standard event-sourcing answer to the right to be forgotten; revisit if
-  erasure is ever actually requested (§11).
+- **DEFERRED** Transactional outbox for emails. Invite (and later sign-in) emails
+  are sent after the save, best-effort: a transient relay failure loses the email,
+  though the invite stands and its link is in the response. An outbox would record
+  "send this email" in the same transaction as the event and the `InviteDelivery`
+  document, and a background worker would deliver and retry it — `InviteDelivery`
+  is the natural place for delivery status. Revisit with the choice of relay
+  (§4), or if Wolverine (phase 2), whose durable outbox does exactly this, arrives
+  first.
+  - **Superseded invites:** `InviteDelivery.TokenHash` keys a delivery to its
+    `MemberInvited` event, so the worker can skip a pending delivery whose invite
+    has since been replaced by a re-invite rather than send a dead link.
+  - **The raw token must survive until sending.** The email carries the link, the
+    link carries the raw token, and today the raw token exists only in memory
+    during the request. An outbox sends later, so it must hold the token until
+    then. Options: store it in the outbox entry and delete it once sent (a
+    short-lived secret at rest); store it encrypted with ASP.NET Data Protection,
+    whose key ring is already in Postgres (§4); or generate the token at send time
+    and record its hash then — which would mean the response can no longer return
+    the link, reversing slice 3's "emailed *and* returned" decision.
 - **DEFERRED** Completeness inside composite read model types (`Member[]`), with
   slice 6; values decided from stream state (`source: state`), with slice 4 (§13).
 - **DEFERRED** Transactional relay — shortlisted in §4; `LogEmailSender` until then.

@@ -40,10 +40,14 @@
 #   A field is `name: Type`, or a mapping when it needs more than a type.
 #   Shapes are declared once, like every element.  Sources sit on the field:
 #     screen      `inputs:` - what the user types or picks
-#     command     `source:` screen (default) | route | session | generated
+#     command     `source:` screen (default) | route | session | generated | lookup
+#                           (lookup: read from outside the stream to feed a
+#                           guard; may never feed an event field)
 #                 `feeds:`  [Event.field, ...] - event fields it fills that are
 #                           NOT already same-named (same name feeds implicitly)
 #                 `stream: true` - only selects the stream, feeds no event field
+#                 `uses:`   "text" - where the value goes when not into an event
+#                           (a plain document, an email)
 #     event       a type only.  Where an event's values come from depends on the
 #                 slice emitting it, so that lives on that slice's command.
 #     read model  `source:` [Event, ...] - the events the field is built from
@@ -129,16 +133,19 @@ slices:
       fields:
         groupId: { type: GroupId, source: route, stream: true }
         memberId: { type: MemberId, source: route }
-        email: string
+        # no email in the ledger: it goes to an erasable plain document
+        email: { type: string, uses: "InviteDelivery document, invite email" }
         # SHA-256 of a random token generated per invite; the raw token is
         # returned and emailed once, and recorded nowhere
         tokenHash: { type: string, source: generated }
         by: { type: UserId, source: session }
+        # guards (spec §11): may be stale; the claim enforces one user, one slot
+        emailHolder: { type: "UserId?", source: lookup }     # Identity: account with this email
+        invitedTo: { type: "MemberId[]", source: lookup }    # InviteDelivery: slots invited at it
     events:
       - name: MemberInvited
         fields:
           memberId: MemberId
-          email: string
           tokenHash: string
           by: UserId
 

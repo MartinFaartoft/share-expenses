@@ -16,28 +16,28 @@ classes: {
     style: { fill: transparent; stroke-width: 0; font-color: "#6b7280"; bold: true }
   }
   slicename: {
-    width: 250; height: 50
+    width: 277; height: 50
     style: { fill: transparent; stroke-width: 0; font-color: "#374151"; bold: true }
   }
   lgapN: { width: 170;    height: 50;  style: { opacity: 0 } }
-  gapN:  { width: 250; height: 50;  style: { opacity: 0 } }
+  gapN:  { width: 277; height: 50;  style: { opacity: 0 } }
   divN:  { width: 2;      height: 50;  style: { fill: "#c9ced8"; stroke-width: 0 } }
   div:   { width: 2;      height: 160; style: { fill: "#c9ced8"; stroke-width: 0 } }
-  gap:   { width: 250; height: 160; style: { opacity: 0 } }
+  gap:   { width: 277; height: 160; style: { opacity: 0 } }
   screen: {
-    width: 250; height: 160
+    width: 277; height: 160
     style: { font: mono; font-size: 15; fill: "#fbfbfd"; stroke: "#8c93a0"; stroke-width: 2; border-radius: 6 }
   }
   command: {
-    width: 250; height: 160
+    width: 277; height: 160
     style: { font: mono; font-size: 15; fill: "#4a90d9"; stroke: "#2b6cb0"; font-color: "#ffffff"; border-radius: 6 }
   }
   event: {
-    width: 250; height: 160
+    width: 277; height: 160
     style: { font: mono; font-size: 15; fill: "#f5a623"; stroke: "#c07d12"; font-color: "#1f1f1f"; border-radius: 6 }
   }
   view: {
-    width: 250; height: 160
+    width: 277; height: 160
     style: { font: mono; font-size: 15; fill: "#54b054"; stroke: "#357935"; font-color: "#ffffff"; border-radius: 6 }
   }
 }
@@ -64,23 +64,23 @@ n7: "8 - Settle up (draft)                   " { class: slicename }
 
 # ===== row 2: screens =====
 l2: "SCREENS" { class: lanelabel }
-s0: "New group                 \n                          \nname       [........]     \ncurrency   [ GBP  v ]     \nyour name  [........]     \n                          \n  [ Create group ]        " { class: screen }
+s0: "New group                    \n                             \nname       [........]        \ncurrency   [ GBP  v ]        \nyour name  [........]        \n                             \n  [ Create group ]           " { class: screen }
 gp2_0_1: "" { class: gap }
 gp2_0_2: "" { class: gap }
 dv2_1: "" { class: div }
-s1: "Group setup               \n                          \n- displayName: string     \n                          \n                          \n                          " { class: screen }
+s1: "Group setup                  \n                             \n- displayName: string        \n                             \n                             \n                             " { class: screen }
 dv2_2: "" { class: div }
-s2: "Invite member             \n                          \n- email: string           \n                          \n                          \n                          " { class: screen }
+s2: "Invite member                \n                             \n- email: string              \n                             \n                             \n                             " { class: screen }
 dv2_3: "" { class: div }
-s3: "Invite landing            \n                          \nAlice invited you to      \nLisbon trip as Bob        \n                          \n  [ Sign me in ]          " { class: screen }
+s3: "Invite landing               \n                             \nAlice invited you to         \nLisbon trip as Bob           \n                             \n  [ Sign me in ]             " { class: screen }
 dv2_4: "" { class: div }
-s4: "Sign in / claim           \n                          \n                          \n                          \n                          \n                          " { class: screen }
+s4: "Sign in / claim              \n                             \n                             \n                             \n                             \n                             " { class: screen }
 dv2_5: "" { class: div }
-s5: "Add expense               \n                          \n                          \n                          \n                          \n                          " { class: screen }
+s5: "Add expense                  \n                             \n                             \n                             \n                             \n                             " { class: screen }
 dv2_6: "" { class: div }
-s6: "Balances                  \n                          \n                          \n                          \n                          \n                          " { class: screen }
+s6: "Balances                     \n                             \n                             \n                             \n                             \n                             " { class: screen }
 dv2_7: "" { class: div }
-s7: "Settle up                 \n                          \n                          \n                          \n                          \n                          " { class: screen }
+s7: "Settle up                    \n                             \n                             \n                             \n                             \n                             " { class: screen }
 
 # ===== row 3: read models =====
 l3: "READ MODELS" { class: lanelabel }
@@ -92,55 +92,55 @@ gp3_1: "" { class: gap }
 dv3_2: "" { class: div }
 gp3_2: "" { class: gap }
 dv3_3: "" { class: div }
-rm3: "InviteLookup              \n                          \n- groupName: string       \n- memberName: string      \n- invitedBy: string       \n- live: bool              " { class: view }
+rm3: "InviteLookup                 \n                             \n- groupName: string          \n- memberName: string         \n- invitedBy: string          \n- live: bool                 " { class: view }
 dv3_4: "" { class: div }
 gp3_4: "" { class: gap }
 dv3_5: "" { class: div }
 gp3_5: "" { class: gap }
 dv3_6: "" { class: div }
-rm6: "GroupLedger               \n                          \n- members: Member[]       \n- expenses: Expense[]     \n- balances: long          \n                          " { class: view }
+rm6: "GroupLedger                  \n                             \n- members: Member[]          \n- expenses: Expense[]        \n- balances: long             \n                             " { class: view }
 dv3_7: "" { class: div }
 gp3_7: "" { class: gap }
 
 # ===== row 4: commands =====
 l4: "COMMANDS" { class: lanelabel }
-c0: "CreateGroup               \n                          \n- groupName: string       \n- currency: string        \n- memberName: string      \n- createdBy: UserId (ses) \n- groupId: GroupId (gen)  \n- memberId: MemberId (gen)" { class: command }
+c0: "CreateGroup                  \n                             \n- groupName: string          \n- currency: string           \n- memberName: string         \n- createdBy: UserId (ses)    \n- groupId: GroupId (gen)     \n- memberId: MemberId (gen)   " { class: command }
 gp4_0_1: "" { class: gap }
 gp4_0_2: "" { class: gap }
 dv4_1: "" { class: div }
-c1: "AddMember                 \n                          \n- groupId: GroupId (url)  \n- displayName: string     \n- by: UserId (ses)        \n- memberId: MemberId (gen)" { class: command }
+c1: "AddMember                    \n                             \n- groupId: GroupId (url)     \n- displayName: string        \n- by: UserId (ses)           \n- memberId: MemberId (gen)   " { class: command }
 dv4_2: "" { class: div }
-c2: "InviteMember              \n                          \n- groupId: GroupId (url)  \n- memberId: MemberId (url)\n- email: string           \n- tokenHash: string (gen) \n- by: UserId (ses)        " { class: command }
+c2: "InviteMember                 \n                             \n- groupId: GroupId (url)     \n- memberId: MemberId (url)   \n- email: string              \n- tokenHash: string (gen)    \n- by: UserId (ses)           \n- emailHolder: UserId? (lku) \n- invitedTo: MemberId[] (lku)" { class: command }
 dv4_3: "" { class: div }
 gp4_3: "" { class: gap }
 dv4_4: "" { class: div }
-c4: "ClaimMember               \n                          \n                          \n                          \n                          \n                          " { class: command }
+c4: "ClaimMember                  \n                             \n                             \n                             \n                             \n                             " { class: command }
 dv4_5: "" { class: div }
-c5: "RecordExpense             \n                          \n                          \n                          \n                          \n                          " { class: command }
+c5: "RecordExpense                \n                             \n                             \n                             \n                             \n                             " { class: command }
 dv4_6: "" { class: div }
 gp4_6: "" { class: gap }
 dv4_7: "" { class: div }
-c7: "RecordSettlement          \n                          \n                          \n                          \n                          \n                          " { class: command }
+c7: "RecordSettlement             \n                             \n                             \n                             \n                             \n                             " { class: command }
 
 # ===== row 5: event stream =====
 l5: "EVENT STREAM" { class: lanelabel }
-e0_0: "GroupCreated              \n                          \n- groupId: GroupId        \n- name: string            \n- currency: string        \n- createdBy: UserId       " { class: event }
-e0_1: "MemberAdded               \n                          \n- memberId: MemberId      \n- displayName: string     \n- by: UserId              \n                          " { class: event }
-e0_2: "MemberClaimed             \n                          \n- memberId: MemberId      \n- userId: UserId          \n                          \n                          " { class: event }
+e0_0: "GroupCreated                 \n                             \n- groupId: GroupId           \n- name: string               \n- currency: string           \n- createdBy: UserId          " { class: event }
+e0_1: "MemberAdded                  \n                             \n- memberId: MemberId         \n- displayName: string        \n- by: UserId                 \n                             " { class: event }
+e0_2: "MemberClaimed                \n                             \n- memberId: MemberId         \n- userId: UserId             \n                             \n                             " { class: event }
 dv5_1: "" { class: div }
-e1_0: "MemberAdded               \n                          \n- memberId: MemberId      \n- displayName: string     \n- by: UserId              \n                          " { class: event }
+e1_0: "MemberAdded                  \n                             \n- memberId: MemberId         \n- displayName: string        \n- by: UserId                 \n                             " { class: event }
 dv5_2: "" { class: div }
-e2_0: "MemberInvited             \n                          \n- memberId: MemberId      \n- email: string           \n- tokenHash: string       \n- by: UserId              " { class: event }
+e2_0: "MemberInvited                \n                             \n- memberId: MemberId         \n- tokenHash: string          \n- by: UserId                 \n                             " { class: event }
 dv5_3: "" { class: div }
 gp5_3: "" { class: gap }
 dv5_4: "" { class: div }
-e4_0: "MemberClaimed             \n                          \n- memberId: MemberId      \n- userId: UserId          \n                          \n                          " { class: event }
+e4_0: "MemberClaimed                \n                             \n- memberId: MemberId         \n- userId: UserId             \n                             \n                             " { class: event }
 dv5_5: "" { class: div }
-e5_0: "ExpenseRecorded           \n                          \n                          \n                          \n                          \n                          " { class: event }
+e5_0: "ExpenseRecorded              \n                             \n                             \n                             \n                             \n                             " { class: event }
 dv5_6: "" { class: div }
 gp5_6: "" { class: gap }
 dv5_7: "" { class: div }
-e7_0: "SettlementRecorded        \n                          \n                          \n                          \n                          \n                          " { class: event }
+e7_0: "SettlementRecorded           \n                             \n                             \n                             \n                             \n                             " { class: event }
 
 # --- State Change slices: screen -> command -> event(s)
 s0 -> c0

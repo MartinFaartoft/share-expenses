@@ -6,15 +6,13 @@ using ShareExpenses.Slices.CreateGroup;
 namespace ShareExpenses.Slices.InviteMember;
 
 /// <summary>A member slot as InviteMember sees it.</summary>
-/// <param name="Email">
-/// The email last invited to this slot. Kept after the slot is claimed: an email
-/// that has joined still holds its slot (scenario 11).
-/// </param>
-internal sealed record Slot(string Name, bool Claimed, string? Email);
+internal sealed record Slot(string Name, bool Claimed);
 
 /// <summary>
 /// What InviteMember needs to know about a group, folded from its stream by Marten
 /// (<c>FetchForWriting</c>). No stream means no state: the group does not exist.
+/// Email addresses are not in the stream; the guards that need them work from
+/// looked-up values on the command (see <see cref="Command"/>).
 ///
 /// FOLD CHECKLIST — this state is private to the slice (spec §12), so nothing
 /// forces it to keep up with new events. When these slices are built, fold their
@@ -37,14 +35,11 @@ internal sealed record State(
     public static State Create(GroupCreated e) => new(e.Name, [], []);
 
     public State Apply(MemberAdded e) =>
-        this with { Slots = Slots.SetItem(e.MemberId, new Slot(e.DisplayName, Claimed: false, Email: null)) };
+        this with { Slots = Slots.SetItem(e.MemberId, new Slot(e.DisplayName, Claimed: false)) };
 
     public State Apply(MemberClaimed e) => this with
     {
         Members = Members.SetItem(e.UserId, e.MemberId),
         Slots = Slots.SetItem(e.MemberId, Slots[e.MemberId] with { Claimed = true }),
     };
-
-    public State Apply(MemberInvited e) =>
-        this with { Slots = Slots.SetItem(e.MemberId, Slots[e.MemberId] with { Email = e.Email }) };
 }

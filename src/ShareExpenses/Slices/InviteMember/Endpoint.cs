@@ -24,8 +24,8 @@ internal static class Endpoint
     // is checked first and a non-member still only ever sees "group not found".
     private static async Task<IResult> Handle(
         string groupId, string memberId, Request request, ClaimsPrincipal user,
-        IDocumentSession session, IEmailSender email, PublicOrigin origin, ILoggerFactory loggers,
-        HttpContext http, CancellationToken ct)
+        IDocumentSession session, IEmailDirectory directory, IEmailSender email, PublicOrigin origin,
+        ILoggerFactory loggers, HttpContext http, CancellationToken ct)
     {
         if (!GroupId.TryParse(groupId, out var group))
             return NotFound(Decider.GroupNotFound);
@@ -34,7 +34,7 @@ internal static class Endpoint
         var (token, tokenHash) = InviteToken.Generate();
         var command = new Command(group, member, request.Email, tokenHash, user.UserId());
 
-        switch (await Handler.Handle(session, command, ct))
+        switch (await Handler.Handle(session, directory, command, ct))
         {
             case Outcome.Invited invited:
                 var link = $"{origin.For(http.Request)}/invites/{group}/{token}";
@@ -66,7 +66,7 @@ internal static class Endpoint
         try
         {
             await email.SendInviteAsync(
-                command.Email!.Trim(), link, invited.GroupName, invited.InviterName, invited.MemberName, ct);
+                invited.Email, link, invited.GroupName, invited.InviterName, invited.MemberName, ct);
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {

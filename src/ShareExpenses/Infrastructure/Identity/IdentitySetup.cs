@@ -44,6 +44,7 @@ public static class IdentitySetup
         services.AddAuthorization();
 
         services.AddEmailSending(env);
+        services.AddScoped<IEmailDirectory, IdentityEmailDirectory>();
         return services;
     }
 
