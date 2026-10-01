@@ -35,6 +35,24 @@
 #   other slices, declared as its `reads` list of event type names.  The
 #   generator resolves each name to the nearest occurrence at or before this
 #   slice, and draws it dashed when the only occurrence is later.
+#
+# FIELDS - shape, and where every value comes from (information completeness).
+#   A field is `name: Type`, or a mapping when it needs more than a type.
+#   Shapes are declared once, like every element.  Sources sit on the field:
+#     screen      `inputs:` - what the user types or picks
+#     command     `source:` screen (default) | route | session | generated
+#                 `feeds:`  [Event.field, ...] - event fields it fills that are
+#                           NOT already same-named (same name feeds implicitly)
+#                 `stream: true` - only selects the stream, feeds no event field
+#     event       a type only.  Where an event's values come from depends on the
+#                 slice emitting it, so that lives on that slice's command.
+#     read model  `source:` [Event, ...] - the events the field is built from
+#   The generator checks that every field of every emitted event is fed by
+#   exactly one command field, with the same type; that every screen-sourced
+#   command field is an input of its screen; and that every read model field
+#   is built from events the read model reads.
+#   `draft: true` marks a slice not yet refined: it skips these checks and is
+#   labelled "(draft)" on the diagram.  Remove the flag as part of refining.
 
 chapter: Happy path
 
@@ -44,6 +62,10 @@ slices:
     type: State Change
     screen:
       name: New group
+      inputs:
+        groupName: string
+        currency: string
+        memberName: string
       wireframe:
         - "name       [........]"
         - "currency   [ GBP  v ]"
@@ -53,10 +75,15 @@ slices:
     command:
       name: CreateGroup
       fields:
-        name: string
+        groupName: { type: string, feeds: [GroupCreated.name] }
         currency: string
-        displayName: string
-        createdBy: UserId
+        memberName: { type: string, feeds: [MemberAdded.displayName] }
+        createdBy:
+          type: UserId
+          source: session
+          feeds: [MemberAdded.by, MemberClaimed.userId]
+        groupId: { type: GroupId, source: generated }
+        memberId: { type: MemberId, source: generated }   # feeds both events by name
     events:
       # three events from one command: a group whose creator is not a member is
       # a meaningless state, so the creator is seated and claimed here
@@ -80,15 +107,19 @@ slices:
     type: State Change
     screen:
       name: Group setup
+      inputs:
+        displayName: string
     command:
       name: AddMember
       fields:
-        groupId: GroupId
+        groupId: { type: GroupId, source: route, stream: true }
         displayName: string
-        by: UserId
+        by: { type: UserId, source: session }
+        memberId: { type: MemberId, source: generated }
     events:  [MemberAdded]
         
   - slice: Invite a member
+    draft: true
     type: State Change
     screen: Group setup
     command:
@@ -100,6 +131,7 @@ slices:
           email: string
 
   - slice: Claim a slot
+    draft: true
     type: State Change
     screen:
       name: Sign in / claim
@@ -108,6 +140,7 @@ slices:
     events: [MemberClaimed]
 
   - slice: Record an expense
+    draft: true
     type: State Change
     screen:
       name: Add expense
@@ -117,6 +150,7 @@ slices:
       - name: ExpenseRecorded
 
   - slice: View balances
+    draft: true
     type: State Read
     screen:
       name: Balances
@@ -135,6 +169,7 @@ slices:
         - SettlementRecorded   # emitted in slice 7: drawn dashed
 
   - slice: Settle up
+    draft: true
     type: State Change
     screen:
       name: Settle up

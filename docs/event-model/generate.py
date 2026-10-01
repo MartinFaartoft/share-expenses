@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Generate the event model diagram from event-model.yaml, and validate it.
 
-    .venv/bin/python docs/event-model/generate.py
+    .venv/bin/python docs/event-model/generate.py [--check] [model.yaml]
 
-Writes <chapter>.d2 next to the YAML and prints a validation report.
-Exits non-zero if any check fails, so it can gate a commit.
+Writes <chapter>.d2 next to the generator and prints a validation report.
+Exits non-zero if any check fails, so it can gate a commit.  --check validates
+without writing anything; with a path, it checks another model file (used to
+confirm each rule fires, by mutating a copy).
 
 The .d2 output is derived - never edit it by hand.
 
@@ -12,6 +14,20 @@ MODEL SHAPE
   Slices own the elements they introduce.  An element is declared once, in
   mapping form with a `name`, at its first appearance in slice order; later
   appearances are bare string references.
+
+FIELDS AND WHERE THEIR VALUES COME FROM (information completeness)
+  A field is `name: Type`, or a mapping when it needs more than a type.
+  Events declare shape only: where an event's values come from depends on which
+  slice emits it, so that is written on the emitting slice's command instead.
+    screen inputs     what the user types, `inputs:` on the screen
+    command fields    `source`: screen (default), route, session, generated;
+                      `feeds`: event fields it fills beyond the same-named ones
+                      (a field always feeds same-named fields of emitted events);
+                      `stream: true` when it only selects the stream
+    read model fields `source`: the events the field is built from
+  Every field of every emitted event must be fed by exactly one command field,
+  and every screen-sourced command field must be an input of its screen.
+  Slices marked `draft: true` are not yet refined and skip these checks.
 
 ARROWS
   None are written in the YAML.  Intra-slice arrows follow from `type`, and
@@ -48,15 +64,29 @@ TYPES = (STATE_CHANGE, STATE_READ, AUTOMATION, TRANSLATION)
 # Automation and Translation are recognised vocabulary but have no layout yet
 RENDERABLE = (STATE_CHANGE, STATE_READ)
 
+# where a command field's value comes from; `screen` is the default
+COMMAND_SOURCES = ("screen", "route", "session", "generated")
+# the keys a field mapping may carry, per element kind
+FIELD_KEYS = {
+    "command": {"type", "source", "feeds", "stream"},
+    "readModel": {"type", "source"},
+    "event": {"type"},
+    "screen": {"type"},
+}
+# drawn after a command field's type when it is not typed on the screen
+SOURCE_TAGS = {"route": "url", "session": "ses", "generated": "gen"}
+
 
 class Report:
     def __init__(self):
-        self.errors, self.warnings = [], []
+        self.errors, self.warnings, self.notes = [], [], []
 
     def error(self, m): self.errors.append(m)
     def warn(self, m):  self.warnings.append(m)
+    def note(self, m):  self.notes.append(m)
 
     def emit(self):
+        for n in self.notes:    print("NOTE   %s" % n)
         for w in self.warnings: print("WARN   %s" % w)
         for e in self.errors:   print("ERROR  %s" % e)
         if not (self.errors or self.warnings):
@@ -86,6 +116,9 @@ class Model:
             rep.error("the model has no `chapter`")
         self.decl = {}          # (kind, name) -> {"slice": i, "spec": {...}}
         self._resolve()
+        self.fields = {}        # (kind, name) -> {field: {type, source, feeds, stream}}
+        self._parse_fields()
+        self._check_sources()
 
     def _declare(self, kind, name, spec, i, where):
         if name is None:
@@ -168,8 +201,180 @@ class Model:
             if kind == "event" and name not in read_events:
                 self.rep.warn("event %s is not consumed by any read model" % name)
 
+    # ---------------------------------------------------------- fields
+    def _parse_fields(self):
+        """Normalise every declared field list to {name: {type, source, feeds, stream}}."""
+        for (kind, name), d in self.decl.items():
+            key = "inputs" if kind == "screen" else "fields"
+            raw = (d["spec"] or {}).get(key) or {}
+            where = "%s %s" % (kind, name)
+            if not isinstance(raw, dict):
+                self.rep.error("%s: `%s` must be a mapping of name: Type" % (where, key))
+                raw = {}
+            parsed = {}
+            for fname, fv in raw.items():
+                f = self._parse_field(kind, where, fname, fv)
+                if f is not None:
+                    parsed[fname] = f
+            self.fields[(kind, name)] = parsed
+
+    def _parse_field(self, kind, where, fname, fv):
+        rep = self.rep
+        if isinstance(fv, str):
+            fv = {"type": fv}
+        if not isinstance(fv, dict) or not isinstance(fv.get("type"), str):
+            rep.error("%s: field %s needs a type" % (where, fname))
+            return None
+        extra = sorted(set(fv) - FIELD_KEYS[kind])
+        if extra and kind == "event":
+            rep.error("%s: field %s carries %s, but event fields declare only a type - "
+                      "where a value comes from depends on the emitting slice, so it is "
+                      "written on that slice's command (`source`, `feeds`)"
+                      % (where, fname, ", ".join(extra)))
+        elif extra:
+            rep.error("%s: field %s has unknown key(s) %s - expected: %s"
+                      % (where, fname, ", ".join(extra), ", ".join(sorted(FIELD_KEYS[kind]))))
+
+        f = {"type": fv["type"], "source": None, "feeds": [], "stream": False}
+        if kind == "command":
+            f["source"] = fv.get("source", "screen")
+            if f["source"] not in COMMAND_SOURCES:
+                rep.error("%s: field %s has source %r - expected one of: %s"
+                          % (where, fname, f["source"], ", ".join(COMMAND_SOURCES)))
+            feeds = fv.get("feeds") or []
+            if not isinstance(feeds, list) or not all(isinstance(t, str) and "." in t for t in feeds):
+                rep.error("%s: field %s: `feeds` must be a list of Event.field" % (where, fname))
+                feeds = []
+            f["feeds"] = feeds
+            f["stream"] = fv.get("stream", False)
+            if not isinstance(f["stream"], bool):
+                rep.error("%s: field %s: `stream` must be true or false" % (where, fname))
+                f["stream"] = False
+        elif kind == "readModel":
+            src = fv.get("source") or []
+            f["source"] = [src] if isinstance(src, str) else src
+            if not isinstance(f["source"], list):
+                rep.error("%s: field %s: `source` must be a list of events" % (where, fname))
+                f["source"] = []
+        return f
+
+    def _check_sources(self):
+        """Information completeness: every value on an event or read model has a source."""
+        used_inputs, drafts = set(), []
+        for i, sl in enumerate(self.slices):
+            where = "slice %d (%s)" % (i + 1, sl.get("slice", "?"))
+            draft = sl.get("draft", False)
+            if not isinstance(draft, bool):
+                self.rep.error("%s: `draft` must be true or false" % where)
+                draft = False
+            if draft:
+                drafts.append(str(i + 1))
+            sname, _ = as_element(sl.get("screen"))
+            inputs = self.fields.get(("screen", sname), {})
+
+            if sl.get("type") == STATE_CHANGE:
+                cname, _ = as_element(sl.get("command"))
+                cmd = self.fields.get(("command", cname), {})
+                used_inputs |= {(sname, n) for n, f in cmd.items()
+                                if f["source"] == "screen" and n in inputs}
+                if not draft:
+                    self._check_command(where, sl, sname, inputs, cname, cmd)
+            elif sl.get("type") == STATE_READ:
+                rname, _ = as_element(sl.get("readModel"))
+                self._check_read_model(where, rname, draft)
+
+        for (kind, name), fields in self.fields.items():
+            if kind == "screen":
+                for n in fields:
+                    if (name, n) not in used_inputs:
+                        self.rep.warn("screen %s: input %s is not used by any command" % (name, n))
+        if drafts:
+            self.rep.note("draft slice(s) %s: completeness not checked" % ", ".join(drafts))
+
+    def _check_command(self, where, sl, sname, inputs, cname, cmd):
+        rep = self.rep
+        if not cmd:
+            rep.error("%s: command %s has no fields" % (where, cname))
+            return
+        events = [as_element(e)[0] for e in sl.get("events") or []]
+        evfields = {e: self.fields.get(("event", e), {}) for e in events}
+        for e, fs in evfields.items():
+            if not fs:
+                rep.error("%s: event %s has no fields" % (where, e))
+
+        feeders = {}                                        # (event, field) -> [command field]
+        for n, f in cmd.items():
+            src = "%s.%s" % (cname, n)
+            if f["source"] == "screen":
+                if n not in inputs:
+                    rep.error("%s: %s is typed on screen %r, which has no input %s"
+                              % (where, src, sname, n))
+                elif inputs[n]["type"] != f["type"]:
+                    rep.error("%s: %s is %s, but screen %r input %s is %s"
+                              % (where, src, f["type"], sname, n, inputs[n]["type"]))
+
+            targets = [(e, n) for e in events if n in evfields[e]]      # by name
+            for t in f["feeds"]:
+                e, _, ef = t.partition(".")
+                if e not in evfields:
+                    rep.error("%s: %s feeds %s, but this slice does not emit %s" % (where, src, t, e))
+                elif ef not in evfields[e]:
+                    rep.error("%s: %s feeds %s, but %s has no field %s" % (where, src, t, e, ef))
+                elif (e, ef) in targets:
+                    rep.warn("%s: %s lists %s in `feeds`, which it already feeds by name" % (where, src, t))
+                else:
+                    targets.append((e, ef))
+            if not targets and not f["stream"]:
+                rep.error("%s: %s feeds no event field - list targets in `feeds`, or mark it "
+                          "`stream: true` if it only selects the stream" % (where, src))
+            for e, ef in targets:
+                feeders.setdefault((e, ef), []).append(n)
+                if evfields[e][ef]["type"] != f["type"]:
+                    rep.error("%s: %s is %s, but feeds %s.%s, which is %s"
+                              % (where, src, f["type"], e, ef, evfields[e][ef]["type"]))
+
+        for e in events:
+            for ef in evfields[e]:
+                fed = feeders.get((e, ef), [])
+                if not fed:
+                    rep.error("%s: %s.%s has no source - no field of %s is named %s or feeds it"
+                              % (where, e, ef, cname, ef))
+                elif len(fed) > 1:
+                    rep.error("%s: %s.%s is fed by more than one field of %s: %s"
+                              % (where, e, ef, cname, ", ".join(fed)))
+
+    def _check_read_model(self, where, rname, draft):
+        reads = self.spec("readModel", rname).get("reads") or []
+        used = set()
+        for n, f in self.fields.get(("readModel", rname), {}).items():
+            if not f["source"] and not draft:
+                self.rep.error("%s: %s.%s has no source - list the events it is built from"
+                               % (where, rname, n))
+            for e in f["source"]:
+                used.add(e)
+                if e not in reads:
+                    self.rep.error("%s: %s.%s is built from %s, which %s does not read"
+                                   % (where, rname, n, e, rname))
+        if not draft:
+            for e in reads:
+                if e not in used:
+                    self.rep.warn("%s: %s reads %s, but no field is built from it" % (where, rname, e))
+
 
 # --------------------------------------------------------------- rendering
+def field_line(name, f):
+    """`- name: Type`, tagged when a command field is not typed on the screen."""
+    tag = SOURCE_TAGS.get(f["source"]) if isinstance(f["source"], str) else None
+    return "- %s: %s%s" % (name, f["type"], " (%s)" % tag if tag else "")
+
+
+def card_fields(m, kind, name):
+    """A screen with a wireframe shows the wireframe; otherwise its inputs."""
+    if kind == "screen" and m.spec("screen", name).get("wireframe"):
+        return []
+    return [field_line(n, f) for n, f in m.fields.get((kind, name), {}).items()]
+
+
 def pad_width(m):
     """Widest line anywhere in the model.
 
@@ -182,22 +387,21 @@ def pad_width(m):
     for (kind, name), d in m.decl.items():
         spec = d["spec"] or {}
         widest = max(widest, len(name))
-        for k, v in (spec.get("fields") or {}).items():
-            widest = max(widest, len("- %s: %s" % (k, v)))
+        for line in card_fields(m, kind, name):
+            widest = max(widest, len(line))
         for raw in spec.get("wireframe") or []:
             widest = max(widest, len(raw))
     return widest
 
 
-def card(key, cls, title, fields=None, wireframe=None, W=21):
-    lines = [title.ljust(W), " " * W]
-    for k, v in (fields or {}).items():
-        lines.append("- %s: %s" % (k, v))
-    lines += list(wireframe or [])
-    while len(lines) < 6:
-        lines.append(" " * W)
+def card(key, cls, title, lines=None, wireframe=None, W=21):
+    out = [title.ljust(W), " " * W]
+    out += list(lines or [])
+    out += list(wireframe or [])
+    while len(out) < 6:
+        out.append(" " * W)
     return '%s: "%s" { class: %s }\n' % (
-        key, "\\n".join(l.ljust(W) for l in lines), cls)
+        key, "\\n".join(l.ljust(W) for l in out), cls)
 
 
 def plain(key, cls, label=""):
@@ -266,7 +470,8 @@ def render(m):
         if i:
             out.append(plain("dvN%d" % i, "divN"))
         out.append(plain("n%d" % i, "slicename",
-                         ("%d - %s" % (i + 1, sl["slice"])).ljust(40)))
+                         ("%d - %s%s" % (i + 1, sl["slice"],
+                                         " (draft)" if sl.get("draft") else "")).ljust(40)))
         for j in range(1, slots[i]):
             out.append(plain("gpN%d_%d" % (i, j), "gapN"))
 
@@ -281,13 +486,14 @@ def render(m):
             if row == 2:
                 sp = m.spec("screen", name)
                 out.append(card("s%d" % i, "screen", name,
+                                lines=card_fields(m, "screen", name),
                                 wireframe=sp.get("wireframe"), W=W))
             elif row == 3 and sl.get("type") == STATE_READ:
                 out.append(card("rm%d" % i, "view", name,
-                                fields=m.spec("readModel", name).get("fields"), W=W))
+                                lines=card_fields(m, "readModel", name), W=W))
             elif row == 4 and sl.get("type") == STATE_CHANGE:
                 out.append(card("c%d" % i, "command", name,
-                                fields=m.spec("command", name).get("fields"), W=W))
+                                lines=card_fields(m, "command", name), W=W))
             else:
                 out.append(plain("gp%d_%d" % (row, i), "gap"))
             for j in range(1, slots[i]):
@@ -308,7 +514,7 @@ def render(m):
             eid = "e%d_%d" % (i, j)
             occurrences.setdefault(name, []).append((i, eid))
             out.append(card(eid, "event", name,
-                            fields=m.spec("event", name).get("fields"), W=W))
+                            lines=card_fields(m, "event", name), W=W))
 
     # intra-slice arrows: implied by pattern, never declared
     out.append("\n# --- State Change slices: screen -> command -> event(s)\n")
@@ -345,8 +551,11 @@ def slug(text):
     return out.strip("-")
 
 
-def main():
-    raw = yaml.safe_load((HERE / "event-model.yaml").read_text())
+def main(argv):
+    check_only = "--check" in argv
+    paths = [a for a in argv if not a.startswith("--")]
+    source = pathlib.Path(paths[0]) if paths else HERE / "event-model.yaml"
+    raw = yaml.safe_load(source.read_text())
     rep = Report()
     model = Model(raw, rep)
 
@@ -368,16 +577,18 @@ def main():
 
     rc = rep.emit()
     d2, ncols = render(model)
-    target = HERE / ("%s.d2" % slug(model.chapter or "chapter"))
-    target.write_text(d2)
     cells = d2.count("{ class: ")
-    print("wrote  %s  (%d columns x 5 rows = %d cells, %d emitted, pad %d)"
-          % (target.name, ncols, ncols * 5, cells, pad_width(model)))
     if cells != ncols * 5:
         print("ERROR  grid is not exactly full - D2 will silently reflow it")
         rc = 1
+    if check_only:
+        return rc
+    target = HERE / ("%s.d2" % slug(model.chapter or "chapter"))
+    target.write_text(d2)
+    print("wrote  %s  (%d columns x 5 rows = %d cells, %d emitted, pad %d)"
+          % (target.name, ncols, ncols * 5, cells, pad_width(model)))
     return rc
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

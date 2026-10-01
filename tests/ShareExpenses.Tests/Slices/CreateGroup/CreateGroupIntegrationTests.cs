@@ -54,7 +54,7 @@ public class CreateGroupIntegrationTests(AppFixture app)
     public async Task Post_creates_the_group_and_records_the_three_events()
     {
         var response = await app.ClientFor(_alice).PostAsJsonAsync("/api/groups",
-            new { name = "Lisbon trip", currency = "gbp", displayName = "Alice" });
+            new { groupName = "Lisbon trip", currency = "gbp", memberName = "Alice" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<CreatedBody>();
@@ -74,7 +74,7 @@ public class CreateGroupIntegrationTests(AppFixture app)
     public async Task Post_is_stored_under_stable_event_type_names()
     {
         var response = await app.ClientFor(_alice).PostAsJsonAsync("/api/groups",
-            new { name = "Porto", currency = "EUR", displayName = "Alice" });
+            new { groupName = "Porto", currency = "EUR", memberName = "Alice" });
         var body = await response.Content.ReadFromJsonAsync<CreatedBody>();
 
         await using var session = Store.QuerySession();
@@ -86,7 +86,7 @@ public class CreateGroupIntegrationTests(AppFixture app)
     public async Task Post_rejects_an_invalid_command_with_400_and_the_reason()
     {
         var response = await app.ClientFor(_alice).PostAsJsonAsync("/api/groups",
-            new { name = "Lisbon trip", currency = "XYZ", displayName = "Alice" });
+            new { groupName = "Lisbon trip", currency = "XYZ", memberName = "Alice" });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("currency must be a known ISO 4217 code", await response.Content.ReadAsStringAsync());
@@ -96,7 +96,7 @@ public class CreateGroupIntegrationTests(AppFixture app)
     public async Task Post_requires_a_signed_in_user()
     {
         var response = await app.CreateClient().PostAsJsonAsync("/api/groups",
-            new { name = "Lisbon trip", currency = "GBP", displayName = "Alice" });
+            new { groupName = "Lisbon trip", currency = "GBP", memberName = "Alice" });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

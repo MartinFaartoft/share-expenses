@@ -5,7 +5,7 @@ using ShareExpenses.Shared;
 
 namespace ShareExpenses.Slices.CreateGroup;
 
-internal sealed record Request(string? Name, string? Currency, string? DisplayName);
+internal sealed record Request(string? GroupName, string? Currency, string? MemberName);
 
 internal sealed record Response(GroupId GroupId, MemberId MemberId);
 
@@ -20,7 +20,7 @@ internal static class Endpoint
     private static async Task<IResult> Handle(
         Request request, ClaimsPrincipal user, IDocumentSession session, HttpContext http, CancellationToken ct)
     {
-        var command = new Command(request.Name, request.Currency, request.DisplayName, user.UserId());
+        var command = new Command(request.GroupName, request.Currency, request.MemberName, user.UserId());
 
         var outcome = await Handler.Handle(session, command, GroupId.New(), MemberId.New(), ct);
 

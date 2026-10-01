@@ -182,7 +182,7 @@ public class AddMemberIntegrationTests(AppFixture app)
     private async Task<GroupId> CreateGroupOverHttp()
     {
         var response = await app.ClientFor(_alice).PostAsJsonAsync("/api/groups",
-            new { name = "Lisbon trip", currency = "GBP", displayName = "Alice" });
+            new { groupName = "Lisbon trip", currency = "GBP", memberName = "Alice" });
         return (await response.Content.ReadFromJsonAsync<CreatedBody>())!.GroupId;
     }
 

@@ -3,7 +3,9 @@ using ShareExpenses.Shared;
 namespace ShareExpenses.Slices.CreateGroup;
 
 /// <summary>The command, as in <c>event-model.yaml</c>. Inputs are raw; deciding validates them.</summary>
-internal sealed record Command(string? Name, string? Currency, string? DisplayName, UserId CreatedBy);
+/// Field names follow the command, not the events: <c>GroupName</c> feeds
+/// <c>GroupCreated.Name</c> and <c>MemberName</c> feeds <c>MemberAdded.DisplayName</c>.
+internal sealed record Command(string? GroupName, string? Currency, string? MemberName, UserId CreatedBy);
 
 /// <summary>
 /// Specs: <c>docs/event-model/slice-01-create-group.md</c>. There is no state to
@@ -16,26 +18,26 @@ internal static class Decider
     /// <param name="memberId">The creator's member slot, chosen by the caller.</param>
     public static Decision Decide(Command command, GroupId groupId, MemberId memberId)
     {
-        var name = command.Name?.Trim() ?? "";
-        if (name.Length == 0)
+        var groupName = command.GroupName?.Trim() ?? "";
+        if (groupName.Length == 0)
             return Decision.Reject("name is required");
-        if (Names.VisibleLength(name) > Names.MaxGroupName)
+        if (Names.VisibleLength(groupName) > Names.MaxGroupName)
             return Decision.Reject($"name must be at most {Names.MaxGroupName} characters");
 
         if (!Currency.TryNormalise(command.Currency, out var currency))
             return Decision.Reject("currency must be a known ISO 4217 code");
 
-        var displayName = command.DisplayName?.Trim() ?? "";
-        if (displayName.Length == 0)
+        var memberName = command.MemberName?.Trim() ?? "";
+        if (memberName.Length == 0)
             return Decision.Reject("your name is required");
-        if (Names.VisibleLength(displayName) > Names.MaxDisplayName)
+        if (Names.VisibleLength(memberName) > Names.MaxDisplayName)
             return Decision.Reject($"your name must be at most {Names.MaxDisplayName} characters");
 
         // The creator is seated and claimed in the same breath: a group whose
         // creator is not a member is a meaningless state (spec §11).
         return Decision.Accept(
-            new GroupCreated(groupId, name, currency, command.CreatedBy),
-            new MemberAdded(memberId, displayName, command.CreatedBy),
+            new GroupCreated(groupId, groupName, currency, command.CreatedBy),
+            new MemberAdded(memberId, memberName, command.CreatedBy),
             new MemberClaimed(memberId, command.CreatedBy));
     }
 }

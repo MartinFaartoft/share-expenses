@@ -20,8 +20,8 @@ public class CreateGroupSpecs
             ? Decider.Decide(command, G1, M1)
             : throw new InvalidOperationException("CreateGroup has no state; scenarios with history belong in the integration tests"));
 
-    private static Command CreateGroup(string? name, string? currency, string? displayName) =>
-        new(name, currency, displayName, Alice);
+    private static Command CreateGroup(string? groupName, string? currency, string? memberName) =>
+        new(groupName, currency, memberName, Alice);
 
     [Fact]
     public void S1_creates_the_group_and_its_first_member() =>
@@ -36,9 +36,9 @@ public class CreateGroupSpecs
     [InlineData("   ")]
     [InlineData("")]
     [InlineData(null)]
-    public void S2_rejects_a_blank_name(string? name) =>
+    public void S2_rejects_a_blank_group_name(string? groupName) =>
         Spec.Given()
-            .When(CreateGroup(name, "GBP", "Alice"))
+            .When(CreateGroup(groupName, "GBP", "Alice"))
             .ThenRejected("name is required");
 
     [Theory]
@@ -54,9 +54,9 @@ public class CreateGroupSpecs
     [Theory]
     [InlineData("   ")]
     [InlineData(null)]
-    public void S5_rejects_a_blank_display_name(string? displayName) =>
+    public void S5_rejects_a_blank_member_name(string? memberName) =>
         Spec.Given()
-            .When(CreateGroup("Lisbon trip", "GBP", displayName))
+            .When(CreateGroup("Lisbon trip", "GBP", memberName))
             .ThenRejected("your name is required");
 
     [Fact]
@@ -66,7 +66,7 @@ public class CreateGroupSpecs
             .ThenRejected("name must be at most 100 characters");
 
     [Fact]
-    public void S7_rejects_a_display_name_longer_than_50_characters() =>
+    public void S7_rejects_a_member_name_longer_than_50_characters() =>
         Spec.Given()
             .When(CreateGroup("Lisbon trip", "GBP", new string('x', 51)))
             .ThenRejected("your name must be at most 50 characters");

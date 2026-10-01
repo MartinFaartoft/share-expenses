@@ -5,7 +5,7 @@ Type: **State Change**. Screen → command → events.
 | | |
 |---|---|
 | Screen | New group |
-| Command | `CreateGroup(name, currency, displayName, createdBy)` |
+| Command | `CreateGroup(groupName, currency, memberName, createdBy)` |
 | Events | `GroupCreated`, `MemberAdded`, `MemberClaimed` |
 | Code | `src/ShareExpenses/Slices/CreateGroup/` |
 | Endpoint | `POST /api/groups` |

@@ -954,6 +954,44 @@ every later appearance is a bare string reference. So fields are written exactly
 once, and a misspelled reference is an undeclared name rather than a silently
 created new element.
 
+**Decision: shapes are declared once; sources are written per field — and never
+on an event.** Every field says where its value comes from, so the generator can
+check *information completeness*: that nothing on an event or a read model
+appears from nowhere.
+
+- **Screens** list their `inputs:` — what the user types or picks.
+- **Command fields** carry `source:` — `screen` (the default), `route`,
+  `session` or `generated` — and `feeds:`, the event fields they fill. A field
+  always feeds same-named fields of the events its slice emits, so `feeds` lists
+  only the exceptions (`createdBy` → `MemberAdded.by`). `stream: true` marks a
+  field that only selects the stream.
+- **Read model fields** carry `source:`, the events they are built from.
+- **Event fields carry a type only.** Where an event's values come from is not a
+  property of the event: `MemberAdded.by` is `createdBy` when CreateGroup emits it
+  and `by` when AddMember does. A source on the event's single declaration would
+  be true for one emitting slice and false for the rest, so provenance is written
+  on each slice's command, pointing forward. This is what lets an event be both
+  declared once and filled differently per slice.
+
+Checks, each confirmed to fire by mutating a copy of the model (`generate.py
+--check <copy>`): every field of every emitted event is fed by exactly one command
+field, of the same type; every `feeds` target is a field of an event this slice
+emits; every command field feeds something or selects the stream; every
+screen-sourced command field is an input of its screen, of the same type; every
+read model field is built from events the read model reads; misspelled keys and
+unknown sources are errors; a source on an event field is an error that explains
+why. Screen inputs no command uses, and read events no field is built from, are
+warnings.
+
+**`draft: true`** marks a slice not yet refined. It keeps every structural check
+but skips completeness, and is labelled "(draft)" on the diagram. Refining a slice
+ends with removing the flag. On cards, a command field not typed on the screen is
+tagged `(gen)`, `(ses)` or `(url)`.
+
+Deferred: field-level checks inside composite types such as `Member[]` (with
+slice 6), and values decided from stream state rather than supplied by the
+command (with slice 4, which looks up the invited slot).
+
 **Slices are typed with the four canonical Event Modeling types**, spelled
 verbatim in the `type` field: `State Change` (a user action that changes state and
 records events), `State Read` (a screen or API response projected from events),
@@ -1009,14 +1047,12 @@ a documentation tool, not application code.
 ## 14. Open questions
 
 - **OPEN** Frontend framework and rendering approach. Deferred deliberately.
-- **OPEN** Check event names in `event-model.yaml` against the public event
-  records in each slice folder, so the model cannot drift from the code (§12, §13).
-- **OPEN** The "declare once" rule in `event-model.yaml` (§13). An event's fields
-  are written only at its first appearance, but a later slice emitting the same
-  event may fill those fields from a different command — `AddMember(displayName)`
-  vs `CreateGroup(name, currency, displayName)` both emit `MemberAdded`. Discuss
-  whether a re-emitting slice should restate or annotate the event's fields, how
-  the generator should treat that, and what the diagram shows.
+- **OPEN** Check event names *and field shapes* in `event-model.yaml` against the
+  public event records in each slice folder, so the model cannot drift from the
+  code (§12, §13). The field lists added for completeness checking make the shape
+  comparison possible.
+- **DEFERRED** Completeness inside composite read model types (`Member[]`), with
+  slice 6; values decided from stream state (`source: state`), with slice 4 (§13).
 - **DEFERRED** Transactional relay — shortlisted in §4; `LogEmailSender` until then.
 - **DEFERRED** `PeriodClosed` / stream archival, until a stream is actually long.
 - **DEFERRED** Wolverine port (phase 2 above).

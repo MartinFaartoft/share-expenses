@@ -56,9 +56,9 @@ POST {{host}}/api/groups
 Content-Type: application/json
 
 {
-  "name": "Lisbon trip",
+  "groupName": "Lisbon trip",
   "currency": "GBP",
-  "displayName": "Alice"
+  "memberName": "Alice"
 }
 
 ### 3. Rejected: unknown currency. Expect 400 with the reason, and no new events.
@@ -66,9 +66,9 @@ POST {{host}}/api/groups
 Content-Type: application/json
 
 {
-  "name": "Lisbon trip",
+  "groupName": "Lisbon trip",
   "currency": "XYZ",
-  "displayName": "Alice"
+  "memberName": "Alice"
 }
 
 ### 4. Add a placeholder member to the group from step 2. Expect 201 with memberId.
