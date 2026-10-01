@@ -1047,10 +1047,47 @@ a documentation tool, not application code.
 ## 14. Open questions
 
 - **OPEN** Frontend framework and rendering approach. Deferred deliberately.
-- **OPEN** Check event names *and field shapes* in `event-model.yaml` against the
-  public event records in each slice folder, so the model cannot drift from the
-  code (§12, §13). The field lists added for completeness checking make the shape
-  comparison possible.
+- **OPEN** Enforce consistency between `event-model.yaml` and the code, failing
+  the build on any mismatch, so the model cannot drift from the code (§12, §13).
+  For every non-draft slice:
+  - **Events:** each event in the model exists as a public record in the slice
+    that first emits it, with the same field names and types (typed ids
+    included), and no extra fields.
+  - **Commands:** the internal `Command` record carries the model's fields, with
+    names and types matching. Fields with `source: route | session | generated`
+    must not come from the request body; `source: screen` fields must. Each
+    `feeds` (explicit or by name) must hold in code: the command field's value
+    ends up in that event field. This last part is the hard one — it needs either
+    a convention the test can read, or a check that runs `Decide` with marked
+    values and traces where they land.
+  - **Specs:** every scenario in `slice-NN-*.md` has a test, and every spec test
+    corresponds to a scenario. Needs a stable scenario id (the leading number) and
+    a naming convention for tests (`S<n>_…`, already in use).
+  - **Read models:** fields and types match the projected document (from slice 6).
+  
+  Mechanism: an xUnit test that reads the YAML and the `.md` files and reflects
+  over the assembly, so `dotnet test` — and therefore the build gate — fails on a
+  mismatch. Draft slices are skipped, as in the generator.
+- **OPEN** Optional guardrail: only the *active* slice may change. Finished
+  slices are settled code, and an AI agent working on slice N can easily "tidy"
+  slice N−2 on the way past. A validation script — runnable by hand, as a
+  pre-commit hook, or by an agent before finishing — compares the working tree
+  (or a branch) against its base and fails if files outside the active slice
+  changed. To decide:
+  - **Declaring the active slice:** a flag in `event-model.yaml` (e.g.
+    `active: true`, at most one), an argument to the script, or the branch name.
+  - **What a slice owns:** `Slices/<Name>/`, `tests/…/Slices/<Name>/`, and
+    `docs/event-model/slice-NN-*.md`.
+  - **Shared files every slice touches** — `AllSlices.cs`, `event-model.yaml`, the
+    generated `.d2`/`.png`, `ShareExpenses.http`, `spec.md`: allowed, but listed
+    in the output so the change is visible; ideally only the active slice's
+    section of the YAML may change.
+  - **Everything else** (`Shared/`, `Infrastructure/`, other slices): a failure,
+    unless overridden explicitly (e.g. `--allow Shared/Names.cs`), so cross-slice
+    changes are deliberate and named — like the name-limit change to slice 1 made
+    while building slice 2.
+  - Optional means advisory by default: it reports, and the caller decides
+    whether to gate on it.
 - **DEFERRED** Completeness inside composite read model types (`Member[]`), with
   slice 6; values decided from stream state (`source: state`), with slice 4 (§13).
 - **DEFERRED** Transactional relay — shortlisted in §4; `LogEmailSender` until then.
