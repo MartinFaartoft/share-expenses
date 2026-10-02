@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Generate the event model diagram from event-model.yaml, and validate it.
 
-    .venv/bin/python docs/event-model/generate.py [--check] [model.yaml]
+    .venv/bin/python docs/event-model/generate.py [--check] [--no-png] [model.yaml]
 
-Writes <chapter>.d2 next to the generator and prints a validation report.
-Exits non-zero if any check fails, so it can gate a commit.  --check validates
-without writing anything; with a path, it checks another model file (used to
-confirm each rule fires, by mutating a copy).
+Writes <chapter>.d2 next to the generator, renders it to <chapter>.png with the
+d2 CLI (`brew install d2`), and prints a validation report.  Exits non-zero if
+any check fails or rendering fails, so it can gate a commit.  --check validates
+without writing anything; --no-png writes the .d2 but skips rendering; with a
+path, it checks another model file (used to confirm each rule fires, by
+mutating a copy).
 
-The .d2 output is derived - never edit it by hand.
+The .d2 and .png outputs are derived - never edit them by hand.
 
 MODEL SHAPE
   Slices own the elements they introduce.  An element is declared once, in
@@ -56,7 +58,9 @@ LAYOUT CONSTRAINTS found by rendering, all recorded in spec.md section 13:
   * No colspan, so a multi-event slice's screen and command sit in the first of
     its columns.  No rowspan either, so dividers are one thin cell per row.
 """
-import sys, pathlib, yaml
+import pathlib, shutil, subprocess, sys
+
+import yaml
 
 HERE = pathlib.Path(__file__).resolve().parent
 
@@ -652,7 +656,24 @@ def main(argv):
     target.write_text(d2)
     print("wrote  %s  (%d columns x 5 rows = %d cells, %d emitted, pad %d)"
           % (target.name, ncols, ncols * 5, cells, pad_width(model)))
+    if "--no-png" not in argv:
+        rc = render_png(target) or rc
     return rc
+
+
+def render_png(source):
+    """Render the .d2 to a .png beside it with the d2 CLI; non-zero on failure."""
+    png = source.with_suffix(".png")
+    d2_cli = shutil.which("d2")
+    if d2_cli is None:
+        print("ERROR  d2 not found on PATH - install it (brew install d2), or pass --no-png")
+        return 1
+    result = subprocess.run([d2_cli, "--pad", "30", str(source), str(png)], capture_output=True, text=True)
+    if result.returncode != 0:
+        print("ERROR  d2 failed to render %s:\n%s" % (png.name, (result.stderr or result.stdout).strip()))
+        return 1
+    print("wrote  %s" % png.name)
+    return 0
 
 
 if __name__ == "__main__":

@@ -1207,13 +1207,16 @@ arrows across the lanes, and it gets noisy quickly. Mitigation when it does: lis
 the source events inside the read model box and draw fewer edges. The source of
 truth keeps every edge; the *rendering* is allowed to elide.
 
-**Decision: `event-model.yaml` is the source of truth; `happy-path.d2` is
-generated and must never be hand-edited.**
+**Decision: `event-model.yaml` is the source of truth; `happy-path.d2` and
+`happy-path.png` are generated and must never be hand-edited.**
 
 ```
 .venv/bin/python docs/event-model/generate.py
-d2 --pad 30 docs/event-model/happy-path.d2 docs/event-model/happy-path.png
 ```
+
+One command: it validates the model, writes the `.d2`, and renders the `.png`
+with the d2 CLI (`d2 --pad 30`). `--no-png` skips rendering; a missing `d2` or a
+failed render is an error, so a stale picture cannot pass silently.
 
 Promoted from a deferred plan once the grid reached 80 cells with load-bearing
 padding — past the point where hand-editing is safe. The generated `.d2` was
