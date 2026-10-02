@@ -141,6 +141,28 @@ mail client opens; a code needs neither.
 - Sessions: sliding 30-day cookie, `HttpOnly`, `Secure`, `SameSite=Lax`.
   Re-authentication is one short email away, so a modest window is cheap.
 
+### Secure by default
+
+**Decision: every endpoint requires a signed-in user unless it is explicitly
+anonymous.** An authorization `FallbackPolicy` requires an authenticated user for
+every endpoint without authorization metadata; the public ones say so with
+`[AllowAnonymous]` / `.AllowAnonymous()`. Unauthenticated calls get 401, not a
+redirect. The explicit `[Authorize]` on slice endpoints stays — redundant now, but
+it states the intent.
+
+Rationale: endpoints used to opt in with `[Authorize]`, so a new slice that forgot
+it was silently public — and a group's data leaked rather than 404'd. With the
+fallback, forgetting is safe rather than merely caught.
+
+**The allow-list is pinned by an architecture test.** Today: `POST
+/api/sign-in/code`, `POST /api/sign-in`, `GET /health`; candidates later, an
+invite landing page if one returns. `AuthorizationTests` walks the running app's
+`EndpointDataSource` — Wolverine's endpoints and minimal APIs alike — and requires
+the set carrying `IAllowAnonymous` to equal the allow-list exactly, so it fails on
+an unexpected public endpoint and on an allow-listed one that is gone (the list
+cannot rot). It also checks the fallback policy denies anonymous users, and that an
+unauthenticated request gets 401.
+
 ### The code is ours, not Identity's
 
 **Decision: our own `SignInCode` record, not Identity's `EmailTokenProvider`.**
@@ -1432,26 +1454,6 @@ a documentation tool, not application code.
     made while building AddMember.
   - Optional means advisory by default: it reports, and the caller decides
     whether to gate on it.
-- **OPEN** Architecture test: every endpoint requires authorization unless it is
-  on an explicit allow-list. Today each endpoint opts in with `[Authorize]` or
-  `RequireAuthorization()`, so a new slice that forgets it is silently public — and
-  a group's data leaks rather than 404s. The test fails the build when an endpoint
-  neither requires authorization nor appears on the allow-list, and when an
-  allow-listed endpoint no longer exists (so the list cannot rot).
-  - **Allow-list today:** `POST /api/sign-in/code`, `POST /api/sign-in`,
-    `GET /health`. Candidates later: an invite landing page, if one returns.
-  - **Mechanism:** build the app (the test host already does) and walk its
-    `EndpointDataSource`: every `RouteEndpoint`, Wolverine's and minimal APIs'
-    alike, carries its authorization metadata (`IAuthorizeData`,
-    `IAllowAnonymous`). Checking metadata at runtime, rather than attributes in IL,
-    covers both ways endpoints are declared, and group-level
-    `RequireAuthorization()` too. Like the slice rules, it runs against a fixture
-    that violates it, so it cannot pass vacuously.
-  - **Consider alongside:** secure by default — an authorization fallback policy
-    requiring a signed-in user (`FallbackPolicy`), so forgetting is safe rather than
-    merely caught, and the allow-list is the set of endpoints marked
-    `[AllowAnonymous]`. The test then guards the allow-list instead of every
-    endpoint.
 - **OPEN** Move the `slice-NN-*.md` specs into `event-model.yaml`, so each slice's
   given-when-thens sit next to its shape and the generator can check them: every
   event in a scenario is one the slice emits or reads, every payload matches the

@@ -32,7 +32,6 @@ public static class Endpoint
         GroupId.TryParse(group, out var id) ? id : GroupId.New();
 
     [WolverinePost("/invites/{group}/accept", Name = "AcceptInvite")]
-    [Authorize]
     public static async Task<(IResult, Events)> Post(
         string group,
         [WriteAggregate(FromMethod = nameof(GroupStream), Required = false)] State? state,

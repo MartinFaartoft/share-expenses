@@ -32,7 +32,6 @@ public static class Endpoint
         GroupId.TryParse(group, out var id) ? id : GroupId.New();
 
     [WolverinePost("/groups/{group}/members", Name = "AddMember")]
-    [Authorize]
     public static (IResult, Events) Post(
         Request request,
         // Required = false: a missing stream arrives as null and is answered by

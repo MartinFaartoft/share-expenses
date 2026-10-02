@@ -18,7 +18,6 @@ namespace ShareExpenses.Slices.ViewInvites;
 public static class Endpoint
 {
     [WolverineGet("/invites", Name = "ViewInvites")]
-    [Authorize]
     public static async Task<IResult> Get(
         ClaimsPrincipal user, IQuerySession session, IEmailDirectory directory, TimeProvider clock, CancellationToken ct)
     {

@@ -18,7 +18,6 @@ public static class Endpoint
     public const string GroupNotFound = "group not found";
 
     [WolverineGet("/groups/{group}", Name = "ViewBalances")]
-    [Authorize]
     public static async Task<IResult> Get(
         string group, ClaimsPrincipal user, IQuerySession session, TimeProvider clock, CancellationToken ct)
     {

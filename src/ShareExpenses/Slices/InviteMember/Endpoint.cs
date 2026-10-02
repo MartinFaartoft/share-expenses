@@ -52,7 +52,6 @@ public static class Endpoint
     // an id no slot has — so membership is checked first and a non-member still only
     // ever sees "group not found".
     [WolverinePost("/groups/{group}/members/{memberId}/invite", Name = "InviteMember")]
-    [Authorize]
     public static async Task<(IResult, Events)> Post(
         string group,
         string memberId,

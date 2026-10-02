@@ -40,7 +40,7 @@ app.MapGet("/health", async (IQuerySession marten, IdentityDb identity, Cancella
     return martenOk && identityOk
         ? Results.Ok(new { status = "healthy" })
         : Results.Problem("database unreachable", statusCode: 503);
-});
+}).AllowAnonymous();
 
 // JasperFx's command line; plain "dotnet run" starts the app as before.
 return await app.RunJasperFxCommands(args);

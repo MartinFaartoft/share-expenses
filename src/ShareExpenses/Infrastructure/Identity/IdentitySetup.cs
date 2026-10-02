@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -39,7 +40,11 @@ public static class IdentitySetup
             o.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = 401; return Task.CompletedTask; };
             o.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = 403; return Task.CompletedTask; };
         });
-        services.AddAuthorization();
+        // Secure by default: an endpoint with no authorization metadata requires a
+        // signed-in user. Public endpoints say so with [AllowAnonymous] / .AllowAnonymous()
+        // (spec §4; the allow-list architecture test pins which ones).
+        services.AddAuthorization(o =>
+            o.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
         services.AddEmailSending(env);
         services.AddScoped<IEmailDirectory, IdentityEmailDirectory>();

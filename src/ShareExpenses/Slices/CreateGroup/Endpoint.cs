@@ -24,7 +24,6 @@ internal sealed record Response(GroupId GroupId, MemberId MemberId);
 public static class Endpoint
 {
     [WolverinePost("/groups", Name = "CreateGroup")]
-    [Authorize]
     [Transactional]
     public static IResult Post(Request request, ClaimsPrincipal user, IDocumentSession session, HttpContext http)
     {
