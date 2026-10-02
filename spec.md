@@ -367,7 +367,9 @@ Splits must sum **exactly** to the expense total — no lost or invented minor u
 - **Shares split:** each participant gets `floor(total * share_i / total_shares)`,
   then leftover minor units are distributed by largest fractional remainder.
 - **Distribution order for leftovers:** the payer first, then remaining
-  participants in member-added order.
+  participants in member-added order. A payer who does not share the expense gets
+  none: leftovers go only to participants. In a shares split the same order breaks
+  ties between equal fractional remainders.
 - **Exact split:** amounts must sum to the total exactly, or the command is
   rejected. No rounding is applied.
 
@@ -375,10 +377,19 @@ Rationale for payer-first: the payer absorbing the stray penny means they are
 owed a penny less, which is socially invisible and never worth arguing about.
 The rule is fully deterministic — the same input always yields the same split.
 
+**Decision: splitting is one pure function in `Shared/`**, used by every slice
+that computes splits — recording an expense now, correcting its amount or split
+later — so a correction can never round differently from the original. It
+computes in 128-bit integers, so `total × share` cannot overflow.
+
+**Decision: an amount is at most 10¹² minor units** (ten billion pounds). Far
+beyond any shared bill, it keeps every amount exact as a JSON number in any client
+(2⁵³), and catches a typo with extra zeros.
+
 ### Events carry computed splits, not just inputs
 
-**Decision:** an expense event records *both* the split inputs (mode,
-participants, weights) *and* the resulting per-person amounts.
+**Decision:** an expense event records *both* the split as entered — its mode
+and that mode's inputs (§7) — *and* the resulting per-person amounts.
 
 Rationale: this is redundant, and deliberately so. The per-person amounts are the
 facts the group agreed to. If the amounts were re-derived from inputs at
@@ -406,9 +417,45 @@ to serve a case that decomposes cleanly into separate entries.
 
 Percentages are deliberately not a separate mode — they are shares out of 100.
 
+**Decision: the split is a tagged union — one shape per mode**, in the API and in
+the event alike:
+
+```
+{ "mode": "equal",  "participants": [memberId, …] }
+{ "mode": "shares", "shares":  [ { memberId, shares }, … ] }
+{ "mode": "exact",  "amounts": [ { memberId, amountMinor }, … ] }
+```
+
+Rationale: with one flat participant shape carrying an optional weight *and* an
+optional amount beside a mode string, every combination that makes no sense —
+weights on an equal split, amounts on a shares split — had to be written and then
+rejected. A union makes them unwritable. A malformed split (unknown or missing
+`mode`, a share or amount missing) fails to read and is answered 400 before any
+deciding. The `mode` values are stored, so — like event type names — they are
+fixed forever. An explicit converter reads the union, not System.Text.Json's
+built-in polymorphism: that needs `mode` first in the object, and answers a missing
+one with a server error rather than a bad request.
+
+**Decision: the server computes equal and shares; exact is the client's
+arithmetic.** Equal and shares record an *intention* the server can replay: a
+corrected amount re-splits by it, and an edit form can show the split as it was
+entered. Exact records only amounts — nothing says whose part shrinks when the
+total changes — so a corrected exact expense needs new amounts. Rejected: having
+the client compute every split and the server check only that the amounts sum.
+It loses the intention, unless kept as an unchecked label that a careless client
+could make false; and every client would carry its own copy of the rounding rule.
+
 **Decision: a settlement payment is just another transaction in the ledger.**
 "Bob paid Alice 50" is an event with a payer, a single beneficiary, and the full
 amount.
+
+It is **not an expense**, though its balance effect is exactly that of an expense
+paid by Bob and shared by Alice alone. It is a different fact, recorded as its own
+`SettlementRecorded` (§11): "Bob added an expense" would be false; settle-up's
+shared-history tiebreak (§10) counts expenses only, and a repayment is not shared
+spending; and the rules differ — one recipient who is not the payer, no
+description, no split, no corrections. The two meet in the balance read model,
+which reduces both to "a payer, credited; debits per member".
 
 Rationale: this is the load-bearing simplification of the whole design. Balances
 are always derived from the stream. There is no stored balance, no `settled`
@@ -646,9 +693,8 @@ logs.)
 
 Transactions:
 ```
-ExpenseRecorded(expenseId, description, amountMinor, payerMemberId, splitMode,
-                participants[memberId, weight?], splits[memberId, amountMinor],
-                paidOn, by)
+ExpenseRecorded(expenseId, description, amountMinor, payerMemberId, split,
+                splits[memberId, amountMinor], paidOn, by)
 ExpenseRemoved(expenseId, by)
 SettlementRecorded(settlementId, fromMemberId, toMemberId, amountMinor, by)
 SettlementRemoved(settlementId, by)
@@ -659,7 +705,7 @@ Corrections — **decision: intention-revealing, one event per kind of change**:
 ExpenseDescriptionCorrected(expenseId, description, by)
 ExpenseAmountCorrected(expenseId, amountMinor, splits[], by)
 ExpensePayerCorrected(expenseId, payerMemberId, by)
-ExpenseSplitChanged(expenseId, splitMode, participants[], splits[], by)
+ExpenseSplitChanged(expenseId, split, splits[], by)
 ExpenseDateCorrected(expenseId, paidOn, by)
 ```
 
@@ -673,7 +719,9 @@ Two consequences worth stating explicitly:
 
 - Any correction that changes the amount, the participants or the mode **must
   carry the recomputed per-person splits**, per §6. Splits are recorded facts,
-  not derivations.
+  not derivations. For an equal or shares split, correcting the amount re-splits
+  by the recorded inputs; an exact split cannot be re-split, so correcting its
+  amount requires new amounts (§7).
 - Correction events carry only the **new** value, never the old one. A projection
   is a fold that already holds current state when the event arrives, so it can
   render "£140 → £120" without the payload duplicating history. Storing
@@ -771,11 +819,13 @@ event is fine. Renames and shape changes get a **new type** (`ExpenseRecordedV2`
 plus a Marten upcaster from the old one. The old type is never deleted and never
 repurposed, and no event type name is ever reused for a different meaning.
 
-**The one exception, before any real data:** `MemberInvited` changed shape in
-place when invites moved from tokens to addresses (`tokenHash` → `inviteId`, §4).
-No stream outside development and tests held it, so their data was reset rather
-than a `MemberInvitedV2` and upcaster written for nothing. From the first real
-group on, the rule above holds without exception.
+**The one exception, before any real data:** events changed shape in place while
+no stream outside development and tests held them — `MemberInvited` when invites
+moved from tokens to addresses (`tokenHash` → `inviteId`, §4), and
+`ExpenseRecorded` when its split became a tagged union (`splitMode` and
+`participants` → `split`, §7). Their data was reset rather than `…V2` types and
+upcasters written for nothing. From the first real group on, the rule above holds
+without exception.
 
 ---
 
@@ -1020,7 +1070,7 @@ in place of `Decider.cs`, and no events.
 
 **Decision: `GroupId`, `MemberId` and `UserId` are distinct types, in code and in
 `event-model.yaml`** — `readonly record struct`s wrapping a `Guid`, hand-written in
-`Shared/Ids.cs`, plus `InviteId`. Later: `ExpenseId`, `SettlementId`.
+`Shared/Ids.cs`, plus `InviteId` and `ExpenseId`. Later: `SettlementId`.
 
 Rationale: events carry several ids side by side — `MemberClaimed(memberId,
 userId)`, later `MemberClaimReleased(memberId, userId, releasedBy)` and an

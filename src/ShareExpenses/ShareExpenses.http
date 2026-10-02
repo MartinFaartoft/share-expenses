@@ -165,5 +165,34 @@ GET {{host}}/api/invites
 # as anyone not invited at their address → 404.
 POST {{host}}/api/invites/{{groupId}}/accept
 
-### 13. Health
+### 13. Record an expense (as Alice — sign back in as her first, steps 1a and 1b).
+# Expect 201 with expenseId; ledger.mt_events gets expense_recorded with the splits.
+# Amounts are in minor units: 10001 is £100.01, so the stray penny goes to the payer.
+POST {{host}}/api/groups/{{groupId}}/expenses
+Content-Type: application/json
+
+{
+  "description": "Dinner",
+  "amountMinor": 10001,
+  "payerMemberId": "{{aliceId}}",
+  "split": { "mode": "equal", "participants": [ "{{aliceId}}", "{{bobId}}" ] },
+  "paidOn": "2026-10-01"
+}
+
+### 14. Rejected: exact amounts that do not add up. Expect 400.
+POST {{host}}/api/groups/{{groupId}}/expenses
+Content-Type: application/json
+
+{
+  "description": "Steak night",
+  "amountMinor": 5000,
+  "payerMemberId": "{{aliceId}}",
+  "split": {
+    "mode": "exact",
+    "amounts": [ { "memberId": "{{aliceId}}", "amountMinor": 2000 }, { "memberId": "{{bobId}}", "amountMinor": 2999 } ]
+  },
+  "paidOn": "2026-10-01"
+}
+
+### 15. Health
 GET {{host}}/health

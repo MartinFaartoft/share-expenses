@@ -1,6 +1,7 @@
 using Marten;
 using ShareExpenses.Slices.CreateGroup;
 using ShareExpenses.Slices.InviteMember;
+using ShareExpenses.Slices.RecordExpense;
 
 namespace ShareExpenses;
 
@@ -17,5 +18,6 @@ public static class AllSlices
     {
         CreateGroupSlice.Register(opts);
         InviteMemberSlice.Register(opts);
+        RecordExpenseSlice.Register(opts);
     }
 }

@@ -206,14 +206,50 @@ slices:
     events: [MemberClaimed]
 
   - slice: Record an expense
-    draft: true
     type: State Change
     screen:
       name: Add expense
+      context:
+        groupId: GroupId
+      inputs:
+        description: string
+        amountMinor: long                                  # in the group currency's minor unit
+        payerMemberId: MemberId
+        # one of: equal (participants) | shares (a share each) | exact (an amount each)
+        split: ExpenseSplit
+        paidOn: DateOnly
+      wireframe:
+        - "Dinner          [ 120.00 ]"
+        - "paid by         [ Alice v ]"
+        - "split  (equal) exact shares"
+        - "[x] Alice [x] Bob [ ] Carol"
+        - "on              [ 2 Oct ]"
+        - "             [ Add ]"
     command:
       name: RecordExpense
+      fields:
+        expenseId: { type: ExpenseId, source: system }     # new id
+        description: string
+        amountMinor: long
+        payerMemberId: MemberId
+        split: ExpenseSplit                                # the inputs, as entered
+        paidOn: DateOnly
+        now: { type: DateTimeOffset, source: system }      # the clock: paidOn is not in the future
+        by: { type: UserId, source: system }               # the signed-in user
+        # the per-person amounts, computed by deciding (spec §6): the rounding's
+        # leftovers go payer first, then in member-added order - read from the stream
+        splits: { type: "Split[]", source: stream }
     events:
       - name: ExpenseRecorded
+        fields:
+          expenseId: ExpenseId
+          description: string
+          amountMinor: long
+          payerMemberId: MemberId
+          split: ExpenseSplit
+          splits: "Split[]"
+          paidOn: DateOnly
+          by: UserId
 
   - slice: View balances
     draft: true

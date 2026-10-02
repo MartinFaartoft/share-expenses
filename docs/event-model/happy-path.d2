@@ -12,7 +12,7 @@ vertical-gap: 22
 
 classes: {
   lanelabel: {
-    width: 170; height: 185
+    width: 170; height: 219
     style: { fill: transparent; stroke-width: 0; font-color: "#6b7280"; bold: true }
   }
   slicename: {
@@ -22,22 +22,22 @@ classes: {
   lgapN: { width: 170;    height: 50;  style: { opacity: 0 } }
   gapN:  { width: 277; height: 50;  style: { opacity: 0 } }
   divN:  { width: 2;      height: 50;  style: { fill: "#c9ced8"; stroke-width: 0 } }
-  div:   { width: 2;      height: 185; style: { fill: "#c9ced8"; stroke-width: 0 } }
-  gap:   { width: 277; height: 185; style: { opacity: 0 } }
+  div:   { width: 2;      height: 219; style: { fill: "#c9ced8"; stroke-width: 0 } }
+  gap:   { width: 277; height: 219; style: { opacity: 0 } }
   screen: {
-    width: 277; height: 185
+    width: 277; height: 219
     style: { font: mono; font-size: 15; fill: "#fbfbfd"; stroke: "#8c93a0"; stroke-width: 2; border-radius: 6 }
   }
   command: {
-    width: 277; height: 185
+    width: 277; height: 219
     style: { font: mono; font-size: 15; fill: "#4a90d9"; stroke: "#2b6cb0"; font-color: "#ffffff"; border-radius: 6 }
   }
   event: {
-    width: 277; height: 185
+    width: 277; height: 219
     style: { font: mono; font-size: 15; fill: "#f5a623"; stroke: "#c07d12"; font-color: "#1f1f1f"; border-radius: 6 }
   }
   view: {
-    width: 277; height: 185
+    width: 277; height: 219
     style: { font: mono; font-size: 15; fill: "#54b054"; stroke: "#357935"; font-color: "#ffffff"; border-radius: 6 }
   }
 }
@@ -56,7 +56,7 @@ n3: "4 - View invites                        " { class: slicename }
 dvN4: "" { class: divN }
 n4: "5 - Accept invite                       " { class: slicename }
 dvN5: "" { class: divN }
-n5: "6 - Record an expense (draft)           " { class: slicename }
+n5: "6 - Record an expense                   " { class: slicename }
 dvN6: "" { class: divN }
 n6: "7 - View balances (draft)               " { class: slicename }
 dvN7: "" { class: divN }
@@ -76,7 +76,7 @@ s3: "Your invites                 \n                             \nAlice invited
 dv2_4: "" { class: div }
 s4: "Your invites                 \n                             \nAlice invited you to         \nLisbon trip as Bob           \n            [ Join ]         \n                             " { class: screen }
 dv2_5: "" { class: div }
-s5: "Add expense                  \n                             \n                             \n                             \n                             \n                             " { class: screen }
+s5: "Add expense                  \n                             \nDinner          [ 120.00 ]   \npaid by         [ Alice v ]  \nsplit  (equal) exact shares  \n[x] Alice [x] Bob [ ] Carol  \non              [ 2 Oct ]    \n             [ Add ]         " { class: screen }
 dv2_6: "" { class: div }
 s6: "Balances                     \n                             \n                             \n                             \n                             \n                             " { class: screen }
 dv2_7: "" { class: div }
@@ -116,7 +116,7 @@ gp4_3: "" { class: gap }
 dv4_4: "" { class: div }
 c4: "AcceptInvite                 \n                             \n- now: DateTimeOffset (sys)  \n- userId: UserId (sys)       \n- invitedAs: InviteId[] (lku)\n- memberId: MemberId (str)   " { class: command }
 dv4_5: "" { class: div }
-c5: "RecordExpense                \n                             \n                             \n                             \n                             \n                             " { class: command }
+c5: "RecordExpense                \n                             \n- expenseId: ExpenseId (sys) \n- description: string        \n- amountMinor: long          \n- payerMemberId: MemberId    \n- split: ExpenseSplit        \n- paidOn: DateOnly           \n- now: DateTimeOffset (sys)  \n- by: UserId (sys)           \n- splits: Split[] (str)      " { class: command }
 dv4_6: "" { class: div }
 gp4_6: "" { class: gap }
 dv4_7: "" { class: div }
@@ -136,7 +136,7 @@ gp5_3: "" { class: gap }
 dv5_4: "" { class: div }
 e4_0: "MemberClaimed                \n                             \n- memberId: MemberId         \n- userId: UserId             \n                             \n                             " { class: event }
 dv5_5: "" { class: div }
-e5_0: "ExpenseRecorded              \n                             \n                             \n                             \n                             \n                             " { class: event }
+e5_0: "ExpenseRecorded              \n                             \n- expenseId: ExpenseId       \n- description: string        \n- amountMinor: long          \n- payerMemberId: MemberId    \n- split: ExpenseSplit        \n- splits: Split[]            \n- paidOn: DateOnly           \n- by: UserId                 " { class: event }
 dv5_6: "" { class: div }
 gp5_6: "" { class: gap }
 dv5_7: "" { class: div }

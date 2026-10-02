@@ -53,6 +53,16 @@ public readonly record struct InviteId(Guid Value) : ITypedId<InviteId>
     public override string ToString() => Value.ToString();
 }
 
+/// <summary>An expense within a group, recorded by <c>ExpenseRecorded</c>.</summary>
+[JsonConverter(typeof(TypedIdJsonConverter<ExpenseId>))]
+public readonly record struct ExpenseId(Guid Value) : ITypedId<ExpenseId>
+{
+    public static ExpenseId New() => new(Guid.CreateVersion7());
+    public static ExpenseId From(Guid value) => new(value);
+    public static bool TryParse(string? s, out ExpenseId id) => TypedId.TryParse(s, out id);
+    public override string ToString() => Value.ToString();
+}
+
 /// <summary>A login identity. Recorded as the actor (<c>by</c>) and on claims.</summary>
 [JsonConverter(typeof(TypedIdJsonConverter<UserId>))]
 public readonly record struct UserId(Guid Value) : ITypedId<UserId>
