@@ -1365,6 +1365,15 @@ a documentation tool, not application code.
     characters as the ids themselves (too small for random ids, so a sequence,
     string stream ids in Marten, and every id-carrying event reshaped); a Guid prefix
     (v7 Guids start with a timestamp, so prefixes collide).
+  - **OPEN — sign-in code autofill.** Make the "paste code from email" flow work on
+    Apple devices (iOS and macOS offer a code found in a recent Mail message as an
+    AutoFill suggestion above the keyboard): the code input carries
+    `autocomplete="one-time-code"`, with `inputmode="numeric"` and `maxlength="6"`
+    for the numeric keypad and a clean paste. Detection in email is Apple's
+    heuristic, not a standard, so the sign-in email should state the code plainly
+    and early — e.g. "Your sign-in code is 123456", in the subject and the first
+    line. Verify on a real iPhone and Mac once the frontend and a mail relay (§4)
+    exist; the log sender sends nothing to detect.
 - **OPEN** Enforce consistency between `event-model.yaml` and the code, failing
   the build on any mismatch, so the model cannot drift from the code (§12, §13).
   For every non-draft slice:
