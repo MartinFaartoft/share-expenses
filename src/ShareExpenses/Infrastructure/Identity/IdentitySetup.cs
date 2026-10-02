@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ShareExpenses.Infrastructure.Identity;
 
-/// <summary>Magic-link identity on ASP.NET Core Identity, EF Core confined to it (spec §4).</summary>
+/// <summary>Sign-in by emailed code on ASP.NET Core Identity, EF Core confined to it (spec §4).</summary>
 public static class IdentitySetup
 {
     public static IServiceCollection AddPasswordlessIdentity(
@@ -13,18 +13,16 @@ public static class IdentitySetup
         services.AddDbContext<IdentityDb>(o => o.UseNpgsql(connectionString,
             npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", IdentityDb.Schema)));
 
-        // Keys must survive restarts, or every restart invalidates every sign-in link and session.
+        // Keys must survive restarts, or every restart signs everyone out.
         services.AddDataProtection()
             .SetApplicationName("ShareExpenses")
             .PersistKeysToDbContext<IdentityDb>();
 
-        services.Configure<PasswordlessLoginTokenProviderOptions>(_ => { });
+        // No token providers: sign-in codes are our own SignInCode records (spec §4).
         services
             .AddIdentityCore<User>(o => o.User.RequireUniqueEmail = true)
             .AddEntityFrameworkStores<IdentityDb>()
-            .AddSignInManager()
-            .AddDefaultTokenProviders() // includes EmailTokenProvider for the six-digit code
-            .AddTokenProvider<PasswordlessLoginTokenProvider>(PasswordlessLoginTokenProvider.ProviderName);
+            .AddSignInManager();
 
         services
             .AddAuthentication(IdentityConstants.ApplicationScheme)

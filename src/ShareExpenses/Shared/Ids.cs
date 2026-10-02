@@ -40,6 +40,19 @@ public readonly record struct MemberId(Guid Value) : ITypedId<MemberId>
     public override string ToString() => Value.ToString();
 }
 
+/// <summary>
+/// An invite: names the plain <c>Invite</c> document that binds a member slot to the
+/// address it was invited at, and is recorded on <c>MemberInvited</c>.
+/// </summary>
+[JsonConverter(typeof(TypedIdJsonConverter<InviteId>))]
+public readonly record struct InviteId(Guid Value) : ITypedId<InviteId>
+{
+    public static InviteId New() => new(Guid.CreateVersion7());
+    public static InviteId From(Guid value) => new(value);
+    public static bool TryParse(string? s, out InviteId id) => TypedId.TryParse(s, out id);
+    public override string ToString() => Value.ToString();
+}
+
 /// <summary>A login identity. Recorded as the actor (<c>by</c>) and on claims.</summary>
 [JsonConverter(typeof(TypedIdJsonConverter<UserId>))]
 public readonly record struct UserId(Guid Value) : ITypedId<UserId>

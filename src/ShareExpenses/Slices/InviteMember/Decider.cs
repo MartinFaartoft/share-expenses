@@ -3,13 +3,13 @@ using ShareExpenses.Shared;
 namespace ShareExpenses.Slices.InviteMember;
 
 /// <summary>The command, as in <c>event-model.yaml</c>. Inputs are raw; deciding validates them.</summary>
-/// <param name="TokenHash">Hash of the token generated for this invite; see <see cref="InviteToken"/>.</param>
+/// <param name="InviteId">The new invite's id, chosen by the caller: names its <c>Invite</c> document.</param>
 /// <param name="Now">The clock, read by the caller, so deciding stays pure and testable.</param>
 /// <param name="EmailHolder">
 /// Looked up: the user whose account email is <paramref name="Email"/>, if any.
 /// </param>
 /// <param name="InvitedTo">
-/// Looked up: slots in this group whose latest invite delivery went to <paramref name="Email"/>.
+/// Looked up: slots in this group whose <c>Invite</c> is addressed to <paramref name="Email"/>.
 /// </param>
 /// <remarks>
 /// The two lookups feed <em>guards</em>, not invariants (spec §11): they come from
@@ -23,7 +23,7 @@ namespace ShareExpenses.Slices.InviteMember;
 internal sealed record Command(
     MemberId MemberId,
     string? Email,
-    string TokenHash,
+    InviteId InviteId,
     DateTimeOffset Now,
     UserId By,
     UserId? EmailHolder = null,
@@ -41,12 +41,10 @@ internal static class Decider
     public const string MemberNotFound = "member not found";
 
     /// <summary>
-    /// How long a new invite link lives. Applied once, when inviting, and recorded on
-    /// the event as a deadline: changing this does not move links already sent.
+    /// How long a new invite lives. Applied once, when inviting, and recorded on the
+    /// event as a deadline: changing this does not move invites already sent.
     /// </summary>
     public static readonly TimeSpan InviteLifetime = TimeSpan.FromDays(30);
-
-    private const int MaxEmailLength = 254;
 
     /// <param name="state">The group's state, or null if its stream does not exist.</param>
     public static Decision Decide(State? state, Command command)
@@ -60,8 +58,8 @@ internal static class Decider
         if (slot.Claimed)
             return Decision.Reject("member has already joined");
 
-        var email = NormaliseEmail(command.Email);
-        if (!IsPlausibleEmail(email))
+        var email = EmailAddress.Trim(command.Email);
+        if (!EmailAddress.IsPlausible(email))
             return Decision.Reject("email is not a valid address");
 
         // Guard: the address belongs to someone already in the group — including
@@ -69,7 +67,7 @@ internal static class Decider
         if (command.EmailHolder is { } holder && state.Members.TryGetValue(holder, out var held))
             return Decision.Reject($"{email} has already joined as {state.Slots[held].Name}");
 
-        // Guard: the address has an open invite on another slot. Deliveries to slots
+        // Guard: the address has an open invite on another slot. Invites to slots
         // since claimed (or gone) no longer hold the address.
         var openElsewhere = (command.InvitedTo ?? new HashSet<MemberId>())
             .Where(m => m != command.MemberId)
@@ -79,18 +77,6 @@ internal static class Decider
             return Decision.Reject($"that email is already invited as {openElsewhere.Name}");
 
         return Decision.Accept(new MemberInvited(
-            command.MemberId, command.TokenHash, command.Now + InviteLifetime, command.By));
+            command.MemberId, command.InviteId, command.Now + InviteLifetime, command.By));
     }
-
-    /// <summary>Trimmed; case kept — the local part is technically case-sensitive.</summary>
-    public static string NormaliseEmail(string? email) => email?.Trim() ?? "";
-
-    /// <summary>
-    /// Plausibly an address, nothing more: real validation is whether mail arrives.
-    /// At most 254 characters, exactly one @ with something on both sides, no whitespace.
-    /// </summary>
-    private static bool IsPlausibleEmail(string email) =>
-        email.Length is > 0 and <= MaxEmailLength
-        && !email.Any(char.IsWhiteSpace)
-        && email.Split('@') is [{ Length: > 0 }, { Length: > 0 }];
 }

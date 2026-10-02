@@ -1,10 +1,8 @@
-using ShareExpenses.Infrastructure.Invites;
 using System.Net;
 using System.Net.Http.Json;
 using Marten;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
-using ShareExpenses.Infrastructure.Identity;
+using ShareExpenses.Infrastructure.Invites;
 using ShareExpenses.Infrastructure.Marten;
 using ShareExpenses.Shared;
 using ShareExpenses.Slices.InviteMember;
@@ -26,6 +24,7 @@ public class InviteMemberIntegrationTests(AppFixture app)
     private readonly MemberId _m2 = MemberId.New();
     private readonly UserId _alice = UserId.New();
     private readonly UserId _mallory = UserId.New();
+
     private IDocumentStore Store => app.Services.GetRequiredService<IDocumentStore>();
 
     private object[] Lisbon =>
@@ -46,13 +45,16 @@ public class InviteMemberIntegrationTests(AppFixture app)
 
         var response = await Invite(_alice, _g1, _m2, "bob@example.com");
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var hash = InviteToken.Hash(TokenOf(await LinkFrom(response)));
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         var stream = await StreamOf(_g1);
         Assert.Equal(Lisbon, stream.Take(Lisbon.Length));
         var invited = Assert.IsType<MemberInvited>(Assert.Single(stream.Skip(Lisbon.Length)));
-        Assert.Equal((_m2, hash, _alice), (invited.MemberId, invited.TokenHash, invited.By));
+        Assert.Equal((_m2, _alice), (invited.MemberId, invited.By));
         Assert.InRange(invited.ExpiresAt, before.AddDays(30), app.Clock.GetUtcNow().AddDays(30));
+
+        // The event names the Invite document that holds the address.
+        var invite = await InviteFor(_g1, _m2);
+        Assert.Equal((invited.InviteId, "bob@example.com"), (invite!.InviteId, invite.Email));
     }
 
     [Fact]
@@ -63,6 +65,101 @@ public class InviteMemberIntegrationTests(AppFixture app)
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Contains("group not found", await response.Content.ReadAsStringAsync());
         Assert.Empty(await StreamOf(_g1));
+    }
+
+    // ── Lookups for real: Invite documents and Identity ──────────────────────────
+
+    [Fact]
+    public async Task S8_an_address_with_an_open_invite_cannot_be_invited_to_another_slot()
+    {
+        var (groupId, bob) = await GroupWithPlaceholder("Bob");
+        var bobby = await AddPlaceholder(groupId, "Bobby");
+        Assert.Equal(HttpStatusCode.NoContent, (await Invite(_alice, groupId, bob, "bob@example.com")).StatusCode);
+
+        var response = await Invite(_alice, groupId, bobby, " BOB@example.com ");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("that email is already invited as Bob", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task S10_the_creators_own_address_cannot_be_invited()
+    {
+        var aliceEmail = $"alice-{Guid.NewGuid():N}@example.com";
+        var alice = await app.AccountFor(aliceEmail);
+        var (groupId, bob) = await GroupWithPlaceholder("Bob", alice);
+
+        var response = await Invite(alice, groupId, bob, aliceEmail.ToUpperInvariant());
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("has already joined as Alice", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Re_inviting_replaces_the_slots_invite_with_one_the_latest_event_names()
+    {
+        var (groupId, bob) = await GroupWithPlaceholder("Bob");
+        await Invite(_alice, groupId, bob, "bob@old.example.com");
+
+        Assert.Equal(HttpStatusCode.NoContent, (await Invite(_alice, groupId, bob, "bob@new.example.com")).StatusCode);
+
+        await using var session = Store.QuerySession();
+        var invite = Assert.Single(await session.Query<Invite>().Where(i => i.GroupId == groupId).ToListAsync());
+        Assert.Equal((bob, "bob@new.example.com"), (invite.MemberId, invite.Email));
+        Assert.Equal(invite.InviteId, Assert.IsType<MemberInvited>((await StreamOf(groupId)).Last()).InviteId);
+    }
+
+    // ── The ledger holds no address ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task The_address_goes_to_the_invite_document_and_never_into_the_ledger()
+    {
+        var (groupId, bob) = await GroupWithPlaceholder("Bob");
+
+        await Invite(_alice, groupId, bob, "  Bob@Example.com ");
+
+        var invite = await InviteFor(groupId, bob);
+        Assert.Equal(("Bob@Example.com", "BOB@EXAMPLE.COM"), (invite!.Email, invite.NormalizedEmail));
+
+        await using var session = Store.QuerySession();
+        var events = await session.QueryAsync<string>(
+            $"select data::text from {MartenSetup.Schema}.mt_events where stream_id = ?", groupId.Value);
+        Assert.DoesNotContain(events, e => e.Contains('@'));
+    }
+
+    // ── The email ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Post_returns_204_and_emails_the_invite_with_no_secret_in_it()
+    {
+        var (groupId, bob) = await GroupWithPlaceholder("Bob");
+        var address = $"{Guid.NewGuid():N}@example.com";
+
+        var response = await Invite(_alice, groupId, bob, address);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(
+            new SentInvite(address, "http://localhost/", "Lisbon trip", "Alice", "Bob"),
+            Assert.Single(app.Emails.Invites, e => e.Email == address));
+    }
+
+    [Fact]
+    public async Task Post_still_succeeds_when_the_email_cannot_be_sent()
+    {
+        var (groupId, bob) = await GroupWithPlaceholder("Bob");
+        var address = $"{Guid.NewGuid():N}@undeliverable.example";
+        app.Emails.FailInvitesTo = email => email == address;
+        try
+        {
+            var response = await Invite(_alice, groupId, bob, address);
+
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+            Assert.IsType<MemberInvited>((await StreamOf(groupId)).Last());
+        }
+        finally
+        {
+            app.Emails.FailInvitesTo = _ => false;
+        }
     }
 
     // ── Concurrency ───────────────────────────────────────────────────────────────
@@ -83,117 +180,10 @@ public class InviteMemberIntegrationTests(AppFixture app)
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.DoesNotContain(await StreamOf(_g1), e => e is MemberInvited);
         Assert.DoesNotContain(app.Emails.Invites, e => e.Email == address);
-        await using var session = Store.QuerySession();
-        Assert.Null(await session.LoadAsync<InviteDelivery>(_m2.Value));
-    }
-
-    // ── Lookups for real: InviteDelivery and Identity ─────────────────────────────
-
-    [Fact]
-    public async Task S8_an_address_with_an_open_invite_cannot_be_invited_to_another_slot()
-    {
-        var (groupId, bob) = await GroupWithPlaceholder("Bob");
-        var bobby = await AddPlaceholder(groupId, "Bobby");
-        Assert.Equal(HttpStatusCode.OK, (await Invite(_alice, groupId, bob, "bob@example.com")).StatusCode);
-
-        var response = await Invite(_alice, groupId, bobby, " BOB@example.com ");
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("that email is already invited as Bob", await response.Content.ReadAsStringAsync());
-    }
-
-    [Fact]
-    public async Task S10_the_creators_own_address_cannot_be_invited()
-    {
-        var aliceEmail = $"alice-{Guid.NewGuid():N}@example.com";
-        await CreateAccount(_alice, aliceEmail);
-        var (groupId, bob) = await GroupWithPlaceholder("Bob");
-
-        var response = await Invite(_alice, groupId, bob, aliceEmail.ToUpperInvariant());
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("has already joined as Alice", await response.Content.ReadAsStringAsync());
-    }
-
-    [Fact]
-    public async Task Re_inviting_overwrites_the_delivery_keyed_to_the_latest_invite()
-    {
-        var (groupId, bob) = await GroupWithPlaceholder("Bob");
-        await Invite(_alice, groupId, bob, "bob@old.example.com");
-
-        Assert.Equal(HttpStatusCode.OK, (await Invite(_alice, groupId, bob, "bob@new.example.com")).StatusCode);
-        var latest = await Invite(_alice, groupId, bob, "bob@new.example.com");
-        Assert.Equal(HttpStatusCode.OK, latest.StatusCode);
-        var link = await LinkFrom(latest);
-
-        await using var session = Store.QuerySession();
-        var delivery = Assert.Single(await session.Query<InviteDelivery>().Where(d => d.GroupId == groupId).ToListAsync());
-        Assert.Equal((bob.Value, "bob@new.example.com"), (delivery.Id, delivery.Email));
-
-        // The delivery is keyed to the latest invite: its link, and its event.
-        Assert.Equal(InviteToken.Hash(TokenOf(link)), delivery.TokenHash);
-        Assert.Equal(delivery.TokenHash, Assert.IsType<MemberInvited>((await StreamOf(groupId)).Last()).TokenHash);
-    }
-
-    // ── The ledger holds no address ───────────────────────────────────────────────
-
-    [Fact]
-    public async Task The_address_goes_to_the_delivery_document_and_never_into_the_ledger()
-    {
-        var (groupId, bob) = await GroupWithPlaceholder("Bob");
-
-        var link = await LinkFrom(await Invite(_alice, groupId, bob, "  Bob@Example.com "));
-        var token = TokenOf(link);
-
-        await using var session = Store.QuerySession();
-        var delivery = await session.LoadAsync<InviteDelivery>(bob.Value);
-        Assert.Equal((groupId, "Bob@Example.com"), (delivery!.GroupId, delivery.Email));
-
-        var events = await session.QueryAsync<string>(
-            $"select data::text from {MartenSetup.Schema}.mt_events where stream_id = ?", groupId.Value);
-        Assert.DoesNotContain(events, e => e.Contains('@'));
-        var invited = Assert.Single(events, e => e.Contains("TokenHash"));
-        Assert.DoesNotContain(token, invited);
-        Assert.Contains(InviteToken.Hash(token), invited);
+        Assert.Null(await InviteFor(_g1, _m2));
     }
 
     // ── HTTP ──────────────────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task Post_returns_200_with_a_group_scoped_link_and_emails_the_same_link()
-    {
-        var (groupId, bob) = await GroupWithPlaceholder("Bob");
-
-        var response = await Invite(_alice, groupId, bob, " Bob@Example.com ");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var link = await LinkFrom(response);
-        // The token rides in the fragment, so no server ever receives it in a URL.
-        Assert.Matches($"^http://localhost/invites/{groupId}#[A-Za-z0-9_-]{{43}}$", link);
-        Assert.Equal(
-            new SentInvite("Bob@Example.com", link, "Lisbon trip", "Alice", "Bob"),
-            Assert.Single(app.Emails.Invites, e => e.Link.Contains(groupId.ToString())));
-    }
-
-    [Fact]
-    public async Task Post_still_succeeds_when_the_email_cannot_be_sent()
-    {
-        var (groupId, bob) = await GroupWithPlaceholder("Bob");
-        var address = $"{Guid.NewGuid():N}@undeliverable.example";
-        app.Emails.FailInvitesTo = email => email == address;
-        try
-        {
-            var response = await Invite(_alice, groupId, bob, address);
-
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            Assert.NotNull(await LinkFrom(response));
-            Assert.IsType<MemberInvited>((await StreamOf(groupId)).Last());
-        }
-        finally
-        {
-            app.Emails.FailInvitesTo = _ => false;
-        }
-    }
 
     [Fact]
     public async Task Post_rejects_an_invalid_email_with_400_and_writes_nothing()
@@ -204,8 +194,7 @@ public class InviteMemberIntegrationTests(AppFixture app)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("email is not a valid address", await response.Content.ReadAsStringAsync());
-        await using var session = Store.QuerySession();
-        Assert.Null(await session.LoadAsync<InviteDelivery>(bob.Value));
+        Assert.Null(await InviteFor(groupId, bob));
     }
 
     [Theory]
@@ -265,35 +254,28 @@ public class InviteMemberIntegrationTests(AppFixture app)
         await session.SaveChangesAsync();
     }
 
-    private async Task<(GroupId Group, MemberId Placeholder)> GroupWithPlaceholder(string name)
+    private async Task<(GroupId Group, MemberId Placeholder)> GroupWithPlaceholder(string name, UserId? creator = null)
     {
-        var created = await app.ClientFor(_alice).PostAsJsonAsync("/api/groups",
+        var created = await app.ClientFor(creator ?? _alice).PostAsJsonAsync("/api/groups",
             new { groupName = "Lisbon trip", currency = "GBP", memberName = "Alice" });
         var groupId = (await created.Content.ReadFromJsonAsync<CreatedBody>())!.GroupId;
-        return (groupId, await AddPlaceholder(groupId, name));
+        return (groupId, await AddPlaceholder(groupId, name, creator));
     }
 
-    private async Task<MemberId> AddPlaceholder(GroupId groupId, string name)
+    private async Task<MemberId> AddPlaceholder(GroupId groupId, string name, UserId? actor = null)
     {
-        var added = await app.ClientFor(_alice).PostAsJsonAsync($"/api/groups/{groupId}/members", new { displayName = name });
+        var added = await app.ClientFor(actor ?? _alice).PostAsJsonAsync($"/api/groups/{groupId}/members", new { displayName = name });
         return (await added.Content.ReadFromJsonAsync<AddedBody>())!.MemberId;
-    }
-
-    private async Task CreateAccount(UserId id, string email)
-    {
-        await using var scope = app.Services.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
-        var result = await users.CreateAsync(new User { Id = id.Value, UserName = email, Email = email });
-        Assert.True(result.Succeeded, string.Join("; ", result.Errors.Select(e => e.Description)));
     }
 
     private Task<HttpResponseMessage> Invite(UserId actor, GroupId groupId, MemberId memberId, string email) =>
         app.ClientFor(actor).PostAsJsonAsync($"/api/groups/{groupId}/members/{memberId}/invite", new { email });
 
-    private static async Task<string> LinkFrom(HttpResponseMessage response) =>
-        (await response.Content.ReadFromJsonAsync<InvitedBody>())!.Link;
-
-    private static string TokenOf(string link) => link[(link.IndexOf('#') + 1)..];
+    private async Task<Invite?> InviteFor(GroupId groupId, MemberId memberId)
+    {
+        await using var session = Store.QuerySession();
+        return await session.Query<Invite>().SingleOrDefaultAsync(i => i.GroupId == groupId && i.MemberId == memberId);
+    }
 
     private async Task<IReadOnlyList<object>> StreamOf(GroupId groupId)
     {
@@ -304,6 +286,4 @@ public class InviteMemberIntegrationTests(AppFixture app)
     private sealed record CreatedBody(GroupId GroupId, MemberId MemberId);
 
     private sealed record AddedBody(MemberId MemberId);
-
-    private sealed record InvitedBody(string Link);
 }

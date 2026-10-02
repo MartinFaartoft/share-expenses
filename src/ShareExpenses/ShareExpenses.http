@@ -40,13 +40,23 @@
 @host = https://localhost:7194
 @email = alice@example.com
 
-### 1. Sign in (Development only — stand-in for the magic link). Sets the cookie.
-# @name signIn
-POST {{host}}/dev/sign-in
+### 1a. Request a sign-in code. Expect 202. In Development the code is not emailed:
+# LogEmailSender writes it to the app log ("Sign-in email for ...: code 123456").
+POST {{host}}/api/sign-in/code
 Content-Type: application/json
 
 {
   "email": "{{email}}"
+}
+
+### 1b. Sign in with the code from the log. Expect 200 { userId }; sets the cookie.
+# A first sign-in creates the account. Wrong code: 400, five tries per code.
+POST {{host}}/api/sign-in
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "code": "paste-the-code-here"
 }
 
 ### 2. Create a group. Expect 201 with groupId and memberId.
@@ -99,9 +109,10 @@ Content-Type: application/json
   "displayName": "Bob"
 }
 
-### 7. Invite Bob (from step 4). Expect 200 with the invite link; the same link is
-# written to the app log by LogEmailSender. Only the token's hash is stored:
-# compare the link with ledger.mt_events (type member_invited, TokenHash).
+### 7. Invite Bob (from step 4). Expect 204. LogEmailSender writes the invite to the
+# app log — no secret in it, just "sign in as bob@example.com". The address is on
+# the Invite document (ledger.mt_doc_invite), never in the ledger: compare with
+# ledger.mt_events (type member_invited carries only the InviteId).
 @bobId = {{addMember.response.body.$.memberId}}
 POST {{host}}/api/groups/{{groupId}}/members/{{bobId}}/invite
 Content-Type: application/json
@@ -110,8 +121,8 @@ Content-Type: application/json
   "email": "bob@example.com"
 }
 
-### 8. Re-invite Bob at another address. Expect 200 and a new link; the old one is retired.
-
+### 8. Re-invite Bob at another address. Expect 204: the slot's Invite is replaced, and
+# the old address no longer finds it.
 POST {{host}}/api/groups/{{groupId}}/members/{{bobId}}/invite
 Content-Type: application/json
 
@@ -128,35 +139,31 @@ Content-Type: application/json
   "email": "alice@example.com"
 }
 
-### 10. View the invite from step 8, as the landing page does — no sign-in needed.
-# The link is {{host}}/invites/{groupId}#{token}; the page sends the part after '#'.
-# Paste that token below. Expect 200 { groupName, memberName, invitedBy }.
-# Try step 7's token too: 404, it was retired by step 8.
-POST {{host}}/api/invites/{{groupId}}/lookup
+### 10. Sign in as Bob, at the address step 8 invited (overwrites the cookie).
+# Request a code, then sign in with it from the log, as in steps 1a and 1b.
+POST {{host}}/api/sign-in/code
 Content-Type: application/json
 
 {
-  "token": "paste-the-token-after-#-here"
-}
-
-### 11. Claim Bob's slot. Claiming needs a DIFFERENT signed-in user — Alice already
-# holds a slot, so as Alice this is 409 "you're already in this group as Alice".
-# First sign in as Bob (overwrites the cookie), then paste step 8's token.
-# Expect 200 { groupId, memberId }; claim again → 409; as anyone else → 404.
-POST {{host}}/dev/sign-in
-Content-Type: application/json
-
-{
-  "email": "bob@example.com"
+  "email": "bob@new.example.com"
 }
 
 ###
-POST {{host}}/api/invites/{{groupId}}/accept
+POST {{host}}/api/sign-in
 Content-Type: application/json
 
 {
-  "token": "paste-the-token-after-#-here"
+  "email": "bob@new.example.com",
+  "code": "paste-the-code-here"
 }
 
-### 12. Health
+### 11. Bob's invites. Expect 200 { invites: [ { groupId, groupName, memberName, invitedBy } ] }.
+# Signed in as bob@example.com instead, the list is empty: step 8 moved the invite.
+GET {{host}}/api/invites
+
+### 12. Join. Expect 200 { groupId, memberId }; again → 409 "already in this group";
+# as anyone not invited at their address → 404.
+POST {{host}}/api/invites/{{groupId}}/accept
+
+### 13. Health
 GET {{host}}/health

@@ -13,7 +13,7 @@ Status: design in progress. Decisions below are settled unless marked **OPEN**.
 ## 1. Scope
 
 **In scope (v1)**
-- Create a group; invite people to it by link/email.
+- Create a group; invite people to it by email.
 - Record expenses: who paid, how much, who it's split between, how it's split.
 - See per-person balances at any time.
 - Get a concrete settle-up plan: an ordered list of "X transfers N to Y".
@@ -59,7 +59,7 @@ the simplest thing that works.
   app and PostgreSQL on the same host.
 - **Frontend:** **OPEN — deferred.** The API and event model come first; the
   client is chosen later. Assume a mobile-web client for UX purposes: the primary
-  target is a phone screen, one-handed, and the share-link join flow must not
+  target is a phone screen, one-handed, and the sign-in and join flow must not
   require an install.
 
 ### Hosting consequences
@@ -71,7 +71,7 @@ the simplest thing that works.
   than assumed.
 - Restarts are manual and infrequent, which makes the persisted data-protection
   key ring (§4) load-bearing rather than theoretical: without it, every restart
-  logs everyone out and invalidates outstanding sign-in links.
+  logs everyone out.
 - No managed-Postgres safety net — connection limits, vacuum behaviour and disk
   headroom are ours to watch. At this data volume none of it should bite, but
   nobody else is watching either.
@@ -83,16 +83,16 @@ This is the ledger. History *is* the product here — "why is my balance this
 number" is answered by replaying what happened.
 
 **Plain documents, not event-sourced (supporting state):** users, sessions,
-login tokens, invite deliveries (the address an invite was sent to).
+sign-in codes, and invites — the `Invite` document binding a member slot to the
+address it was invited at.
 
-Invite *lookups* were on this list and moved off it with InviteMember: an invite's
-token *hash* is recorded on `MemberInvited`, and the lookup is folded from the
-group stream on demand (§11). The hash is safe to keep forever — a SHA-256 of 256
-random bits cannot be reversed or guessed, and claims nothing on its own — and
-keeping it in the stream means re-inviting and claiming retire old links with no
-second store to keep in step. The invite's email address went the other way: it
-is personal data, so it lives in the erasable `InviteDelivery` document and never
-enters the ledger.
+An invite is split across the line. *That* a slot was invited, by whom, until when,
+is a ledger fact: `MemberInvited(memberId, inviteId, expiresAt, by)`. The address
+is personal data, so it lives on the erasable `Invite` document the event's
+`inviteId` names, and never enters the ledger. The stream decides which invite is
+a slot's current one, so re-inviting and claiming retire old invites with no
+second store to keep in step; the document only answers "which slots were invited
+at this address" (§11).
 
 Rationale: these have no interesting history, no invariants worth auditing, and
 high write churn. Event-sourcing a session table produces a firehose of noise
@@ -104,65 +104,70 @@ pattern goes wrong.
 
 ## 4. Identity and access
 
-**Decision: magic email link only — no passwords stored, no external identity
-provider.** Built on ASP.NET Core Identity as a local user store.
+**Decision: sign in with a six-digit code sent by email — the only way in. No
+passwords stored, no links, no external identity provider.** Built on ASP.NET Core
+Identity as a local user store.
 
 Rationale for revisiting the "rolling your own" concern: most of this flow is
-framework code. Identity supplies token generation, expiry, the user store, email
-normalisation, cookie issuance and renewal, and security-stamp-based global
-sign-out; ASP.NET supplies rate limiting. What is genuinely owned is single-use
-bookkeeping and the choice of mail relay. Rejected alternatives: OAuth via Google
+framework code. Identity supplies the user store, email normalisation, cookie
+issuance and renewal, and security-stamp-based global sign-out; ASP.NET supplies
+rate limiting. What is genuinely owned is the code itself — issuing, checking and
+retiring it — and the choice of mail relay. Rejected alternatives: OAuth via Google
 or similar (no appetite for a third-party provider), and local passwords (storing
 hashes makes every database backup a credential store, and accounts used twice a
 year mean forgotten passwords by the second trip — which requires a reset flow,
 so email returns anyway, on top of the passwords).
 
+**Why a code and not a link** (reversed from an earlier link-plus-code design).
+A typed code works on any device — email on the phone, browser on the laptop —
+and keeps the user in the tab they started in, so nothing has to survive a
+round trip through a mail client. And there is nothing for a mail client or
+corporate scanner to prefetch and burn. A link needed a landing page with a POST
+button to defend against prefetchers, and a way to carry state across the tab the
+mail client opens; a code needs neither.
+
 ### Mechanism
 
-- Sign-in request → `UserManager.GenerateUserTokenAsync` with
-  `DataProtectorTokenProvider` and a custom purpose, `"passwordless-login"`.
-  These tokens are stateless and self-validating, so **there is no token table**.
-- Token lifespan: 15 minutes.
-- Verify with `VerifyUserTokenAsync`, then `SignInManager.SignInAsync`.
+- **Request:** `POST /api/sign-in/code { email }`. Generates six uniformly random
+  digits, stores a `SignInCode` — `{ email, SHA-256(code), expiresAt, attemptsLeft }`,
+  one per address, replacing any earlier one — and emails the code. The response is
+  the same whether or not the address has an account (below).
+- **Verify:** `POST /api/sign-in { email, code }`. The code must match, be unexpired
+  and have attempts left. A match deletes the `SignInCode`, finds the user by
+  address — creating them if there is none — and signs them in. A miss spends an
+  attempt; the last one deletes the code. Every failure is the same answer: the
+  code is wrong or has expired.
+- **Lifetime: 10 minutes. Attempts: 5 per code.**
 - Sessions: sliding 30-day cookie, `HttpOnly`, `Secure`, `SameSite=Lax`.
-  Re-authentication is one tap on an email, so a modest window is cheap.
+  Re-authentication is one short email away, so a modest window is cheap.
 
-### Every sign-in email carries a link *and* a code
+### The code is ours, not Identity's
 
-**Decision:** each email contains a tappable link and a six-digit code (Identity's
-`EmailTokenProvider`).
+**Decision: our own `SignInCode` record, not Identity's `EmailTokenProvider`.**
+Identity's provider issues codes only to an existing user, so the account would be
+created when a code is *requested* — leaving rows behind for every address anyone
+types. Its codes stay valid for several minutes after use, and it counts no
+attempts. Our record is single-use by deletion, counts attempts, and needs no user
+until the code is proven: the account is created on first successful sign-in.
 
-Rationale: the cross-device case is common — email on the phone, browser open on
-the laptop. The code path costs little because the provider already exists, and a
-typed code cannot be consumed by a link prefetcher. Two verification paths, both
-framework-supplied.
+`SignInCode` is login state, so it lives with Identity: an EF table in the
+`identity` schema (below), never in the ledger. The code is stored hashed, so a
+backup holds no live code in the clear; with a million possible codes the hash
+does not stop a determined reader of the live database, but such a reader would
+have to act within the code's ten minutes.
 
-### Single-use enforcement — the one genuinely owned piece
+### Guessing is what the limits are for
 
-Identity's login tokens are **not** single-use by default. A password-reset token
-is effectively single-use only because changing the password bumps the security
-stamp; a login changes nothing, so the token stays valid for its full lifespan.
-
-**Decision:** track consumption explicitly — store `SHA-256(token)` with an
-expiry, reject any token already present, prune expired rows.
-
-Explicitly rejected: forcing single-use via `UpdateSecurityStampAsync`. It does
-work, but it signs the user out of every other device, which is the wrong
-behaviour for a login.
-
-### Link prefetching
-
-Mail clients and corporate security scanners fetch URLs found in email, which
-would burn a single-use token before the human ever clicks it.
-
-**Decision:** the link lands on a page with a "Sign me in" button that POSTs.
-A prefetch only ever hits the GET, and consumes nothing.
+A six-digit code is one in a million. **Five attempts per code** bound guessing
+per code; **ASP.NET's rate limiter on the request endpoint**, keyed per address
+and per IP, bounds how many codes — and so how many attempts — anyone can get for
+an address, and stops the endpoint being used to flood someone's inbox. Both are
+load-bearing: without them a code is brute-forceable in minutes.
 
 ### Data protection keys must be persisted
 
-DataProtector tokens *and* auth cookies are both validated against the
-data-protection key ring. The default in a container is in-memory, so **every
-restart would invalidate every outstanding link and every active session.**
+Auth cookies are validated against the data-protection key ring. The default in a
+container is in-memory, so **every restart would sign everyone out.**
 
 **Decision:** persist keys to Postgres via `PersistKeysToDbContext`.
 
@@ -170,27 +175,24 @@ Recorded as a decision rather than an implementation note because getting it
 wrong produces a bug that presents as random, intermittent logouts — the kind
 that gets misdiagnosed for weeks.
 
-### Rate limiting, self-registration and user enumeration
+### Self-registration and user enumeration
 
-- ASP.NET's built-in rate limiter on the request-link endpoint, keyed per email
-  address and per IP. Load-bearing now that any address gets an email: without
-  it, the endpoint can be used to flood someone's inbox.
-- **Decision: anyone can sign up.** Requesting a sign-in link for an address with
-  no account sends a link that, once used, creates the account. A new user can
+- **Decision: anyone can sign up.** Requesting a code for an address with no
+  account sends a code that, once used, creates the account. A new user can
   create a group straight away; an invite is not a precondition for an account.
   (Reversed from an earlier "nobody self-registers" decision: it made the first
   sign-in of every invitee a special case, and blocked anyone from starting a
   group without being invited to one first.)
+- **Every account's address is verified**, because an account only comes into
+  being by proving the address with a code. Invites rely on this (below).
 - **Self-registration grants no visibility.** An account sees only groups it holds
-  a slot in — its own, and those it has claimed via an invite. Everything else
-  answers "not found", exactly as for a group that does not exist (§5; AddMember, InviteMember,
-  ViewInvite).
-- **No user enumeration still holds:** requesting a link returns the same response
-  whether or not the address has an account, and both cases send an email. Prefer
-  creating the account when the link is *used*, not when it is requested, so
-  requests for addresses nobody controls leave no rows behind — subject to what
-  Identity's token providers need (they sign against a user), to be settled with
-  the sign-in work.
+  a slot in — its own, and those it has claimed via an invite — and invites
+  addressed to it. Everything else answers "not found", exactly as for a group that
+  does not exist (§5; AddMember, InviteMember, AcceptInvite).
+- **No user enumeration:** requesting a code returns the same response whether or
+  not the address has an account, and both cases send an email. Nothing is
+  written for an address until its code is used, apart from the short-lived
+  `SignInCode`.
 
 ### Persistence: EF Core, firewalled
 
@@ -199,8 +201,8 @@ codebase alongside Marten.
 
 **Decision: accept EF Core, strictly confined to Identity** — its own
 `DbContext`, its own `identity` schema, never joined to domain data. Marten owns
-the event store and projections; EF owns users, logins and the key ring, and
-nothing else.
+the event store, projections and the domain's plain documents; EF owns users,
+sign-in codes and the key ring, and nothing else.
 
 Rationale: §3 already fences identity off as non-event-sourced, so the boundary
 exists and this respects it. The alternative — implementing `IUserStore` and its
@@ -211,9 +213,9 @@ the two stacks genuinely chafe.
 ### Mail relay — deferred
 
 **Decision: deferred.** Development and early verification use a
-`LogEmailSender` implementation of `IEmailSender` that writes the sign-in link
-and code straight to the application log. Entirely adequate while the only users
-are the author and deliberate testers.
+`LogEmailSender` implementation of `IEmailSender` that writes each sign-in code
+and invite straight to the application log. Entirely adequate while the only
+users are the author and deliberate testers.
 
 **Safety gate:** the log sender must refuse to start when the environment is
 Production. Otherwise it silently locks out every real user, and the failure
@@ -226,8 +228,8 @@ deliverability), Resend (best developer experience), Amazon SES (cheapest, most
 setup). Free-tier terms shift; verify before committing.
 
 Running our own outbound SMTP is explicitly rejected: cold IP reputation and
-unaligned DMARC put login links in spam folders, and a login link in spam is a
-total lockout that the user blames on the app. SPF, DKIM and DMARC must be
+unaligned DMARC put sign-in emails in spam folders, and a sign-in code in spam is
+a total lockout that the user blames on the app. SPF, DKIM and DMARC must be
 configured on the sending domain whichever provider is eventually chosen.
 
 ### Consequences accepted
@@ -236,9 +238,11 @@ configured on the sending domain whichever provider is eventually chosen.
 - Deliverability remains a real user-facing failure mode — mitigated by a
   reputable relay, never eliminated.
 - No offline or LAN-only login.
+- An account *is* its address. Changing address, holding several, or merging two
+  accounts are not v1 features (§14).
 - Browsers evict data for sites unused for months, so a returning user on iOS may
   find their session gone between trips. This is acceptable precisely because
-  re-authentication is self-service: request a link, tap it.
+  re-authentication is self-service: request a code, type it.
 
 ### Members vs users
 
@@ -248,31 +252,41 @@ what makes everything below cheap.
 
 **Decision: placeholder members are allowed and claimable.**
 Add someone by name alone and record expenses against them immediately. When they
-later sign in through their invite, they claim that member slot and the existing
-history stays intact.
+are invited and sign in with the invited address, they claim that member slot and
+the existing history stays intact.
 
 Rationale: without this the app fails at the exact moment it is meant to be
 useful — standing in a restaurant, wanting to enter the bill now, with one person
-who will not click their invite until Thursday.
+who will not open their invite until Thursday.
 
 #### Claiming is driven by the invite, not by a picker
 
-**Decision: the invite binds the slot.** `MemberInvited(memberId, email)` already
-ties an email address to one specific member slot, so the invite token identifies
-which slot is being claimed. There is no "who are you?" list to mis-tap.
+**Decision: the invite binds the slot.** `InviteMember` ties an email address to
+one specific member slot, so the address identifies which slot is being claimed.
+There is no "who are you?" list to mis-tap.
 
 Consequences:
-- Claiming is not a free choice; it is the automatic result of signing in through
-  an invite.
+- Claiming is not a free choice; it is accepting an invite addressed to you.
 - A placeholder added by name but never invited is not claimable until someone
   invites it. This is a feature — every claim traces back to a deliberate act by
   an existing member.
 
-**Decision: the token is the capability — the signed-in email need not match the
-invited one.** Requiring a match would block a forwarded link, but it would also
-break the very common "you invited my old address" case. Claims are announced in
-the activity feed instead, consistent with §5: accountability by visibility
-rather than by enforcement.
+**Decision: the invited address is the key — only a user signed in with it may
+claim.** Signing in proves control of the address (above), so an invite is
+claimed by whoever can read the mail it was sent to, and by nobody else. Reversed
+from an earlier design where the invite carried a secret token and "the token is
+the capability": whoever held the link could claim, whatever address they signed
+in with. That design accepted forwarded links and the "you invited my old
+address" case; it also needed the token kept out of logs, carried across sign-in
+in the browser, and looked up by an anonymous endpoint. Matching the address
+removes all of that.
+
+Accepted cost: an invite to the wrong address — an old one, a work one — can only
+be fixed by the inviter re-inviting the right one. A forwarded invite email does
+nothing for its new reader. Letting a signed-in user prove a *second* address to
+claim an invite sent there would cover both, but it opens account addresses, email
+change and account merging; deferred (§14). Claims are still announced in the
+activity feed, consistent with §5: accountability by visibility.
 
 #### Reversing a claim
 
@@ -542,7 +556,7 @@ GroupCreated(name, currency, createdBy)
 GroupRenamed(name, by)
 GroupArchived(by) / GroupUnarchived(by)
 MemberAdded(memberId, displayName, by)
-MemberInvited(memberId, tokenHash, expiresAt, by)
+MemberInvited(memberId, inviteId, expiresAt, by)
 MemberClaimed(memberId, userId)
 MemberClaimReleased(memberId, userId, releasedBy)
 MemberRenamed(memberId, displayName, by)
@@ -580,54 +594,55 @@ version 0 to a stream that already exists fails — rather than by aggregate
 validation.
 
 **Decision: no email address enters the ledger.** `MemberInvited` records the
-slot, the token's hash and the actor; the address the invite went to lives in the
-`InviteDelivery` plain document (§3), and a user's current address lives only in
+slot, the invite's id and the actor; the address the invite went to lives on the
+`Invite` plain document that id names (§3), and a user's address lives only in
 Identity. Events are immutable, so personal data in them could never be corrected
 or erased; keeping it out removes the problem rather than managing it, and email
 changes stay an account matter instead of an event on every group the user is in.
 Cost accepted: the ledger cannot answer "which address was this invite sent to" —
-`InviteDelivery` can, for as long as it is kept.
+the `Invite` document can, for as long as it is kept (until the slot is claimed or
+re-invited).
 
 **Decision: invariants use only the stream; guards may use lookups.** An
 *invariant* protects the ledger and must always hold — "one user holds at most
 one slot per group" is keyed on `UserId`, enforced at claim time, inside the
 stream's transaction. A *guard* saves a person from a mistake that an invariant
 would otherwise reject later and less helpfully — "one address, one slot" at
-invite time is one. Guards may read data outside the stream (Identity,
-`InviteDelivery`), passed into `Decide` as looked-up command fields so deciding
-stays pure. Such lookups can be stale or race; the worst outcome is a mistake
-reaching the invariant, never a corrupt ledger.
+invite time is one. Guards may read data outside the stream (Identity, `Invite`
+documents), passed into `Decide` as looked-up command fields so deciding stays
+pure. Such lookups can be stale or race; the worst outcome is a mistake reaching
+the invariant, never a corrupt ledger.
+
+**One lookup does more than guard: claiming.** Which slot a user may claim is
+decided by address, and the address is not in the ledger — so AcceptInvite looks
+up the `Invite` documents addressed to the user and passes their ids into
+`Decide`. The lookup *proposes*; the stream *confirms*: a slot is claimed only if
+its current invite (its newest `MemberInvited`) is one of those ids, unclaimed and
+unexpired. A lookup still never supplies an event's values — `MemberClaimed`'s
+slot comes from the stream — but here it authorises them. That is the price of
+keeping addresses out of the ledger, and it is bounded: a stale or leftover
+document can only name an invite the stream has already retired.
 
 This resolves the creator's email and email changes together: InviteMember asks
 Identity which account *currently* owns the address and rejects it if that user
 holds a slot — the creator included, whatever address they use today — and
 rejects an address with an open invite on another slot. A changed-away address is
 free again; one still in use is caught early. Email change itself is not a v1
-feature (with magic links the address *is* the login), but nothing depends on that.
+feature (the address *is* the login), but nothing depends on that.
 
-**Invite links expire after 30 days, recorded as a deadline on the event:**
+**Invites expire after 30 days, recorded as a deadline on the event:**
 InviteMember decides `expiresAt = now + 30 days` (the clock passed in, so
-deciding stays pure) and `MemberInvited` carries it. A link is live while
-`now < expiresAt`. Enforced where the link is used (viewing and claiming); a link
-is retired earlier by re-inviting the slot or by the slot being claimed.
-Shortening the lifetime later affects only new invites — links already sent keep
+deciding stays pure) and `MemberInvited` carries it. An invite is live while
+`now < expiresAt`. Enforced where the invite is used (viewing and claiming); an
+invite is retired earlier by re-inviting the slot or by the slot being claimed.
+Shortening the lifetime later affects only new invites — invites already sent keep
 the deadline their email promised.
 
-**Invite links carry the token in the URL fragment** —
-`/invites/{groupId}#{token}`. Browsers never send a fragment to a server, so the
-token, a live secret for 30 days, stays out of reverse-proxy logs and server logs —
-no server-side component can log it even by accident, which is a structural
-guarantee where log scrubbing is a config that can regress. The landing page reads
-it client-side and sends it in a POST body. Prefetchers fetch the page without the
-fragment, so they consume nothing.
-
-What the fragment does **not** buy, lest anyone rely on it: the token is still kept
-in browser history and bookmarks, and synced to the browser account, exactly as a
-query string would be. `Referer` is a weak win too — fragments are never sent in
-it, but the default `strict-origin-when-cross-origin` policy already strips path and
-query cross-origin. Logs are the reason, and reason enough. Scripts that report
-`location.href` (analytics, error reporting) *do* see the fragment, so one must be
-scrubbed explicitly if ever added.
+**The invite email carries no secret.** It names the group, the slot and the
+inviter, and asks the invitee to sign in with the invited address; a plain link to
+the app is safe to prefetch, forward or log. (Reversed from an earlier design whose
+invite link carried a token in its URL fragment, to keep that secret out of server
+logs.)
 
 Transactions:
 ```
@@ -675,13 +690,12 @@ the truthful statement anyway.
 | `GroupLedger` | **inline** | members, live expenses, per-member balances |
 | `ActivityFeed` | **inline** | who did what, when |
 | `UserGroups` | **async** (multi-stream) | a user's group list |
-| `InviteReadModel` | **live** (folded on each request, nothing stored) | invite landing page: group, slot, inviter |
+| `PendingInvitesReadModel` | **live** (folded on each request, nothing stored) | a user's invites: group, slot, inviter |
 
-`InviteReadModel` is live deliberately — the third lifecycle. An invite link carries
-its group id (`/invites/{groupId}#{token}`), so looking one up means folding a
-single group stream of a few hundred events: cheap enough to do per request, and
-nothing is stored that could go stale. Scoping the link to the group is what
-makes this possible; a bare token would need a projection across every group.
+`PendingInvitesReadModel` is live deliberately — the third lifecycle. The user's
+`Invite` documents name their groups, so showing them means folding a handful of
+group streams of a few hundred events each: cheap enough to do per request, and
+nothing is stored that could go stale.
 
 Rationale for inline on the ledger: the core phone interaction is "add the
 expense, then immediately look at the balances". Inline projections commit in the
@@ -729,7 +743,7 @@ not from a shared class, so splitting the checks across slices weakens nothing.
   claimed again.
 - A user holds at most one member slot per group — otherwise their balance
   is ambiguous. Enforced by AcceptInvite against the stream alone, before
-  the invite token is even looked at; the stream version closes the race.
+  any invite is even looked at; the stream version closes the race.
 
 Two of these cut across nearly every slice — "not archived" and "is a current
 member". Each slice folds the few events involved itself. The duplication is a
@@ -756,6 +770,12 @@ learning; the reminder lives in `Slices/AddMember/Endpoint.cs`.
 event is fine. Renames and shape changes get a **new type** (`ExpenseRecordedV2`)
 plus a Marten upcaster from the old one. The old type is never deleted and never
 repurposed, and no event type name is ever reused for a different meaning.
+
+**The one exception, before any real data:** `MemberInvited` changed shape in
+place when invites moved from tokens to addresses (`tokenHash` → `inviteId`, §4).
+No stream outside development and tests held it, so their data was reset rather
+than a `MemberInvitedV2` and upcaster written for nothing. From the first real
+group on, the rule above holds without exception.
 
 ---
 
@@ -916,12 +936,14 @@ in place of `Decider.cs`, and no events.
 
 - **Wolverine does the fetch and the save.** `[WriteAggregate]` fetches the
   state with `FetchForWriting`; the endpoint returns `(IResult, Events)`, and
-  Wolverine appends the events at the version it read and saves. A read slice uses
-  `[ReadAggregate]`, which folds live. CreateGroup has no stream to fetch: it starts
-  one on the session, under `[Transactional]`.
+  Wolverine appends the events at the version it read and saves. A read slice over
+  one stream would use `[ReadAggregate]`, which folds live; View invites reads
+  several, chosen by a lookup, so it folds each itself with `AggregateStreamAsync`.
+  CreateGroup has no stream to fetch: it starts one on the session, under
+  `[Transactional]`.
 - **`Required = false` on every fetch:** a missing stream arrives as `null` and is
-  answered by `Decide` or `Read`, so "no such group" and "not a member" (or "dead
-  invite link") give the same response, body included.
+  answered by `Decide` or `Read`, so "no such group" and "not a member" (or
+  "invite not found") give the same response, body included.
 - **The group id comes from the route as a string**, resolved by the endpoint's
   `GroupStream` method (`FromMethod`). A malformed id becomes one no stream has,
   so it takes the unknown-group path. Wolverine's own typed-route parsing would
@@ -938,7 +960,8 @@ in place of `Decider.cs`, and no events.
 - **Side effects after the commit go in `AfterCommitAsync`.** InviteMember's email
   must only be sent once the invite is saved: the endpoint fills a `PendingEmail`
   (created by its `Load()`), and `AfterCommitAsync` sends it. Wolverine's `After`
-  runs *before* the commit, and would email a dead link when the save loses a race.
+  runs *before* the commit, and would email an invite that was never saved when the
+  save loses a race.
 - **Event types are registered with explicit stored names** (`group_created`),
   so a class or folder rename can never change what is in the database.
 - **Naming: every slice folds a `State`; a read slice's output is its read model.**
@@ -946,10 +969,10 @@ in place of `Decider.cs`, and no events.
   decides against, or what a read slice reads from (Emmett likewise uses
   `evolve`/state for both). A state-read slice's `Reader` then turns its `State`
   into the **read model** named in `event-model.yaml`, which is exactly what the
-  screen receives, named `<Thing>ReadModel` (e.g. `InviteReadModel`). The two
-  differ whenever the answer depends on query inputs: ViewInvite's state holds
-  every open invite, hash and deadline; its read model is the one invite a token
-  selects, at the current time. Event Modeling draws only the events and the read
+  screen receives, named `<Thing>ReadModel` (e.g. `PendingInvitesReadModel`). The
+  two differ whenever the answer depends on query inputs: View invites folds each
+  invited group's state — every open invite, its id and deadline; its read model is
+  only the invites the user's address selects, at the current time. Event Modeling draws only the events and the read
   model — the state in between is an implementation detail. "View" is not used in
   code: Event Modeling and Marten use it as a synonym for read model, so a type
   named `View` that is *not* the read model invites confusion (tried briefly, and
@@ -997,7 +1020,7 @@ in place of `Decider.cs`, and no events.
 
 **Decision: `GroupId`, `MemberId` and `UserId` are distinct types, in code and in
 `event-model.yaml`** — `readonly record struct`s wrapping a `Guid`, hand-written in
-`Shared/Ids.cs`. Later: `ExpenseId`, `SettlementId`.
+`Shared/Ids.cs`, plus `InviteId`. Later: `ExpenseId`, `SettlementId`.
 
 Rationale: events carry several ids side by side — `MemberClaimed(memberId,
 userId)`, later `MemberClaimReleased(memberId, userId, releasedBy)` and an
@@ -1159,21 +1182,22 @@ appears from nowhere.
 
 - **Screens** list their `inputs:` — what the user types or picks — and their
   `context:` — what the screen already holds: the group being viewed, the slot
-  tapped, the token from a link.
+  or invite tapped.
 - **Command fields** carry `source:`, classified by **trust**, not transport:
   - `client` (the default) — sent by the caller, typed or held by the screen.
     Untrusted: deciding validates it.
-  - `system` — supplied by the server: the signed-in user, the clock, new ids
-    and tokens.
+  - `system` — supplied by the server: the signed-in user, the clock, new ids.
   - `stream` — derived by deciding, from the folded stream. Trusted and
     consistent: the only kind an invariant may rest on.
   - `lookup` — read from outside the stream (Identity, plain documents). Trusted
-    but possibly stale: it may feed guards, never an event field.
+    but possibly stale: it may feed guards, or propose candidates that deciding
+    confirms against the stream (§11), but never an event field. A State Read
+    slice's query may use lookups too: View invites finds its groups that way.
 
   `stream` vs `lookup` is the invariants-vs-guards line of §11, made visible.
   Route vs body vs link fragment is transport, not model: it is recorded in the
-  slice's `.md` and enforced in code (e.g. invite tokens only ever travel in a
-  fragment or a body, never a URL path). The id that selects the stream is not a
+  slice's `.md` and enforced in code (e.g. a sign-in code only ever travels in a
+  body, never a URL). The id that selects the stream is not a
   command or query field either: it comes from the screen's `context`, and the
   stream is fetched before deciding (by Wolverine, §12), so deciding receives the
   group as its folded state rather than as an input.
@@ -1270,23 +1294,10 @@ a documentation tool, not application code.
 ## 14. Open questions
 
 - **OPEN** Frontend framework and rendering approach. Deferred deliberately.
-  Whatever is chosen, the invite flow needs this behaviour (decided with AcceptInvite):
-  - **Keep the invite token across sign-in in `localStorage`**, not
-    `sessionStorage`: a magic link tapped in a webmail tab opens a *new* tab, where
-    `sessionStorage` is empty. Store it with a timestamp; clear it after the claim,
-    or after a few hours, so it does not linger on a shared device.
-  - **Losing it must be harmless, not impossible.** A sign-in link opened in a mail
-    app's in-app browser, or on another device, defeats every client-side store,
-    cookies included. So: when the landing page (ViewInvite) finds the user already
-    signed in, it offers **"Join as Bob"** directly — tapping the invite link again
-    always recovers, with no second sign-in.
-  - **Steer towards the six-digit code** on the landing page: typing it keeps the
-    user in the same tab, so the stored token survives.
-  - Rejected: exchanging the token for a short-lived `HttpOnly` cookie scoped to
-    sign-up and claim. Its only gain over `localStorage` is hiding the token from
-    injected script — which could call the claim endpoint with the session anyway
-    — and it fixes no case `localStorage` does not, at the cost of a new endpoint,
-    a protected cookie and its expiry.
+  Sign-in and joining need no state carried between pages or tabs: the user types
+  an address, then the code, in the same page; after signing in they land on their
+  invites. (An earlier link-based design had to keep an invite token across sign-in
+  in `localStorage`; codes and address-matched invites removed that.)
 - **OPEN** Enforce consistency between `event-model.yaml` and the code, failing
   the build on any mismatch, so the model cannot drift from the code (§12, §13).
   For every non-draft slice:
@@ -1349,7 +1360,7 @@ a documentation tool, not application code.
     field order. Possibly positional in the source, checked against declared field
     order.
   - **Symbolic values:** ids and actors (`g1`, `m2`, `alice`), system-supplied
-    values (new ids, `now`, generated tokens and their hashes), and placeholders
+    values (new ids, `now`), and placeholders
     such as `<51 characters>` — what each one means and how a test turns it into
     a real value.
   - **Shared givens:** the "unless stated otherwise" background, and extending it
@@ -1362,41 +1373,26 @@ a documentation tool, not application code.
     alignment). Either the generator ignores them, or it renders them separately.
   Once the format is settled, move every non-draft slice in one go. Slices refined
   after that write their specs straight into the YAML.
-- **DEFERRED** Transactional outbox for emails. Invite (and later sign-in) emails
-  are sent after the save, best-effort: a transient relay failure loses the email,
-  though the invite stands and its link is in the response. An outbox would record
-  "send this email" in the same transaction as the event and the `InviteDelivery`
-  document, and a background worker would deliver and retry it — `InviteDelivery`
-  is the natural place for delivery status. Revisit with the choice of relay
-  (§4). Wolverine's durable outbox does exactly this, but it runs in mediator-only
-  mode today (no inbox/outbox); adopting it means switching durability mode, and
-  the email becomes a message handled after the commit.
-  - **Superseded invites:** `InviteDelivery.TokenHash` keys a delivery to its
-    `MemberInvited` event, so the worker can skip a pending delivery whose invite
-    has since been replaced by a re-invite rather than send a dead link.
-  - **The raw token must survive until sending.** The email carries the link, the
-    link carries the raw token, and today the raw token exists only in memory
-    during the request. An outbox sends later, so it must hold the token until
-    then. Options: store it in the outbox entry and delete it once sent (a
-    short-lived secret at rest); store it encrypted with ASP.NET Data Protection,
-    whose key ring is already in Postgres (§4); or generate the token at send time
-    and record its hash then — which would mean the response can no longer return
-    the link, reversing InviteMember's "emailed *and* returned" decision.
+- **DEFERRED** Transactional outbox for emails. Invite and sign-in emails are
+  sent after the commit, best-effort: a transient relay failure loses the email,
+  though the invite stands (the invitee can sign in with the address regardless)
+  and a sign-in code can be requested again. An outbox would record "send this
+  email" in the same transaction as the event and the `Invite` document, and a
+  background worker would deliver and retry it — `Invite` is the natural place for
+  delivery status. Revisit with the choice of relay (§4). Wolverine's durable
+  outbox does exactly this, but it runs in mediator-only mode today (no
+  inbox/outbox); adopting it means switching durability mode, and the email becomes
+  a message handled after the commit. A superseded invite needs no special care:
+  the worker can check its `Invite` still exists before sending.
 - **DEFERRED** Completeness inside composite read model types (`Member[]`), and
   checking that a screen's `context` is fed by a read model — both with
   ViewBalances' `GroupLedger` (§13).
-- **DEFERRED** Rate limiting the unauthenticated invite lookup
-  (`POST /api/invites/{group}/lookup`, ViewInvite). Guessing a 256-bit token is
-  hopeless, but each request folds a group stream, so the endpoint is a cheap way
-  to load the server. Add ASP.NET's per-IP rate limiter together with the
-  sign-in endpoints (§4), so one limiter policy is designed for both.
-- **DEFERRED** Invite-aware sign-in, if cross-device sign-up proves common. The
-  sign-in request would optionally carry the invite (`groupId` + token), and the
-  magic-link email would carry it on in its fragment, so signing in completes the
-  claim on whichever device opens that email — the one option that survives a
-  change of browser or device. Costs: the invite token travels in a second email,
-  and the sign-in endpoint gains an invite-aware path. Until then, re-tapping the
-  invite link while signed in recovers (see the frontend item above).
+- **DEFERRED** Email change, several addresses per account, and account merging.
+  An account *is* its address (§4), and invites are claimed by address — so an
+  invite to an old or second address can today only be fixed by re-inviting. A
+  signed-in user proving a second address (with a code sent to it) would let them
+  claim invites sent there, but raises the rest: which address signs in, what
+  happens when two accounts turn out to be one person.
 - **DEFERRED** Transactional relay — shortlisted in §4; `LogEmailSender` until then.
 - **DEFERRED** `PeriodClosed` / stream archival, until a stream is actually long.
 - **OPEN** Wolverine in production. `AutoCreate.None` covers Marten's schema but

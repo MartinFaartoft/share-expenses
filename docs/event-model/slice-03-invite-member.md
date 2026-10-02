@@ -5,30 +5,32 @@ Type: **State Change**. Screen → command → events.
 | | |
 |---|---|
 | Screen | Invite member (modelled; no frontend yet) |
-| Command | `InviteMember(memberId, email, tokenHash, now, by)` + looked up: `emailHolder`, `invitedTo` |
+| Command | `InviteMember(memberId, email, inviteId, now, by)` + looked up: `emailHolder`, `invitedTo` |
 | Events | `MemberInvited` |
-| Also writes | `InviteDelivery` — plain document, the address the invite went to |
+| Also writes | `Invite` — plain document binding the slot to the address |
 | Code | `src/ShareExpenses/Slices/InviteMember/` |
-| Endpoint | `POST /api/groups/{group}/members/{memberId}/invite` |
+| Endpoint | `POST /api/groups/{group}/members/{memberId}/invite` — 204, no body |
 
-Issues a link that lets whoever holds it claim one member slot (spec §4: the
-invite binds the slot, and the token is the capability), and emails it. The link
-is also returned in the response, so it can be shared in a group chat.
+Invites an email address to one member slot (spec §4: the invite binds the slot).
+Whoever signs in with that address — proving they control it, with a code sent to
+it — may claim the slot (AcceptInvite). The invite email carries no secret: it
+names the group, the slot and the inviter, and asks the invitee to sign in with
+the invited address.
 
 **No email address enters the ledger.** `MemberInvited` records the slot, the
-token's hash and the actor. The address goes into `InviteDelivery`, a plain,
-erasable document (spec §3, §11).
+invite's id and the actor. The address is on the `Invite` document the id names —
+plain, erasable supporting state (spec §3, §11).
 
 ## Specifications
 
 Scenarios run against group `g1`'s stream. The group only selects the stream, so it
 is not a command field (spec §13).
 
-`h0`, `h1` are hashes of pinned tokens. Every command is issued at `t0`, so a new
-invite's deadline is `t0+30d`; `…` is an earlier invite's deadline, which deciding
-never reads. Lookups are written `WITH`: they come from
-outside the stream (Identity, and `InviteDelivery`) and feed guards, not
-invariants. Unless stated otherwise, every scenario starts from:
+`i0`, `i1` are invite ids; `i1` is the new invite's, chosen by the endpoint. Every
+command is issued at `t0`, so a new invite's deadline is `t0+30d`; `…` is an
+earlier invite's deadline, which deciding never reads. Lookups are written `WITH`:
+they come from outside the stream (Identity, and `Invite` documents) and feed
+guards, not invariants. Unless stated otherwise, every scenario starts from:
 
 ```
 GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
@@ -40,7 +42,7 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 ```
 1 - invites a placeholder member
     WHEN   InviteMember(m2, "bob@example.com", alice)
-    THEN   MemberInvited(m2, h1, t0+30d, alice)
+    THEN   MemberInvited(m2, i1, t0+30d, alice)
 
 2 - the group must exist
     GIVEN  (empty stream)
@@ -64,13 +66,13 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
     THEN   rejected - email is not a valid address
 
 7 - re-inviting replaces the previous invite
-    GIVEN  ... AND MemberInvited(m2, h0, …, alice)
+    GIVEN  ... AND MemberInvited(m2, i0, …, alice)
     WITH   invitedTo(bob@example.com) = {m2}
     WHEN   InviteMember(m2, "bob@example.com", alice)
-    THEN   MemberInvited(m2, h1, t0+30d, alice)
+    THEN   MemberInvited(m2, i1, t0+30d, alice)
 
 8 - an address with an open invite cannot be invited to another slot
-    GIVEN  ... AND MemberAdded(m3, "Bobby", alice) AND MemberInvited(m2, h0, …, alice)
+    GIVEN  ... AND MemberAdded(m3, "Bobby", alice) AND MemberInvited(m2, i0, …, alice)
     WITH   invitedTo(bob@example.com) = {m2}
     WHEN   InviteMember(m3, "BOB@example.com", alice)
     THEN   rejected - that email is already invited as Bob
@@ -88,21 +90,21 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
     THEN   rejected - alice@example.com has already joined as Alice
 
 11 - an invite to a slot since claimed no longer holds its address
-    GIVEN  ... AND MemberInvited(m2, h0, …, alice) AND MemberClaimed(m2, bob)
+    GIVEN  ... AND MemberInvited(m2, i0, …, alice) AND MemberClaimed(m2, bob)
            AND MemberAdded(m3, "Bobby", alice)
     WITH   invitedTo(bob@example.com) = {m2}, emailHolder(bob@example.com) = none
     WHEN   InviteMember(m3, "bob@example.com", alice)
-    THEN   MemberInvited(m3, h1, t0+30d, alice)
+    THEN   MemberInvited(m3, i1, t0+30d, alice)
 
 12 - an account outside the group is no obstacle
     WITH   emailHolder(carol@example.com) = carol
     WHEN   InviteMember(m2, "carol@example.com", alice)
-    THEN   MemberInvited(m2, h1, t0+30d, alice)
+    THEN   MemberInvited(m2, i1, t0+30d, alice)
 ```
 
-Scenario 11 is the "Bob changed his address" case: his account no longer answers
-to bob@example.com, so the old address is free. Had he not changed it, scenario 9
-would apply.
+Scenario 11 is a stale lookup: claiming deletes the slot's `Invite`, so normally
+`invitedTo` would already be empty. Deciding ignores invites to claimed slots
+either way.
 
 ## Notes
 
@@ -112,32 +114,35 @@ would apply.
   mistake that the claim would otherwise reject later, on the invitee's side. Guards
   may use data from outside the stream (spec §11); a stale lookup can only let a
   mistake through to claim time, never corrupt the ledger.
-- **Lookups:** `emailHolder` is the account whose *current* address this is
-  (Identity, case-insensitive); `invitedTo` is the slots whose latest
-  `InviteDelivery` went to this address (case-insensitive). Deciding ignores
-  deliveries for slots that have since been claimed.
+- **Lookups:** `emailHolder` is the account whose address this is (Identity,
+  case-insensitive); `invitedTo` is the slots whose `Invite` is addressed to it
+  (case-insensitive). Deciding ignores invites for slots that have since been
+  claimed.
 - **Order of checks:** membership, then the slot, then the email. A non-member
   gets `group not found` whatever else is wrong. Over HTTP: 404 for a missing
   group, a non-member and a malformed group id alike; `member not found` (404)
   only once membership is established.
-- **The token.** 32 random bytes, base64url. Only its SHA-256 (`tokenHash`) is
-  recorded; the raw token exists in the response and the email, nowhere else. The
-  link is `{App:PublicOrigin}/invites/{groupId}#{token}`: the token rides in the
-  URL *fragment*, which browsers never send to a server, so it stays out of proxy
-  logs and `Referer` headers. The landing page reads it client-side and posts it
-  (ViewInvite).
+- **The `Invite` document** — `{ id, groupId, memberId, email }`, one per slot —
+  is written in the same transaction as `MemberInvited`, and its id is the event's
+  `inviteId`. Re-inviting replaces the slot's document; claiming deletes it.
+- **Why the event names the invite.** The stream, not the document, decides which
+  invite is a slot's current one: the newest `MemberInvited`. A document that
+  survives when it should not — restored from a backup, or left behind by a bug —
+  names an invite the stream has superseded, and claims nothing.
 - **Email** is trimmed and kept in its original case. "Plausibly an email": at
   most 254 characters, exactly one `@` with something on both sides, no
-  whitespace. Real validation is delivery.
+  whitespace. Real validation is delivery — and now, signing in with it.
 - **Expiry** is decided here and recorded: `expiresAt = now + 30 days`, on the
   event (spec §11). It is a deadline, a domain fact — not the append time, which
   stays Marten metadata. Changing the lifetime later never moves the deadline of
-  links already sent. It is *enforced* where the link is used (ViewInvite and AcceptInvite).
-- **Re-inviting** overwrites the slot's `InviteDelivery` and retires the previous
-  link: the newest `MemberInvited` for a slot is the live one.
-- **Email is sent after the save.** If sending fails, the response is still 200
-  with the link and the failure is logged. A transactional outbox would make
-  delivery retry on transient failures (spec §14, DEFERRED).
+  invites already sent. It is *enforced* where the invite is used (View invites and
+  AcceptInvite).
+- **The email is sent after the commit**, and only if it succeeded. If sending
+  fails, the response is still 204 and the failure is logged: the invite stands,
+  and the invitee can sign in with the address regardless. A transactional outbox
+  would make delivery retry on transient failures (spec §14, DEFERRED).
+- **The email has no secret to leak.** It links to the app; anyone may open it,
+  and only the invited address can sign in and claim.
 
 ## Deferred to the slices that introduce the events
 

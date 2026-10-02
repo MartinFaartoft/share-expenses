@@ -21,12 +21,12 @@ FIELDS AND WHERE THEIR VALUES COME FROM (information completeness)
   slice emits it, so that is written on the emitting slice's command instead.
     screen            `inputs:` what the user types or picks;
                       `context:` what the screen already holds (the group being
-                      viewed, the slot tapped, the token from a link)
+                      viewed, the slot or invite tapped)
     command fields    `source`, by trust: client (default), system, stream, lookup;
                       `feeds`: event fields it fills beyond the same-named ones
                       (a field always feeds same-named fields of emitted events)
     read model fields `source`: the events the field is built from
-    State Read query  `query:` {input: {type, source}}, source client or system.
+    State Read query  `query:` {input: {type, source}}, source client, system or lookup.
                       Drawn on the read model card as `> input: Type (tag)`
   Checks look BACKWARD only - every value used is available from a step before
   it: every event field is fed by exactly one command field of the same type
@@ -82,7 +82,7 @@ RENDERABLE = (STATE_CHANGE, STATE_READ)
 #   lookup  read from outside the stream (Identity, plain documents) - trusted but
 #           possibly stale, so it may feed guards only, never an event field
 COMMAND_SOURCES = ("client", "system", "stream", "lookup")
-QUERY_SOURCES = ("client", "system")
+QUERY_SOURCES = ("client", "system", "lookup")
 # the keys a field mapping may carry, per element kind
 FIELD_KEYS = {
     "command": {"type", "source", "feeds"},

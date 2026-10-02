@@ -15,8 +15,6 @@ namespace ShareExpenses.Slices.InviteMember;
 // Public: Wolverine generates code against the endpoint's signature (spec §12).
 public sealed record Request(string? Email);
 
-internal sealed record Response(string Link);
-
 /// <summary>
 /// The invite email, carried from the endpoint (which knows what to say, but runs
 /// before the save) to <see cref="Endpoint.AfterCommitAsync"/> (which runs only once
@@ -27,14 +25,15 @@ public sealed class PendingEmail
     internal InviteEmail? Email { get; set; }
 }
 
+/// <param name="AppLink">Where to sign in. Carries no secret: only the invited address can claim (spec §4).</param>
 internal sealed record InviteEmail(
-    GroupId GroupId, MemberId MemberId, string To, string Link, string GroupName, string InviterName, string MemberName);
+    GroupId GroupId, MemberId MemberId, string To, string AppLink, string GroupName, string InviterName, string MemberName);
 
 /// <summary>
 /// <c>POST /groups/{group}/members/{memberId}/invite</c> — the Invite member screen's submit.
 ///
 /// Wolverine fetches the group (<c>FetchForWriting</c>), runs <see cref="Post"/>,
-/// appends the returned events, saves — the event and the <see cref="InviteDelivery"/>
+/// appends the returned events, saves — the event and the <see cref="Invite"/>
 /// document in one transaction — and only then runs <see cref="AfterCommitAsync"/>.
 /// </summary>
 public static class Endpoint
@@ -70,39 +69,36 @@ public static class Endpoint
     {
         var groupId = GroupStream(group);
         var member = MemberId.TryParse(memberId, out var parsed) ? parsed : MemberId.From(Guid.Empty);
-        var (token, tokenHash) = InviteToken.Generate();
-        var email = Decider.NormaliseEmail(request.Email);
+        var email = EmailAddress.Trim(request.Email);
 
         // Lookups for the guards (spec §11): outside the stream, possibly stale.
         var emailHolder = email.Length > 0 ? await directory.AccountFor(email, ct) : null;
-        var invitedTo = await SlotsInvitedAt(session, groupId, email, ct);
+        var invitedTo = (await Invite.AddressedTo(session, email, groupId, ct)).Select(i => i.MemberId).ToHashSet();
 
         var command = new Command(
-            member, request.Email, tokenHash, clock.GetUtcNow(), user.UserId(),
+            member, request.Email, InviteId.New(), clock.GetUtcNow(), user.UserId(),
             EmailHolder: emailHolder, InvitedTo: invitedTo);
 
         switch (Decider.Decide(state, command))
         {
             case Decision.Accepted accepted:
-                // Same session, same transaction as the event.
-                session.Store(new InviteDelivery
+                // Same session, same transaction as the event: one Invite per slot, so
+                // re-inviting replaces the slot's previous one.
+                session.DeleteWhere<Invite>(i => i.GroupId == groupId && i.MemberId == command.MemberId);
+                session.Store(new Invite
                 {
-                    Id = command.MemberId.Value,
+                    Id = command.InviteId.Value,
                     GroupId = groupId,
-                    TokenHash = command.TokenHash,
+                    MemberId = command.MemberId,
                     Email = email,
+                    NormalizedEmail = EmailAddress.Normalize(email),
                 });
-
-                // The token goes in the fragment: browsers never send it to a server,
-                // so it stays out of proxy and server logs. Not out of browser history or
-                // bookmarks — a fragment is stored and synced like any other part of a URL.
-                var link = $"{origin.For(http.Request)}/invites/{groupId}#{token}";
 
                 // Accepted implies the actor is a member and the slot exists.
                 pending.Email = new InviteEmail(
-                    groupId, command.MemberId, email, link,
+                    groupId, command.MemberId, email, $"{origin.For(http.Request)}/",
                     state!.GroupName, state.Slots[state.Members[command.By]].Name, state.Slots[command.MemberId].Name);
-                return (Results.Ok(new Response(link)), [.. accepted.Events]);
+                return (Results.NoContent(), [.. accepted.Events]);
             case Decision.Rejected { Kind: Rejection.NotFound } rejected:
                 return (Results.Problem(rejected.Reason, statusCode: StatusCodes.Status404NotFound), []);
             case Decision.Rejected rejected:
@@ -114,8 +110,8 @@ public static class Endpoint
 
     /// <summary>
     /// After the save, and only if it succeeded: the invite has happened whether or
-    /// not the email arrives, and the link is in the response either way. A failure
-    /// is logged, not returned.
+    /// not the email arrives — the invitee can sign in with the address regardless.
+    /// A failure is logged, not returned.
     /// </summary>
     public static async Task AfterCommitAsync(
         PendingEmail pending, IEmailSender sender, ILogger<PendingEmail> logger, CancellationToken ct)
@@ -125,11 +121,11 @@ public static class Endpoint
 
         try
         {
-            await sender.SendInviteAsync(email.To, email.Link, email.GroupName, email.InviterName, email.MemberName, ct);
+            await sender.SendInviteAsync(email.To, email.AppLink, email.GroupName, email.InviterName, email.MemberName, ct);
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
-            // Never the link: it carries the token, which must stay out of logs (spec §11).
+            // Ids, not the address: personal data stays out of logs.
             logger.LogError(e,
                 "Invite to group {GroupId} for member {MemberId} was recorded, but its email could not be sent",
                 email.GroupId, email.MemberId);
@@ -142,20 +138,4 @@ public static class Endpoint
         Status = StatusCodes.Status409Conflict,
         Detail = "the group changed while you were inviting; please try again",
     };
-
-    /// <summary>Slots in the group whose latest invite went to this address (case-insensitive).</summary>
-    private static async Task<IReadOnlySet<MemberId>> SlotsInvitedAt(
-        IDocumentSession session, GroupId groupId, string email, CancellationToken ct)
-    {
-        if (email.Length == 0)
-            return new HashSet<MemberId>();
-
-        // A group has a handful of deliveries; compare in memory rather than lean on
-        // database collation for case-insensitivity.
-        var deliveries = await session.Query<InviteDelivery>().Where(d => d.GroupId == groupId).ToListAsync(ct);
-        return deliveries
-            .Where(d => string.Equals(d.Email, email, StringComparison.OrdinalIgnoreCase))
-            .Select(d => MemberId.From(d.Id))
-            .ToHashSet();
-    }
 }

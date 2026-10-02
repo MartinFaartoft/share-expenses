@@ -1,5 +1,6 @@
 using JasperFx;
 using Marten;
+using ShareExpenses.Infrastructure.Invites;
 using ShareExpenses.Infrastructure.Wolverine;
 using ShareExpenses.Shared;
 using Wolverine.Marten;
@@ -32,6 +33,10 @@ public static class MartenSetup
                 opts.RegisterValueType(typeof(GroupId));
                 opts.RegisterValueType(typeof(MemberId));
                 opts.RegisterValueType(typeof(UserId));
+                opts.RegisterValueType(typeof(InviteId));
+
+                // Supporting state shared by slices (spec §3).
+                Invite.Register(opts);
 
                 // Event types and projections belong to the slices that own them.
                 AllSlices.Register(opts);

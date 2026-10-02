@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using Marten;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,6 +40,22 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
         await _postgres.DisposeAsync();
     }
 
+    /// <summary>
+    /// An account for <paramref name="email"/>, as signing in with a code would create
+    /// it — so its address counts as verified (spec §4). Tests then act as it with
+    /// <see cref="ClientFor"/>, without going through sign-in.
+    /// </summary>
+    public async Task<ShareExpenses.Shared.UserId> AccountFor(string email)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+        var user = new User { Id = Guid.CreateVersion7(), UserName = email, Email = email, EmailConfirmed = true };
+        var result = await users.CreateAsync(user);
+        if (!result.Succeeded)
+            throw new InvalidOperationException(string.Join("; ", result.Errors.Select(e => e.Description)));
+        return ShareExpenses.Shared.UserId.From(user.Id);
+    }
+
     public HttpClient ClientFor(ShareExpenses.Shared.UserId userId)
     {
         var client = CreateClient();
@@ -62,6 +79,9 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
     {
         builder.UseEnvironment("Development");
         builder.UseSetting("ConnectionStrings:Postgres", _postgres.GetConnectionString());
+        // Every test request comes from the same (absent) client IP: lift that limit;
+        // the sign-in tests check the per-address limits instead.
+        builder.UseSetting("SignIn:RequestsPerIp", "100000");
         builder.ConfigureTestServices(services =>
         {
             services.AddAuthentication(HeaderAuthentication.SchemeName)

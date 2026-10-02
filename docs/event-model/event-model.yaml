@@ -41,20 +41,21 @@
 #   Shapes are declared once, like every element.  Sources sit on the field:
 #     screen      `inputs:`  - what the user types or picks
 #                 `context:` - what the screen already holds: the group being
-#                              viewed, the slot tapped, the token from a link
+#                              viewed, the slot or invite tapped
 #     command     `source:` by trust -
 #                   client  sent by the caller: typed, or held by the screen (default)
 #                   system  supplied by the server: signed-in user, clock, new ids
 #                   stream  derived by deciding, from the folded stream
 #                   lookup  read from outside the stream, e.g. Identity; stale-able,
-#                           so it may feed guards only, never an event field
+#                           so it never feeds an event field: it may feed guards, or
+#                           propose candidates that deciding confirms against the stream
 #                 `feeds:`  [Event.field, ...] - event fields it fills that are
 #                           NOT already same-named (same name feeds implicitly)
 #     event       a type only.  Where an event's values come from depends on the
 #                 slice emitting it, so that lives on that slice's command.
 #     read model  `source:` [Event, ...] - the events the field is built from
 #     query       on a State Read slice: `query:` {input: {type, source}},
-#                 source client or system
+#                 source client, system or lookup
 #   The generator checks BACKWARD only - every value used is available from a
 #   step before it: every event field is fed by exactly one command field of the
 #   same type; every client value is an input or context of its screen; every
@@ -143,50 +144,46 @@ slices:
       name: InviteMember
       fields:
         memberId: MemberId
-        # no email in the ledger: it goes to an erasable plain document and the email
+        # no email in the ledger: it goes to the erasable Invite document, and the email
         email: string
-        # SHA-256 of a random token generated per invite; the raw token is
-        # returned and emailed once, and recorded nowhere
-        tokenHash: { type: string, source: system }
-        # the clock; the link's deadline is decided now and recorded: now + 30 days
+        # names the Invite document that binds this slot to the address
+        inviteId: { type: InviteId, source: system }       # new id
+        # the clock; the invite's deadline is decided now and recorded: now + 30 days
         now: { type: DateTimeOffset, source: system, feeds: [MemberInvited.expiresAt] }
         by: { type: UserId, source: system }               # the signed-in user
         # guards (spec §11): may be stale; the claim enforces one user, one slot
         emailHolder: { type: "UserId?", source: lookup }     # Identity: account with this email
-        invitedTo: { type: "MemberId[]", source: lookup }    # InviteDelivery: slots invited at it
+        invitedTo: { type: "MemberId[]", source: lookup }    # Invite: slots invited at it
     events:
       - name: MemberInvited
         fields:
           memberId: MemberId
-          tokenHash: string
+          inviteId: InviteId
           expiresAt: DateTimeOffset
           by: UserId
 
-  - slice: View invite
+  - slice: View invites
     type: State Read
     screen:
-      name: Invite landing
+      name: Your invites
       context:
-        groupId: GroupId
-        token: string                                      # from the link's fragment
+        groupId: GroupId                                   # the invite tapped
       wireframe:
         - "Alice invited you to"
         - "Lisbon trip as Bob"
-        - ""
-        - "  [ Sign me in ]"
+        - "            [ Join ]"
     query:
-      token: string                                        # matched against tokenHash
+      userId: { type: UserId, source: system }             # the signed-in user
+      # Invite documents addressed to the user's (verified) account email
+      invites: { type: "InviteId[]", source: lookup }
       now: { type: DateTimeOffset, source: system }        # live while now < expiresAt
     readModel:
-      # live: folded from the one group stream named in the link, per request.
-      # Shows an invite only if its token matches and it is open and unexpired;
-      # anything else is a plain "not found".
-      name: InviteReadModel
+      # live: each invited group's stream is folded per request. An invite shows
+      # only while it is its slot's current one, unclaimed and unexpired, in a
+      # group the user is not already in.
+      name: PendingInvitesReadModel
       fields:
-        groupName: { type: string, source: [GroupCreated] }
-        memberName: { type: string, source: [MemberAdded] }
-        # MemberInvited.by -> the inviter's claim -> that slot's name
-        invitedBy: { type: string, source: [MemberInvited, MemberClaimed, MemberAdded] }
+        invites: { type: "PendingInvite[]", source: [GroupCreated, MemberAdded, MemberInvited, MemberClaimed] }
       reads:
         - GroupCreated
         - MemberAdded
@@ -195,22 +192,16 @@ slices:
 
   - slice: Accept invite
     type: State Change
-    screen:
-      name: Sign in / claim
-      context:
-        groupId: GroupId
-        token: string                                      # kept from the link across sign-in
-      wireframe:
-        - "  [ Sign me in ]"
-        - ""
-        - "(sign in, then join)"
+    screen: Your invites
     command:
       name: AcceptInvite
       fields:
-        token: string                                      # matched against open invites
         now: { type: DateTimeOffset, source: system }      # the clock: now < expiresAt
         userId: { type: UserId, source: system }           # the signed-in user, claiming
-        # the slot whose open, unexpired invite the token matches - found by deciding
+        # Invite documents in this group addressed to the user's account email: they
+        # propose; the stream decides which, if any, is a slot's current open invite
+        invitedAs: { type: "InviteId[]", source: lookup }
+        # the slot whose current, unexpired invite is one of those - found by deciding
         memberId: { type: MemberId, source: stream }
     events: [MemberClaimed]
 

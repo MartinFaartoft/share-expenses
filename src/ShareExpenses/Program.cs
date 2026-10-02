@@ -14,6 +14,7 @@ var connectionString = builder.Configuration.GetConnectionString("Postgres")
 builder.Services.AddLedgerStore(connectionString, builder.Environment);
 builder.Services.AddPasswordlessIdentity(connectionString, builder.Environment);
 builder.Services.AddPublicOrigin(builder.Configuration, builder.Environment);
+builder.Services.AddSignIn(builder.Configuration);
 builder.AddWolverineEndpoints();
 
 // The clock, injected so time-dependent decisions (invite deadlines) stay testable.
@@ -25,11 +26,12 @@ await app.MigrateIdentityInDevelopmentAsync();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 // Slice endpoints: discovered by Wolverine, under /api. To list them:
 //   dotnet run --project src/ShareExpenses -- describe
 app.MapWolverineEndpoints();
-app.MapDevSignIn();
+app.MapSignIn();
 
 app.MapGet("/health", async (IQuerySession marten, IdentityDb identity, CancellationToken ct) =>
 {
