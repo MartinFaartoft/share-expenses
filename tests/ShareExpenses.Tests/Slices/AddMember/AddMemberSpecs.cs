@@ -36,7 +36,7 @@ public class AddMemberSpecs
 
     private DecideSpec<Command> Spec => new((history, command) => Decider.Decide(Fold.Of<State>(history), command, _next));
 
-    private static Command AddMember(string? displayName, UserId by) => new(G1, displayName, by);
+    private static Command AddMember(string? displayName, UserId by) => new(displayName, by);
 
     [Fact]
     public void S1_adds_a_placeholder_member_by_name_alone() =>

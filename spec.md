@@ -1173,7 +1173,10 @@ appears from nowhere.
   `stream` vs `lookup` is the invariants-vs-guards line of §11, made visible.
   Route vs body vs link fragment is transport, not model: it is recorded in the
   slice's `.md` and enforced in code (e.g. invite tokens only ever travel in a
-  fragment or a body, never a URL path).
+  fragment or a body, never a URL path). The id that selects the stream is not a
+  command or query field either: it comes from the screen's `context`, and the
+  stream is fetched before deciding (by Wolverine, §12), so deciding receives the
+  group as its folded state rather than as an input.
 - **`feeds:`** lists the event fields a command field fills; a field always feeds
   same-named fields of the events its slice emits, so `feeds` lists only the
   exceptions (`createdBy` → `MemberAdded.by`).
@@ -1195,7 +1198,7 @@ read model reads. Misspelled keys and unknown sources are errors; a source on an
 event field is an error that explains why.
 
 Whether a value is *used* afterwards is deliberately not checked: a command field
-that feeds no event (a stream selector, an address for an email) is legitimate,
+that feeds no event (an address for an email, a guard's lookup) is legitimate,
 and declaring every such use (`stream: true`, `uses:`) was tried and dropped as
 bookkeeping that caught nothing. Each rule was confirmed to fire by mutating a
 copy of the model (`generate.py --check <copy>`).
@@ -1383,7 +1386,7 @@ a documentation tool, not application code.
   checking that a screen's `context` is fed by a read model — both with
   ViewBalances' `GroupLedger` (§13).
 - **DEFERRED** Rate limiting the unauthenticated invite lookup
-  (`POST /api/invites/{groupId}/lookup`, ViewInvite). Guessing a 256-bit token is
+  (`POST /api/invites/{group}/lookup`, ViewInvite). Guessing a 256-bit token is
   hopeless, but each request folds a group stream, so the endpoint is a cheap way
   to load the server. Add ASP.NET's per-IP rate limiter together with the
   sign-in endpoints (§4), so one limiter policy is designed for both.

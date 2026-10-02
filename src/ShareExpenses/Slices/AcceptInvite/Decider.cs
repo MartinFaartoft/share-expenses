@@ -7,7 +7,7 @@ namespace ShareExpenses.Slices.AcceptInvite;
 /// <param name="Token">From the invite link's fragment, posted in the body.</param>
 /// <param name="Now">The clock, passed in so deciding stays pure and testable.</param>
 /// <param name="UserId">The signed-in user, claiming.</param>
-internal sealed record Command(GroupId GroupId, string? Token, DateTimeOffset Now, UserId UserId);
+internal sealed record Command(string? Token, DateTimeOffset Now, UserId UserId);
 
 /// <summary>Specs: <c>docs/event-model/slice-05-claim-member.md</c>.</summary>
 internal static class Decider

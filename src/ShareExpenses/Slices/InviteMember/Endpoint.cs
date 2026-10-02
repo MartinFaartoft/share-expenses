@@ -74,11 +74,12 @@ public static class Endpoint
         var email = Decider.NormaliseEmail(request.Email);
 
         // Lookups for the guards (spec §11): outside the stream, possibly stale.
-        var command = new Command(groupId, member, request.Email, tokenHash, clock.GetUtcNow(), user.UserId())
-        {
-            EmailHolder = email.Length > 0 ? await directory.AccountFor(email, ct) : null,
-            InvitedTo = await SlotsInvitedAt(session, groupId, email, ct),
-        };
+        var emailHolder = email.Length > 0 ? await directory.AccountFor(email, ct) : null;
+        var invitedTo = await SlotsInvitedAt(session, groupId, email, ct);
+
+        var command = new Command(
+            member, request.Email, tokenHash, clock.GetUtcNow(), user.UserId(),
+            EmailHolder: emailHolder, InvitedTo: invitedTo);
 
         switch (Decider.Decide(state, command))
         {
@@ -86,9 +87,9 @@ public static class Endpoint
                 // Same session, same transaction as the event.
                 session.Store(new InviteDelivery
                 {
-                    Id = member.Value,
+                    Id = command.MemberId.Value,
                     GroupId = groupId,
-                    TokenHash = tokenHash,
+                    TokenHash = command.TokenHash,
                     Email = email,
                 });
 
@@ -99,7 +100,8 @@ public static class Endpoint
 
                 // Accepted implies the actor is a member and the slot exists.
                 pending.Email = new InviteEmail(
-                    groupId, member, email, link, state!.GroupName, state.Slots[state.Members[command.By]].Name, state.Slots[member].Name);
+                    groupId, command.MemberId, email, link,
+                    state!.GroupName, state.Slots[state.Members[command.By]].Name, state.Slots[command.MemberId].Name);
                 return (Results.Ok(new Response(link)), [.. accepted.Events]);
             case Decision.Rejected { Kind: Rejection.NotFound } rejected:
                 return (Results.Problem(rejected.Reason, statusCode: StatusCodes.Status404NotFound), []);

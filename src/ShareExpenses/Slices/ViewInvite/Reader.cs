@@ -2,9 +2,12 @@ using ShareExpenses.Shared;
 
 namespace ShareExpenses.Slices.ViewInvite;
 
-/// <summary>The query, as in <c>event-model.yaml</c>: group from the route, token from the link's fragment.</summary>
+/// <summary>
+/// The query, as in <c>event-model.yaml</c>: the token from the link's fragment. The group
+/// from the link only selects the stream, so it is not here (spec §13).
+/// </summary>
 /// <param name="Now">The clock, passed in so reading stays pure and testable.</param>
-internal sealed record Query(GroupId GroupId, string? Token, DateTimeOffset Now);
+internal sealed record Query(string? Token, DateTimeOffset Now);
 
 /// <summary>
 /// The read model, as in <c>event-model.yaml</c>: exactly what the landing page

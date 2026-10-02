@@ -5,11 +5,11 @@ Type: **State Change**. Screen → command → events.
 | | |
 |---|---|
 | Screen | Invite member (modelled; no frontend yet) |
-| Command | `InviteMember(groupId, memberId, email, tokenHash, now, by)` + looked up: `emailHolder`, `invitedTo` |
+| Command | `InviteMember(memberId, email, tokenHash, now, by)` + looked up: `emailHolder`, `invitedTo` |
 | Events | `MemberInvited` |
 | Also writes | `InviteDelivery` — plain document, the address the invite went to |
 | Code | `src/ShareExpenses/Slices/InviteMember/` |
-| Endpoint | `POST /api/groups/{groupId}/members/{memberId}/invite` |
+| Endpoint | `POST /api/groups/{group}/members/{memberId}/invite` |
 
 Issues a link that lets whoever holds it claim one member slot (spec §4: the
 invite binds the slot, and the token is the capability), and emails it. The link
@@ -20,6 +20,9 @@ token's hash and the actor. The address goes into `InviteDelivery`, a plain,
 erasable document (spec §3, §11).
 
 ## Specifications
+
+Scenarios run against group `g1`'s stream. The group only selects the stream, so it
+is not a command field (spec §13).
 
 `h0`, `h1` are hashes of pinned tokens. Every command is issued at `t0`, so a new
 invite's deadline is `t0+30d`; `…` is an earlier invite's deadline, which deciding
@@ -36,64 +39,64 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 
 ```
 1 - invites a placeholder member
-    WHEN   InviteMember(g1, m2, "bob@example.com", alice)
+    WHEN   InviteMember(m2, "bob@example.com", alice)
     THEN   MemberInvited(m2, h1, t0+30d, alice)
 
 2 - the group must exist
     GIVEN  (empty stream)
-    WHEN   InviteMember(g1, m2, "bob@example.com", alice)
+    WHEN   InviteMember(m2, "bob@example.com", alice)
     THEN   rejected - group not found
 
 3 - only members of the group may invite
-    WHEN   InviteMember(g1, m2, "bob@example.com", mallory)
+    WHEN   InviteMember(m2, "bob@example.com", mallory)
     THEN   rejected - group not found
 
 4 - the slot must exist in the group
-    WHEN   InviteMember(g1, m9, "bob@example.com", alice)
+    WHEN   InviteMember(m9, "bob@example.com", alice)
     THEN   rejected - member not found
 
 5 - a slot that has already joined cannot be invited
-    WHEN   InviteMember(g1, m1, "alice@example.com", alice)
+    WHEN   InviteMember(m1, "alice@example.com", alice)
     THEN   rejected - member has already joined
 
 6 - rejects an address that is not plausibly an email
-    WHEN   InviteMember(g1, m2, "bob", alice)
+    WHEN   InviteMember(m2, "bob", alice)
     THEN   rejected - email is not a valid address
 
 7 - re-inviting replaces the previous invite
     GIVEN  ... AND MemberInvited(m2, h0, …, alice)
     WITH   invitedTo(bob@example.com) = {m2}
-    WHEN   InviteMember(g1, m2, "bob@example.com", alice)
+    WHEN   InviteMember(m2, "bob@example.com", alice)
     THEN   MemberInvited(m2, h1, t0+30d, alice)
 
 8 - an address with an open invite cannot be invited to another slot
     GIVEN  ... AND MemberAdded(m3, "Bobby", alice) AND MemberInvited(m2, h0, …, alice)
     WITH   invitedTo(bob@example.com) = {m2}
-    WHEN   InviteMember(g1, m3, "BOB@example.com", alice)
+    WHEN   InviteMember(m3, "BOB@example.com", alice)
     THEN   rejected - that email is already invited as Bob
 
 9 - the address of a user already in the group cannot be invited
     GIVEN  ... AND MemberClaimed(m2, bob) AND MemberAdded(m3, "Bobby", alice)
     WITH   emailHolder(bob@example.com) = bob
-    WHEN   InviteMember(g1, m3, "bob@example.com", alice)
+    WHEN   InviteMember(m3, "bob@example.com", alice)
     THEN   rejected - bob@example.com has already joined as Bob
 
 10 - including the creator's
     GIVEN  ... AND MemberAdded(m3, "Bobby", alice)
     WITH   emailHolder(alice@example.com) = alice
-    WHEN   InviteMember(g1, m3, "alice@example.com", alice)
+    WHEN   InviteMember(m3, "alice@example.com", alice)
     THEN   rejected - alice@example.com has already joined as Alice
 
 11 - an invite to a slot since claimed no longer holds its address
     GIVEN  ... AND MemberInvited(m2, h0, …, alice) AND MemberClaimed(m2, bob)
            AND MemberAdded(m3, "Bobby", alice)
     WITH   invitedTo(bob@example.com) = {m2}, emailHolder(bob@example.com) = none
-    WHEN   InviteMember(g1, m3, "bob@example.com", alice)
+    WHEN   InviteMember(m3, "bob@example.com", alice)
     THEN   MemberInvited(m3, h1, t0+30d, alice)
 
 12 - an account outside the group is no obstacle
     WITH   emailHolder(carol@example.com) = carol
-    WHEN   InviteMember(g1, m2, "carol@example.com", alice)
+    WHEN   InviteMember(m2, "carol@example.com", alice)
     THEN   MemberInvited(m2, h1, t0+30d, alice)
 ```
 
@@ -122,14 +125,14 @@ would apply.
   link is `{App:PublicOrigin}/invites/{groupId}#{token}`: the token rides in the
   URL *fragment*, which browsers never send to a server, so it stays out of proxy
   logs and `Referer` headers. The landing page reads it client-side and posts it
-  (slice 4).
+  (ViewInvite).
 - **Email** is trimmed and kept in its original case. "Plausibly an email": at
   most 254 characters, exactly one `@` with something on both sides, no
   whitespace. Real validation is delivery.
 - **Expiry** is decided here and recorded: `expiresAt = now + 30 days`, on the
   event (spec §11). It is a deadline, a domain fact — not the append time, which
   stays Marten metadata. Changing the lifetime later never moves the deadline of
-  links already sent. It is *enforced* where the link is used (slices 4 and 5).
+  links already sent. It is *enforced* where the link is used (ViewInvite and AcceptInvite).
 - **Re-inviting** overwrites the slot's `InviteDelivery` and retires the previous
   link: the newest `MemberInvited` for a slot is the live one.
 - **Email is sent after the save.** If sending fails, the response is still 200
@@ -145,4 +148,4 @@ would apply.
 
 ## Concurrency
 
-As slice 2: a conflicting save answers **409** and the client retries.
+As AddMember: a conflicting save answers **409** and the client retries.

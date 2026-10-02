@@ -16,9 +16,11 @@ namespace ShareExpenses.Slices.InviteMember;
 /// outside the stream and may be stale. The worst a stale lookup can do is let a
 /// mistake through to claim time, where "one user, one slot" is enforced against
 /// the stream itself.
+///
+/// No group id: it only selects the stream, which Wolverine fetches from the route
+/// before the endpoint runs (spec §13). Deciding gets the group as its folded state.
 /// </remarks>
 internal sealed record Command(
-    GroupId GroupId,
     MemberId MemberId,
     string? Email,
     string TokenHash,

@@ -45,7 +45,7 @@ public class AcceptInviteSpecs
     private static readonly DecideSpec<Command> Spec =
         new((history, command) => Decider.Decide(Fold.Of<State>(history), command));
 
-    private static Command AcceptInvite(string? token, UserId by, DateTimeOffset at) => new(G1, token, at, by);
+    private static Command AcceptInvite(string? token, UserId by, DateTimeOffset at) => new(token, at, by);
 
     [Fact]
     public void S1_claims_the_invited_slot() =>

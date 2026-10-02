@@ -6,15 +6,18 @@ Type: **State Read**. Events → read model → screen.
 |---|---|
 | Screen | Invite landing ("Alice invited you to Lisbon trip as Bob — [Sign me in]") |
 | Read model | `InviteReadModel` — **live**: folded from one group stream per request, nothing stored |
-| Query | `ViewInvite(groupId, token, now)` — group from the route, token from the link's fragment, the clock |
+| Query | `ViewInvite(token, now)` — token from the link's fragment, the clock; the group from the route selects the stream |
 | Code | `src/ShareExpenses/Slices/ViewInvite/` |
-| Endpoint | `POST /api/invites/{groupId}/lookup`, body `{ "token": "…" }` — no sign-in |
+| Endpoint | `POST /api/invites/{group}/lookup`, body `{ "token": "…" }` — no sign-in |
 
 The page an invite link lands on. It shows who invited you, to which group, as
-whom — and offers "Sign me in", which leads to claiming (slice 5). Viewing changes
+whom — and offers "Sign me in", which leads to claiming (AcceptInvite). Viewing changes
 nothing, so a mail client or scanner prefetching the page consumes nothing (spec §4).
 
 ## Specifications
+
+Scenarios run against group `g1`'s stream. The group only selects the stream, so it
+is not a query field (spec §13).
 
 `h1`, `h2` are the hashes of tokens `t1`, `t2`; `tX` matches nothing. Times are
 relative to `t0`. Unless stated otherwise, every scenario starts from:
@@ -28,42 +31,42 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 
 ```
 1 - shows a live invite
-    WHEN   ViewInvite(g1, t1)  at t0+1d
+    WHEN   ViewInvite(t1)  at t0+1d
     THEN   { groupName: "Lisbon trip", memberName: "Bob", invitedBy: "Alice" }
 
 2 - a wrong token finds nothing
-    WHEN   ViewInvite(g1, tX)  at t0+1d
+    WHEN   ViewInvite(tX)  at t0+1d
     THEN   not found
 
 3 - an unknown group finds nothing
     GIVEN  (empty stream)
-    WHEN   ViewInvite(g1, t1)  at t0+1d
+    WHEN   ViewInvite(t1)  at t0+1d
     THEN   not found
 
 4 - an invite is dead at its deadline
-    WHEN   ViewInvite(g1, t1)  at t0+30d
+    WHEN   ViewInvite(t1)  at t0+30d
     THEN   not found
     (and at t0+30d less one second: shown)
 
 5 - re-inviting retires the previous link
     GIVEN  ... AND MemberInvited(m2, h2, t0+31d, alice)
-    WHEN   ViewInvite(g1, t1)  at t0+1d
+    WHEN   ViewInvite(t1)  at t0+1d
     THEN   not found
 
 6 - the new link has its own deadline
     GIVEN  ... AND MemberInvited(m2, h2, t0+59d, alice)
-    WHEN   ViewInvite(g1, t2)  at t0+40d
+    WHEN   ViewInvite(t2)  at t0+40d
     THEN   { "Lisbon trip", "Bob", "Alice" }
 
 7 - a claimed slot's invite is used up
     GIVEN  ... AND MemberClaimed(m2, bob)
-    WHEN   ViewInvite(g1, t1)  at t0+1d
+    WHEN   ViewInvite(t1)  at t0+1d
     THEN   not found
 
 8 - the inviter is named by their slot in this group
     GIVEN  ... AND MemberAdded(m3, "Carol", alice) AND MemberClaimed(m3, carol)
            AND MemberInvited(m2, h2, t0+30d, carol)
-    WHEN   ViewInvite(g1, t2)  at t0+1d
+    WHEN   ViewInvite(t2)  at t0+1d
     THEN   { "Lisbon trip", "Bob", "Carol" }
 ```
 

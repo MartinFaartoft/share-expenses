@@ -51,7 +51,7 @@ public class InviteMemberSpecs
 
     private static Command InviteMember(
         MemberId member, string? email, UserId by, UserId? emailHolder = null, params MemberId[] invitedTo) =>
-        new(G1, member, email, H1, T0, by, emailHolder, invitedTo.ToHashSet());
+        new(member, email, H1, T0, by, emailHolder, invitedTo.ToHashSet());
 
     [Fact]
     public void S1_invites_a_placeholder_member() =>

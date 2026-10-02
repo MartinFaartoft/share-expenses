@@ -5,10 +5,10 @@ Type: **State Change**. Screen → command → events.
 | | |
 |---|---|
 | Screen | Group setup |
-| Command | `AddMember(groupId, displayName, by)` |
-| Events | `MemberAdded` (owned by slice 1) |
+| Command | `AddMember(displayName, by)` |
+| Events | `MemberAdded` (owned by CreateGroup) |
 | Code | `src/ShareExpenses/Slices/AddMember/` |
-| Endpoint | `POST /api/groups/{groupId}/members` |
+| Endpoint | `POST /api/groups/{group}/members` |
 
 Adds a **placeholder** member by name alone (spec §4): someone expenses can be
 recorded against immediately, who may be invited and claim the slot later. Adding
@@ -16,7 +16,10 @@ and inviting are separate commands; a client may send both from one form.
 
 ## Specifications
 
-Unless stated otherwise, every scenario starts from the group as slice 1 leaves it:
+Scenarios run against group `g1`'s stream. The group only selects the stream, so it
+is not a command field (spec §13).
+
+Unless stated otherwise, every scenario starts from the group as CreateGroup leaves it:
 
 ```
 GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
@@ -26,42 +29,42 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 
 ```
 1 - adds a placeholder member, by name alone
-    WHEN   AddMember(g1, "Bob", alice)
+    WHEN   AddMember("Bob", alice)
     THEN   MemberAdded(m2, "Bob", alice)
 
 2 - any member may add, and is recorded as the actor
     GIVEN  ... AND MemberAdded(m2, "Bob", alice) AND MemberClaimed(m2, bob)
-    WHEN   AddMember(g1, "Carol", bob)
+    WHEN   AddMember("Carol", bob)
     THEN   MemberAdded(m3, "Carol", bob)
 
 3 - the group must exist
     GIVEN  (empty stream)
-    WHEN   AddMember(g1, "Bob", alice)
+    WHEN   AddMember("Bob", alice)
     THEN   rejected - group not found
 
 4 - only members of the group may add
-    WHEN   AddMember(g1, "Bob", mallory)
+    WHEN   AddMember("Bob", mallory)
     THEN   rejected - group not found
 
 5 - an unclaimed placeholder confers no membership
     GIVEN  ... AND MemberAdded(m2, "Bob", alice)
-    WHEN   AddMember(g1, "Carol", bob)
+    WHEN   AddMember("Carol", bob)
     THEN   rejected - group not found
 
 6 - rejects a blank name
-    WHEN   AddMember(g1, "   ", alice)
+    WHEN   AddMember("   ", alice)
     THEN   rejected - name is required
 
 7 - rejects a name already used in the group
-    WHEN   AddMember(g1, " alice ", alice)
+    WHEN   AddMember(" alice ", alice)
     THEN   rejected - a member with that name already exists
 
 8 - rejects a name longer than 50 characters
-    WHEN   AddMember(g1, <51 characters>, alice)
+    WHEN   AddMember(<51 characters>, alice)
     THEN   rejected - name must be at most 50 characters
 
 9 - trims the name
-    WHEN   AddMember(g1, "  Bob ", alice)
+    WHEN   AddMember("  Bob ", alice)
     THEN   MemberAdded(m2, "Bob", alice)
 ```
 
@@ -77,7 +80,7 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
   claim on a slot.
 - **Names** are trimmed, compared case-insensitively for duplicates, and limited
   to 50 visible characters after trimming. Rejection wording is per context:
-  "name" here, "your name" in slice 1.
+  "name" here, "your name" in CreateGroup.
 - `by` is the signed-in user, never a member slot (spec §12).
 
 ## Deferred to the slices that introduce the events

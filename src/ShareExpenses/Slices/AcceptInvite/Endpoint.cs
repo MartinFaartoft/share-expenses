@@ -45,7 +45,7 @@ public static class Endpoint
         TimeProvider clock)
     {
         var groupId = GroupStream(group);
-        var command = new Command(groupId, request?.Token, clock.GetUtcNow(), user.UserId());
+        var command = new Command(request?.Token, clock.GetUtcNow(), user.UserId());
 
         switch (Decider.Decide(state, command))
         {

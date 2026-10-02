@@ -34,7 +34,6 @@ public static class Endpoint
     [WolverinePost("/groups/{group}/members", Name = "AddMember")]
     [Authorize]
     public static (IResult, Events) Post(
-        string group,
         Request request,
         // Required = false: a missing stream arrives as null and is answered by
         // Decide, so "no such group" and "not a member" give the same 404 body.
@@ -43,8 +42,7 @@ public static class Endpoint
         HttpContext http)
     {
         var memberId = MemberId.New();
-        // A malformed id resolves to a fresh one each time; harmless, as no stream has it.
-        var command = new Command(GroupStream(group), request.DisplayName, user.UserId());
+        var command = new Command(request.DisplayName, user.UserId());
 
         return Decider.Decide(state, command, memberId) switch
         {

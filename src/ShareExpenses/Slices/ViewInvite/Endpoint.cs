@@ -30,11 +30,10 @@ public static class Endpoint
     [WolverinePost("/invites/{group}/lookup", Name = "ViewInvite")]
     [AllowAnonymous]
     public static IResult Post(
-        string group,
         Request? request,
         [ReadAggregate(FromMethod = nameof(GroupStream), Required = false)] State? state,
         TimeProvider clock) =>
-        Reader.Read(state, new Query(GroupStream(group), request?.Token, clock.GetUtcNow())) is { } invite
+        Reader.Read(state, new Query(request?.Token, clock.GetUtcNow())) is { } invite
             ? Results.Ok(invite)
             : Results.Problem(NotFoundReason, statusCode: StatusCodes.Status404NotFound);
 }

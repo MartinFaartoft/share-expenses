@@ -4,7 +4,7 @@ using ShareExpenses.Slices.CreateGroup;
 namespace ShareExpenses.Slices.AddMember;
 
 /// <summary>The command, as in <c>event-model.yaml</c>. Inputs are raw; deciding validates them.</summary>
-internal sealed record Command(GroupId GroupId, string? DisplayName, UserId By);
+internal sealed record Command(string? DisplayName, UserId By);
 
 /// <summary>Specs: <c>docs/event-model/slice-02-add-member.md</c>.</summary>
 internal static class Decider

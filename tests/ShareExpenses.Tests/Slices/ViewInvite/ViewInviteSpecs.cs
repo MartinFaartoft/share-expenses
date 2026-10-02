@@ -46,7 +46,7 @@ public class ViewInviteSpecs
     private static readonly ReadSpec<Query, InviteReadModel> Spec =
         new((history, query) => Reader.Read(Fold.Of<State>(history), query));
 
-    private static Query ViewInvite(string? token, DateTimeOffset at) => new(G1, token, at);
+    private static Query ViewInvite(string? token, DateTimeOffset at) => new(token, at);
 
     [Fact]
     public void S1_shows_a_live_invite() =>
