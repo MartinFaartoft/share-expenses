@@ -748,7 +748,7 @@ nothing else; the client resends, and the rules run against the new state.
 Server-side retry — re-fetch, re-decide, re-append, a few times — was considered
 and deferred: it would be correct rather than a blind overwrite, since the rules
 run again, and would turn most conflicts into one round trip. Kept visible while
-learning; the reminder lives in `Slices/AddMember/Handler.cs`.
+learning; the reminder lives in `Slices/AddMember/Endpoint.cs`.
 
 ### Event schema evolution
 
@@ -773,6 +773,24 @@ Rationale: §2 applied honestly. The rework *is* the exercise, not waste — a
 framework is far easier to judge once you have written the code it replaces.
 Phase 2 is a conscious checkpoint, not a backlog item.
 
+**Done: every slice runs on Wolverine** (WolverineFx 6.44, `WolverineFx.Http.Marten`),
+ported once AcceptInvite made four state-change slices. What it took over, and what
+it cost:
+
+- **Gone from every slice:** the handler — fetch, append, save, catch the conflict —
+  and its `Outcome` type. Wolverine generates that code around each endpoint
+  method. What stays in a slice is deciding, and mapping the decision to HTTP.
+- **Cost: visibility.** Wolverine discovers only public endpoint classes and
+  generates code against their signatures, so the endpoint class and every type in
+  its signature — request, state, and the state's own member types — must be
+  public. "Only events are public" became "only events couple slices" (below).
+- **Cost: explicit wiring.** Endpoints are found by scanning, against the earlier
+  decision to stitch them together by name (below).
+- **Smaller costs:** each fetched `State` needs an `Id`; internal services need a
+  service-location allow-list entry; Wolverine adds 8 tables in its own `wolverine`
+  schema even in mediator-only mode; generated code is compiled with Roslyn at
+  startup (`WolverineFx.RuntimeCompilation`) unless pre-generated with `codegen write`.
+
 ### Code structure: vertical slices
 
 **Decision: one folder per event-model slice, and the folder owns everything about
@@ -787,8 +805,8 @@ diff touching two slice folders is a signal worth noticing in review.
 ```
 src/ShareExpenses/
   Program.cs          hosting only
-  AllSlices.cs        the explicit list of slices
-  Infrastructure/     Identity (EF), Marten store setup
+  AllSlices.cs        what the slices register with the store
+  Infrastructure/     Identity (EF), Marten store and Wolverine setup
   Shared/             pure, framework-free code used by several slices
   Slices/<Name>/      one folder per slice
 ```
@@ -799,11 +817,21 @@ across two projects. Purity is kept where it pays: decision logic is a pure
 function inside the slice, and `Shared/` must not reference ASP.NET, Marten or
 any slice.
 
-**Decision: only events are public.** Every other type in a slice is `internal`.
-The two exceptions are the slice's events and one static entry-point class,
-`<Name>Slice`, exposing `Register(StoreOptions)` and `Map(IEndpointRouteBuilder)`.
-The suffix avoids the namespace `CreateGroup` colliding with a type of the same
-name.
+**Decision: only events couple slices.** Originally "only events are public":
+every other type in a slice was `internal`. Wolverine (phase 2) forces more types
+public, so visibility no longer marks the boundary, and the architecture tests
+classify instead. Public types in a slice may be:
+
+- its **events** — the only types another slice may use;
+- its **Wolverine endpoint** class, and its **contract**: the types in the
+  endpoint's public method signatures (request, folded state), and the public
+  member types of those, transitively (a state's `Slot`);
+- an optional **entry point**, `<Name>Slice`, with `Register(StoreOptions)` — only
+  for slices that own events or projections. The suffix avoids the namespace
+  `CreateGroup` colliding with a type of the same name.
+
+Everything else stays `internal`: `Command`, `Decider`, read models, responses
+that are returned as an `IResult` rather than in a signature.
 
 - **An event is owned by the slice that first emits it** — the same rule as
   "declared once, at first appearance" in `event-model.yaml`. `AddMember` emits
@@ -819,39 +847,51 @@ removals; `RemoveMember` additionally folds balances.
 
 Rationale: a shared `Group` aggregate would be the one fat type every slice
 depends on, which is precisely the coupling the slices exist to avoid. It also
-breaks the "only events are public" rule. The state a command needs is a
+couples every slice to more than events. The state a command needs is a
 projection of the stream like any other; there is no reason it must be the *same*
 projection for every command.
 
-**Enforcement: `internal` plus an architecture test.** C# has no folder-level
-visibility, so `internal` alone means assembly-wide. A test fails the build when:
+**Enforcement: an architecture test.** C# has no folder-level visibility, so
+`internal` alone means assembly-wide. A test fails the build when:
 
-- a public type in a slice is anything other than a `sealed record` event or the
-  `<Name>Slice` entry point;
-- a slice depends on another slice's non-public types;
-- `Shared/` depends on a slice, ASP.NET or Marten;
-- a slice namespace has no `<Name>Slice`, or `AllSlices` does not call it.
+- a public type in a slice is none of: event, endpoint, contract, entry point;
+- a slice depends on anything of another slice's but its events — internal or
+  public;
+- `Shared/` depends on a slice, ASP.NET, Marten or Wolverine;
+- a `<Name>Slice` has no `Register(StoreOptions)`, or `AllSlices` does not call it;
+- an event is not registered by any slice's `Register` — unregistered, Marten
+  would quietly store it under a name derived from the class, identical today and
+  wrong after a rename (§11).
 
 **Marten constraint, verified by spike rather than assumed:** internal state
 types, internal projected documents, inline projections over them, LINQ queries
 and `FetchForWriting` concurrency conflicts all work. But Marten 9 dispatches
 conventional `Create`/`Apply` methods through a compile-time source generator,
 which silently declines methods that are not `public` — the failure only surfaces
-at runtime, as "no source-generated dispatcher found". So: **types `internal`,
-convention methods `public`**. Their effective visibility is still internal, so
-the rule holds; the architecture test checks types, not members.
+at runtime, as "no source-generated dispatcher found". So: **convention methods
+`public`**, whatever the type's visibility. (Every `State` is public now anyway —
+see phase 2 — but the constraint holds for internal folded types.)
 
 Tests reach internal types through `InternalsVisibleTo`. Rejected: private nested
 types in a `static partial class` per slice (compiler-enforced, but untestable
 below HTTP and hostile to Marten's code generation), and a project per slice
 (real enforcement, roughly twenty projects for v1).
 
-**Decision: endpoints are stitched together explicitly.** `AllSlices.cs` calls every
-slice's `Register` and `Map` by name. The full API surface is readable in one
-file, and a missing slice is visible in review — and caught by the architecture
-test. Rejected: reflection-based discovery, which saves one line per slice at the
-cost of knowing what is wired up. (Named `AllSlices`, not `Slices`: a class cannot
-share a name with the `ShareExpenses.Slices` namespace.)
+**Decision: endpoints are discovered; store registrations are explicit.**
+Originally `AllSlices.cs` called every slice's `Register` and `Map` by name, and
+reflection-based discovery was rejected as saving a line per slice at the cost of
+knowing what is wired up. Wolverine discovers endpoints by scanning, with no
+explicit alternative, so that decision is reversed for endpoints: the API surface
+is listed by `dotnet run --project src/ShareExpenses -- describe` (or the OpenAPI
+document) instead of read from one file.
+
+Store registrations stay explicit, because they protect stored data: `AllSlices`
+calls the `Register` of every slice that has a `<Name>Slice`, and the architecture
+test checks every event is registered. Rejected: an attribute on each event
+(`[StoredAs("group_created")]`) found by a scan — it would remove the last
+per-slice file, but leave nothing in the app wired up by name. (Named `AllSlices`,
+not `Slices`: a class cannot share a name with the `ShareExpenses.Slices`
+namespace.)
 
 The architecture tests run every rule against the application *and* against
 fixture slices in the test project — one conforming, several deliberately
@@ -860,23 +900,45 @@ passing vacuously.
 
 ### Anatomy of a state-change slice
 
-Set by `CreateGroup`, the first slice built; later slices follow it unless they
-have a reason not to.
+Set by `CreateGroup`, the first slice built, and reshaped by the Wolverine port;
+later slices follow it unless they have a reason not to.
 
 | File | Visibility | Contents |
 |---|---|---|
 | `Events.cs` | public | the events this slice owns, as `sealed record`s |
-| `<Name>Slice.cs` | public | `Register` (event types, projections) and `Map` |
-| `Decider.cs` | internal | `Command`, state (if any), pure `Decide` returning `Decision` |
-| `Handler.cs` | internal | fetch → decide → append → save; returns a slice-local `Outcome` |
-| `Endpoint.cs` | internal | request/response records; maps `Outcome` to HTTP |
+| `<Name>Slice.cs` | public | only if the slice owns events or projections: `Register` |
+| `State.cs` | public | what the slice folds, with an `Id` for Wolverine |
+| `Decider.cs` | internal | `Command` and the pure `Decide` returning `Decision` |
+| `Endpoint.cs` | public class | the Wolverine endpoint: route, `Request` (public), `Response` (internal); decides and maps `Decision` to HTTP; `OnException` for the 409 |
 
-- **Ids are generated in the endpoint and passed in**, so `Decide` and `Handler`
-  are deterministic and tests can pin them. Ids are `Guid.CreateVersion7()`.
-- **`Decision` (in `Shared/`) is the decide result; `Outcome` is per slice.**
-  Every slice decides the same way, but what can go wrong *after* deciding —
-  a stream collision, a concurrency conflict — differs per slice, and so does
-  its HTTP mapping.
+A State Read slice has `Reader.cs` (internal `Query`, read model and pure `Read`)
+in place of `Decider.cs`, and no events.
+
+- **Wolverine does the fetch and the save.** `[WriteAggregate]` fetches the
+  state with `FetchForWriting`; the endpoint returns `(IResult, Events)`, and
+  Wolverine appends the events at the version it read and saves. A read slice uses
+  `[ReadAggregate]`, which folds live. CreateGroup has no stream to fetch: it starts
+  one on the session, under `[Transactional]`.
+- **`Required = false` on every fetch:** a missing stream arrives as `null` and is
+  answered by `Decide` or `Read`, so "no such group" and "not a member" (or "dead
+  invite link") give the same response, body included.
+- **The group id comes from the route as a string**, resolved by the endpoint's
+  `GroupStream` method (`FromMethod`). A malformed id becomes one no stream has,
+  so it takes the unknown-group path. Wolverine's own typed-route parsing would
+  answer a malformed id with an empty 404 — a different body from a missing group.
+  The route parameter is `{group}`, not `{groupId}`: Wolverine names the resolved
+  variable `groupId` after its type, and the two would collide in generated code.
+- **Ids are generated in the endpoint and passed in**, so `Decide` is
+  deterministic and spec tests can pin them. Ids are `Guid.CreateVersion7()`.
+- **`Decision` (in `Shared/`) is the decide result; each endpoint maps it to
+  HTTP,** because the mapping differs per slice (AcceptInvite's 409 carries the
+  way in). What can go wrong *after* deciding — a stream collision, a concurrency
+  conflict — is an exception from Wolverine's save, answered by the endpoint's own
+  `OnException`, so each slice keeps its own wording.
+- **Side effects after the commit go in `AfterCommitAsync`.** InviteMember's email
+  must only be sent once the invite is saved: the endpoint fills a `PendingEmail`
+  (created by its `Load()`), and `AfterCommitAsync` sends it. Wolverine's `After`
+  runs *before* the commit, and would email a dead link when the save loses a race.
 - **Event types are registered with explicit stored names** (`group_created`),
   so a class or folder rename can never change what is in the database.
 - **Naming: every slice folds a `State`; a read slice's output is its read model.**
@@ -897,33 +959,35 @@ have a reason not to.
   Marten names a type by its bare class name, so two slices' `State` types
   collide on `ledger.state` — found while building InviteMember, where whichever slice was used
   second failed with a 500. The attribute, not `Schema.For<State>()` in
-  `Register`: registering makes Marten validate the type as a stored document,
-  which demands an `Id` a live-folded state does not have. Enforced by the
-  architecture tests.
+  `Register`: registering would make Marten treat a live-folded state as a stored
+  document. Enforced by the architecture tests.
 - **Tests per slice:** `<Name>Specs` mirror `slice-NN-*.md` line for line against
   `Decide` alone; `<Name>IntegrationTests` cover what needs a store (e.g. "created
   exactly once") and the HTTP mapping, against a throwaway PostgreSQL container
-  (Testcontainers), never the development database.
+  (Testcontainers), never the development database. With no handler of our own to
+  call, integration tests go through HTTP. Ids generated per request are read back
+  from the response. A race is staged by `BeforeNextSave`, a store-wide Marten
+  listener that runs a competing write just before the next save — including the
+  sessions Wolverine opens.
 - **Specs read as `Given(...).When(...).Then(...)` / `.ThenRejected(reason)` /
   `.ThenNotFound(reason)`.**
   `DecideSpec` runs a scenario against `Decide`; `ReadSpec` against a read slice's
-  pure read; `StreamSpec` runs the same shape against a real stream — Given appends
-  the history, Then asserts what the stream holds afterwards (untouched on
-  rejection). `Given()` is the empty stream.
+  pure read. `Given()` is the empty stream. (`StreamSpec`, the same shape against a
+  real stream through a slice's handler, went with the handlers.)
 - **Rejections are typed, never matched by wording.** `Decision.Reject(reason)` is
   an invalid command (400); `Decision.NotFound(reason)` is a target that does not
-  exist for this actor (404). Handlers branch on the kind, so rewording a message
+  exist for this actor (404). Endpoints branch on the kind, so rewording a message
   cannot change an HTTP status; specs assert both the wording and the kind.
 - **One test fold for every slice:** `Fold.Of<State>(history)` drives the state's
   `Create`/`Apply` methods by the same convention Marten uses. Stricter than Marten
   on purpose — an event the state has no method for throws unless the spec lists
   it in `ignoring:`, so a state cannot fall behind a new event silently.
-- **Deliberately not extracted (yet):** the handler skeleton (fetch → decide →
-  append → save → 409) and the per-slice outcome-to-HTTP mapping still repeat in
-  each slice. That repetition is what Phase 2 (§12) exists to measure: port to
-  Wolverine's aggregate handler workflow once AcceptInvite makes four
-  state-change slices, and compare. Other frameworks' answers, for reference: Marten's
-  `WriteToAggregate`; Emmett's `CommandHandler` + `DeciderSpecification`;
+- **Still repeated per slice, deliberately:** the `Decision`-to-HTTP mapping and
+  the 409's `OnException`. Wolverine could take the 409 for every slice at once
+  (`MapMartenConcurrencyFailuresToConflict`), at the cost of each slice's wording.
+  The handler skeleton (fetch → decide → append → save → 409) that the hand-rolled
+  slices repeated is what phase 2 removed. Other frameworks' answers, for reference:
+  Marten's `WriteToAggregate`; Emmett's `CommandHandler` + `DeciderSpecification`;
   Eventuous's `CommandService` with `On<Cmd>().InState(...)`; Equinox's
   `Transact` — all a generic runner around a pure decide, plus typed errors.
 - **User ids are `Guid`s.** Identity is keyed on `Guid` (`User : IdentityUser<Guid>`)
@@ -1301,8 +1365,9 @@ a documentation tool, not application code.
   "send this email" in the same transaction as the event and the `InviteDelivery`
   document, and a background worker would deliver and retry it — `InviteDelivery`
   is the natural place for delivery status. Revisit with the choice of relay
-  (§4), or if Wolverine (phase 2), whose durable outbox does exactly this, arrives
-  first.
+  (§4). Wolverine's durable outbox does exactly this, but it runs in mediator-only
+  mode today (no inbox/outbox); adopting it means switching durability mode, and
+  the email becomes a message handled after the commit.
   - **Superseded invites:** `InviteDelivery.TokenHash` keys a delivery to its
     `MemberInvited` event, so the worker can skip a pending delivery whose invite
     has since been replaced by a re-invite rather than send a dead link.
@@ -1331,7 +1396,10 @@ a documentation tool, not application code.
   invite link while signed in recovers (see the frontend item above).
 - **DEFERRED** Transactional relay — shortlisted in §4; `LogEmailSender` until then.
 - **DEFERRED** `PeriodClosed` / stream archival, until a stream is actually long.
-- **DEFERRED** Wolverine port (phase 2 above).
+- **OPEN** Wolverine in production. `AutoCreate.None` covers Marten's schema but
+  not Wolverine's 8 tables in the `wolverine` schema; decide how they are created
+  when deployed. Also decide whether to pre-generate Wolverine's code (`codegen
+  write`, `TypeLoadMode.Static`) instead of compiling it with Roslyn at startup.
 - **DEFERRED** Frozen settle-up plan, unless a shifting plan bites in practice.
 - **DEFERRED** Marten-backed `IUserStore`, if EF Core and Marten genuinely chafe.
 - **DEFERRED** `MemberMergedInto` for duplicate slots — out of scope for v1.

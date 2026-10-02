@@ -2,13 +2,10 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Marten;
-using Marten.Services;
 using Microsoft.Extensions.DependencyInjection;
 using ShareExpenses.Infrastructure.Invites;
 using ShareExpenses.Shared;
-using ShareExpenses.Slices.AcceptInvite;
 using ShareExpenses.Tests.Infrastructure;
-using ShareExpenses.Tests.Specs;
 using MemberClaimed = ShareExpenses.Slices.CreateGroup.MemberClaimed;
 
 namespace ShareExpenses.Tests.Slices.AcceptInvite;
@@ -91,21 +88,16 @@ public class AcceptInviteIntegrationTests(AppFixture app)
     public async Task Two_claimants_one_link_the_loser_gets_409_and_its_retry_404()
     {
         var (groupId, bob, token) = await InvitedBob();
-        var now = app.Clock.GetUtcNow();
 
         // Carol fetches and decides; just before she saves, Bob's claim lands.
-        var bobFirst = new BeforeSave(async () =>
-        {
-            await using var b = Store.LightweightSession();
-            Assert.IsType<Outcome.Claimed>(await Handler.Handle(b, new Command(groupId, token, now, _bob), default));
-        });
-        await using (var carol = Store.LightweightSession(new SessionOptions { Listeners = { bobFirst } }))
-            Assert.IsType<Outcome.Conflict>(await Handler.Handle(carol, new Command(groupId, token, now, _carol), default));
+        app.BeforeNextSave.Arm(async () =>
+            Assert.Equal(HttpStatusCode.OK, (await Claim(_bob, groupId, token)).StatusCode));
+        Assert.Equal(HttpStatusCode.Conflict, (await Claim(_carol, groupId, token)).StatusCode);
 
-        await using var retry = Store.LightweightSession();
-        Assert.Equal(
-            new Outcome.NotFound("invite not found"),
-            await Handler.Handle(retry, new Command(groupId, token, now, _carol), default));
+        var retry = await Claim(_carol, groupId, token);
+
+        Assert.Equal(HttpStatusCode.NotFound, retry.StatusCode);
+        Assert.Contains("invite not found", await retry.Content.ReadAsStringAsync());
         Assert.Equal(new MemberClaimed(bob, _bob), (await StreamOf(groupId)).Last());
     }
 
@@ -176,12 +168,6 @@ public class AcceptInviteIntegrationTests(AppFixture app)
     {
         await using var session = Store.QuerySession();
         return (await session.Events.FetchStreamAsync(groupId.Value)).Select(e => e.Data).ToList();
-    }
-
-    /// <summary>Runs <paramref name="competitor"/> just before the session saves.</summary>
-    private sealed class BeforeSave(Func<Task> competitor) : DocumentSessionListenerBase
-    {
-        public override Task BeforeSaveChangesAsync(IDocumentSession session, CancellationToken token) => competitor();
     }
 
     private sealed record CreatedBody(GroupId GroupId, MemberId MemberId);

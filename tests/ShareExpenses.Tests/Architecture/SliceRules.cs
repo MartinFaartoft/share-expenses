@@ -6,6 +6,25 @@ namespace ShareExpenses.Tests.Architecture;
 /// <summary>Where the slices, the shared code and the slice catalog live in an assembly.</summary>
 internal sealed record SliceLayout(string SlicesNamespace, string SharedNamespace, string CatalogType);
 
+/// <summary>What a public type in a slice is for (spec §12).</summary>
+internal enum PublicRole
+{
+    /// <summary>A sealed record the slice owns and emits: the only coupling between slices.</summary>
+    Event,
+
+    /// <summary><c>&lt;Name&gt;Slice</c>: what the slice contributes to the store.</summary>
+    EntryPoint,
+
+    /// <summary>A static class of Wolverine endpoints, public so Wolverine discovers it.</summary>
+    Endpoint,
+
+    /// <summary>A type in an endpoint's signature (request, response, state…), public because Wolverine's generated code uses it.</summary>
+    Contract,
+
+    /// <summary>None of the above: a violation.</summary>
+    Stray,
+}
+
 /// <summary>
 /// The slice boundary rules from spec §12, checked over compiled IL with Mono.Cecil.
 /// Each rule returns its violations as readable strings; an empty list is a pass.
@@ -13,38 +32,68 @@ internal sealed record SliceLayout(string SlicesNamespace, string SharedNamespac
 internal static class SliceRules
 {
     private const string StoreOptions = "Marten.StoreOptions";
-    private const string EndpointRouteBuilder = "Microsoft.AspNetCore.Routing.IEndpointRouteBuilder";
 
     private static readonly string[] FrameworkNamespaces =
-        ["Microsoft.AspNetCore", "Marten", "JasperFx", "Microsoft.EntityFrameworkCore", "Npgsql"];
+        ["Microsoft.AspNetCore", "Marten", "JasperFx", "Wolverine", "Microsoft.EntityFrameworkCore", "Npgsql"];
 
     public static ModuleDefinition Load(System.Reflection.Assembly assembly) =>
         ModuleDefinition.ReadModule(assembly.Location);
 
-    /// <summary>Public types in a slice are its sealed-record events and its <c>&lt;Name&gt;Slice</c> entry point.</summary>
+    /// <summary>
+    /// Every effectively public type in a slice, by role. Wolverine forces endpoints and
+    /// everything in their signatures to be public, so "public" no longer means "event":
+    /// contracts are worked out from the endpoints, and events are the sealed records left.
+    /// </summary>
+    public static IReadOnlyDictionary<TypeDefinition, PublicRole> PublicRoles(ModuleDefinition module, SliceLayout layout)
+    {
+        var inSlices = module.GetTypes().Where(t => IsEffectivelyPublic(t) && SliceOf(t, layout) is not null).ToList();
+        var contracts = Contracts(inSlices.Where(IsWolverineEndpoint), layout);
+
+        return inSlices.ToDictionary(t => t, t =>
+            IsEntryPoint(t, SliceOf(t, layout)!) ? PublicRole.EntryPoint
+            : IsWolverineEndpoint(t) ? PublicRole.Endpoint
+            : contracts.Contains(t) ? PublicRole.Contract
+            : IsSealedRecord(t) ? PublicRole.Event
+            : PublicRole.Stray);
+    }
+
+    /// <summary>The events a slice owns, by full name: its public sealed records that are not contracts.</summary>
+    public static IReadOnlyList<string> Events(ModuleDefinition module, SliceLayout layout) =>
+        PublicRoles(module, layout).Where(r => r.Value == PublicRole.Event).Select(r => r.Key.FullName).Order().ToList();
+
+    /// <summary>
+    /// Public types in a slice are its events, its optional <c>&lt;Name&gt;Slice</c>, its
+    /// Wolverine endpoints, and the types in their signatures — nothing else.
+    /// </summary>
     public static IReadOnlyList<string> PublicSurface(ModuleDefinition module, SliceLayout layout) =>
-        module.GetTypes()
-            .Where(t => IsEffectivelyPublic(t) && SliceOf(t, layout) is not null)
-            .Where(t => !IsSealedRecord(t) && !IsEntryPoint(t, SliceOf(t, layout)!))
-            .Select(t => $"{SliceOf(t, layout)}: {t.FullName} is public, but is neither a sealed record event " +
-                         $"nor the {SliceOf(t, layout)}Slice entry point")
+        PublicRoles(module, layout)
+            .Where(r => r.Value == PublicRole.Stray)
+            .Select(r => $"{SliceOf(r.Key, layout)}: {r.Key.FullName} is public, but is neither a sealed record event, " +
+                         $"the {SliceOf(r.Key, layout)}Slice entry point, a Wolverine endpoint, nor in an endpoint's signature")
             .ToList();
 
-    /// <summary>A slice may use another slice's public types (its events), never its internals.</summary>
-    public static IReadOnlyList<string> CrossSliceDependencies(ModuleDefinition module, SliceLayout layout) =>
-        module.GetTypes()
+    /// <summary>
+    /// A slice may use another slice's events, and nothing else — not its internals, and
+    /// not the types Wolverine forced public (its state, request, response).
+    /// </summary>
+    public static IReadOnlyList<string> CrossSliceDependencies(ModuleDefinition module, SliceLayout layout)
+    {
+        var roles = PublicRoles(module, layout);
+        return module.GetTypes()
             .Select(t => (type: t, slice: SliceOf(t, layout)))
             .Where(x => x.slice is not null)
             .SelectMany(x => ReferencedTypes(x.type)
                 .Where(r => r.Module == module)
                 .Select(r => r.Resolve())
                 .OfType<TypeDefinition>()
-                .Where(r => SliceOf(r, layout) is { } other && other != x.slice && !IsEffectivelyPublic(r))
-                .Select(r => $"{x.slice}: {x.type.FullName} depends on {r.FullName}, which is internal to {SliceOf(r, layout)}"))
+                .Where(r => SliceOf(r, layout) is { } other && other != x.slice
+                            && roles.GetValueOrDefault(r, PublicRole.Stray) != PublicRole.Event)
+                .Select(r => $"{x.slice}: {x.type.FullName} depends on {r.FullName}, which is not an event of {SliceOf(r, layout)}"))
             .Distinct()
             .ToList();
+    }
 
-    /// <summary>Shared code is pure: no slices, no ASP.NET, no persistence.</summary>
+    /// <summary>Shared code is pure: no slices, no ASP.NET, no persistence, no Wolverine.</summary>
     public static IReadOnlyList<string> SharedIsPure(ModuleDefinition module, SliceLayout layout) =>
         module.GetTypes()
             .Where(t => IsIn(Namespace(t), layout.SharedNamespace))
@@ -55,30 +104,27 @@ internal static class SliceRules
             .Distinct()
             .ToList();
 
-    /// <summary>Every slice has an entry point, and the catalog calls both of its methods.</summary>
-    public static IReadOnlyList<string> EntryPointsWired(ModuleDefinition module, SliceLayout layout)
+    /// <summary>
+    /// A slice's <c>&lt;Name&gt;Slice</c> is optional — only slices that own events or
+    /// projections need one — but where it exists it must be well-formed and called
+    /// from the catalog's <c>Register</c>.
+    /// </summary>
+    public static IReadOnlyList<string> RegistrationsWired(ModuleDefinition module, SliceLayout layout)
     {
         var catalog = module.GetType(layout.CatalogType)
             ?? throw new InvalidOperationException($"Catalog {layout.CatalogType} not found");
-        var calledFrom = new Dictionary<string, HashSet<string>>
-        {
-            ["Register"] = CallsIn(catalog, "Register"),
-            ["Map"] = CallsIn(catalog, "Map"),
-        };
+        var called = CallsIn(catalog, "Register");
 
         var violations = new List<string>();
         foreach (var slice in module.GetTypes().Select(t => SliceOf(t, layout)).OfType<string>().Distinct().Order())
         {
             var entry = module.GetType($"{layout.SlicesNamespace}.{slice}.{slice}Slice");
-            if (entry is null || !IsEntryPoint(entry, slice))
-            {
-                violations.Add($"{slice}: no public static {slice}Slice with Register(StoreOptions) and Map(IEndpointRouteBuilder)");
+            if (entry is null)
                 continue;
-            }
-
-            foreach (var (method, calls) in calledFrom)
-                if (!calls.Contains($"{entry.FullName}::{method}"))
-                    violations.Add($"{slice}: {catalog.Name}.{method} does not call {entry.Name}.{method}");
+            if (!IsEntryPoint(entry, slice))
+                violations.Add($"{slice}: {slice}Slice is not a public static class with Register(StoreOptions)");
+            else if (!called.Contains($"{entry.FullName}::Register"))
+                violations.Add($"{slice}: {catalog.Name}.Register does not call {entry.Name}.Register");
         }
         return violations;
     }
@@ -135,12 +181,54 @@ internal static class SliceRules
 
     private static bool IsEntryPoint(TypeDefinition type, string slice) =>
         type.Name == $"{slice}Slice" && type.IsPublic && type.IsAbstract && type.IsSealed
-        && HasStaticMethod(type, "Register", StoreOptions)
-        && HasStaticMethod(type, "Map", EndpointRouteBuilder);
+        && type.Methods.Any(m => m.Name == "Register" && m.IsStatic && m.IsPublic
+                                 && m.Parameters is [var p] && p.ParameterType.FullName == StoreOptions);
 
-    private static bool HasStaticMethod(TypeDefinition type, string name, string parameterType) =>
-        type.Methods.Any(m => m.Name == name && m.IsStatic && m.IsPublic
-                              && m.Parameters is [var p] && p.ParameterType.FullName == parameterType);
+    private static readonly HashSet<string> WolverineRouteAttributes =
+        ["Get", "Post", "Put", "Delete", "Patch", "Head", "Options"];
+
+    /// <summary>A static class with at least one <c>[Wolverine&lt;Verb&gt;]</c> route method.</summary>
+    private static bool IsWolverineEndpoint(TypeDefinition type) =>
+        type.IsAbstract && type.IsSealed
+        && type.Methods.Any(m => m.IsPublic && m.CustomAttributes.Any(a =>
+            a.AttributeType.Namespace == "Wolverine.Http"
+            && a.AttributeType.Name.StartsWith("Wolverine", StringComparison.Ordinal)
+            && a.AttributeType.Name.EndsWith("Attribute", StringComparison.Ordinal)
+            && WolverineRouteAttributes.Contains(a.AttributeType.Name["Wolverine".Length..^"Attribute".Length])));
+
+    /// <summary>
+    /// Types of the endpoints' own slices that appear in their public methods' signatures,
+    /// and — because C# requires it — in the public members of those types, transitively.
+    /// </summary>
+    private static HashSet<TypeDefinition> Contracts(IEnumerable<TypeDefinition> endpoints, SliceLayout layout)
+    {
+        var found = new HashSet<TypeDefinition>();
+        var pending = new Stack<(TypeReference type, string slice)>();
+        foreach (var endpoint in endpoints)
+            foreach (var method in endpoint.Methods.Where(m => m.IsPublic))
+            {
+                pending.Push((method.ReturnType, SliceOf(endpoint, layout)!));
+                foreach (var p in method.Parameters) pending.Push((p.ParameterType, SliceOf(endpoint, layout)!));
+            }
+
+        while (pending.TryPop(out var next))
+        {
+            // Filter by namespace before resolving: only this slice's types need resolving.
+            var own = Flatten(next.type).Where(t => SliceOf(t, layout) == next.slice);
+            foreach (var type in own.Select(t => t.Resolve()).OfType<TypeDefinition>())
+            {
+                if (!found.Add(type))
+                    continue;
+                foreach (var p in type.Properties.Where(p => p.GetMethod is { IsPublic: true }))
+                    pending.Push((p.PropertyType, next.slice));
+                foreach (var f in type.Fields.Where(f => f.IsPublic))
+                    pending.Push((f.FieldType, next.slice));
+                foreach (var p in type.Methods.Where(m => m.IsConstructor && m.IsPublic).SelectMany(m => m.Parameters))
+                    pending.Push((p.ParameterType, next.slice));
+            }
+        }
+        return found;
+    }
 
     private static HashSet<string> CallsIn(TypeDefinition type, string method) =>
         type.Methods.Where(m => m.Name == method && m.HasBody)

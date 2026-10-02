@@ -35,7 +35,7 @@ public class InviteMemberSpecs
     /// <summary>The deadline of some earlier invite in a Given; deciding never reads it.</summary>
     private static readonly DateTimeOffset Earlier = T0.AddDays(20);
 
-    /// <summary>The group as slice 1 leaves it, plus a placeholder "Bob".</summary>
+    /// <summary>The group as CreateGroup leaves it, plus a placeholder "Bob".</summary>
     private static readonly object[] Lisbon =
     [
         new GroupCreated(G1, "Lisbon trip", "GBP", Alice),

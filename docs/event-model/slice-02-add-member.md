@@ -93,4 +93,4 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 Two phones adding at once: both decide against the same stream version, the
 first save wins, the second gets **409 Conflict** and the client retries — at
 which point the rules run against the new state, so a duplicate name is then
-rejected properly. Server-side retry was considered and deferred (see `Handler.cs`).
+rejected properly. Server-side retry was considered and deferred (see `Endpoint.cs`).

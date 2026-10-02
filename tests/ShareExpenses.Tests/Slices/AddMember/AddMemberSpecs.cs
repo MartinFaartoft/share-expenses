@@ -23,7 +23,7 @@ public class AddMemberSpecs
     private static readonly UserId Bob = new(Guid.Parse("00000000-0000-0000-0000-0000000000c2"));
     private static readonly UserId Mallory = new(Guid.Parse("00000000-0000-0000-0000-0000000000c9"));
 
-    /// <summary>The group as slice 1 leaves it.</summary>
+    /// <summary>The group as CreateGroup leaves it.</summary>
     private static readonly object[] Lisbon =
     [
         new GroupCreated(G1, "Lisbon trip", "GBP", Alice),

@@ -1,6 +1,8 @@
 using JasperFx;
 using Marten;
+using ShareExpenses.Infrastructure.Wolverine;
 using ShareExpenses.Shared;
+using Wolverine.Marten;
 
 namespace ShareExpenses.Infrastructure.Marten;
 
@@ -34,7 +36,10 @@ public static class MartenSetup
                 // Event types and projections belong to the slices that own them.
                 AllSlices.Register(opts);
             })
-            .UseLightweightSessions();
+            .UseLightweightSessions()
+            // Lets Wolverine's aggregate handler workflow open sessions and commit them
+            // (spec §12). Wolverine's own tables live in their own schema.
+            .IntegrateWithWolverine(w => w.MessageStorageSchemaName = WolverineSetup.Schema);
 
         return services;
     }

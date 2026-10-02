@@ -7,7 +7,7 @@ using ShareExpenses.Tests.Infrastructure;
 namespace ShareExpenses.Tests.Slices.ViewInvite;
 
 /// <summary>
-/// The landing page end to end: real invites issued through slice 3's endpoint,
+/// The landing page end to end: real invites issued through InviteMember's endpoint,
 /// looked up through this slice's, folded by Marten from the real store.
 /// </summary>
 [Collection(AppCollection.Name)]

@@ -5,10 +5,14 @@ using Microsoft.Extensions.DependencyInjection;
 using ShareExpenses.Shared;
 using ShareExpenses.Slices.CreateGroup;
 using ShareExpenses.Tests.Infrastructure;
-using ShareExpenses.Tests.Specs;
 
 namespace ShareExpenses.Tests.Slices.CreateGroup;
 
+/// <summary>
+/// CreateGroup runs on Wolverine (spec §12): the save happens in generated code, so
+/// everything here goes through HTTP. Ids are generated per request, so specs read
+/// them back from the response rather than pinning them.
+/// </summary>
 [Collection(AppCollection.Name)]
 public class CreateGroupIntegrationTests(AppFixture app)
 {
@@ -16,51 +20,15 @@ public class CreateGroupIntegrationTests(AppFixture app)
 
     private IDocumentStore Store => app.Services.GetRequiredService<IDocumentStore>();
 
-    private async Task<IReadOnlyList<object>> StreamOf(GroupId groupId)
+    // ── Specs against the real store ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task S1_creates_the_group_and_its_first_member()
     {
-        await using var session = Store.QuerySession();
-        return (await session.Events.FetchStreamAsync(groupId.Value)).Select(e => e.Data).ToList();
-    }
-
-    // Fresh ids per test: the container is shared by every test in the run.
-    private readonly GroupId _g1 = GroupId.New();
-    private readonly MemberId _m1 = MemberId.New();
-
-    private StreamSpec<Command> Spec => new(Store, _g1.Value, async (session, command) =>
-        await Handler.Handle(session, command, _g1, _m1, default) switch
-        {
-            Outcome.Created => null,
-            Outcome.Invalid i => i.Reason,
-            Outcome.AlreadyExists => "group already exists",
-            var other => throw new InvalidOperationException($"Unhandled outcome {other}"),
-        });
-
-    [Fact]
-    public Task S1_creates_the_group_and_its_first_member() =>
-        Spec.Given()
-            .When(new Command("Lisbon trip", "GBP", "Alice", _alice))
-            .Then(
-                new GroupCreated(_g1, "Lisbon trip", "GBP", _alice),
-                new MemberAdded(_m1, "Alice", _alice),
-                new MemberClaimed(_m1, _alice));
-
-    [Fact]
-    public Task S4_a_group_is_created_exactly_once() =>
-        Spec.Given(new GroupCreated(_g1, "Lisbon trip", "GBP", _alice))
-            .When(new Command("Lisbon trip", "GBP", "Alice", _alice))
-            .ThenRejected("group already exists");
-
-    [Fact]
-    public async Task Post_creates_the_group_and_records_the_three_events()
-    {
-        var response = await app.ClientFor(_alice).PostAsJsonAsync("/api/groups",
-            new { groupName = "Lisbon trip", currency = "gbp", memberName = "Alice" });
+        var response = await Create("Lisbon trip", "GBP", "Alice");
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<CreatedBody>();
-        Assert.NotNull(body);
-        Assert.Equal($"/api/groups/{body.GroupId}", response.Headers.Location?.OriginalString);
-
+        var body = (await response.Content.ReadFromJsonAsync<CreatedBody>())!;
         Assert.Equal(
             [
                 new GroupCreated(body.GroupId, "Lisbon trip", "GBP", _alice),
@@ -71,10 +39,43 @@ public class CreateGroupIntegrationTests(AppFixture app)
     }
 
     [Fact]
+    public async Task S4_a_group_is_created_exactly_once()
+    {
+        // Just before the save, another write starts a stream with the very same id.
+        Guid? taken = null;
+        app.BeforeNextSave.Arm(async pending =>
+        {
+            taken = Assert.Single(pending.PendingChanges.Streams()).Id;
+            await using var other = Store.LightweightSession();
+            other.Events.StartStream(taken.Value, new GroupCreated(GroupId.From(taken.Value), "Porto", "EUR", _alice));
+            await other.SaveChangesAsync();
+        });
+
+        var response = await Create("Lisbon trip", "GBP", "Alice");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("group already exists", await response.Content.ReadAsStringAsync());
+        var groupId = GroupId.From(taken!.Value);
+        Assert.Equal([new GroupCreated(groupId, "Porto", "EUR", _alice)], await StreamOf(groupId));
+    }
+
+    // ── HTTP ──────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Post_creates_the_group_with_201_and_a_location()
+    {
+        var response = await Create("Lisbon trip", "gbp", "Alice");
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = (await response.Content.ReadFromJsonAsync<CreatedBody>())!;
+        Assert.Equal($"/api/groups/{body.GroupId}", response.Headers.Location?.OriginalString);
+        Assert.Equal("GBP", Assert.IsType<GroupCreated>((await StreamOf(body.GroupId))[0]).Currency);
+    }
+
+    [Fact]
     public async Task Post_is_stored_under_stable_event_type_names()
     {
-        var response = await app.ClientFor(_alice).PostAsJsonAsync("/api/groups",
-            new { groupName = "Porto", currency = "EUR", memberName = "Alice" });
+        var response = await Create("Porto", "EUR", "Alice");
         var body = await response.Content.ReadFromJsonAsync<CreatedBody>();
 
         await using var session = Store.QuerySession();
@@ -85,8 +86,7 @@ public class CreateGroupIntegrationTests(AppFixture app)
     [Fact]
     public async Task Post_rejects_an_invalid_command_with_400_and_the_reason()
     {
-        var response = await app.ClientFor(_alice).PostAsJsonAsync("/api/groups",
-            new { groupName = "Lisbon trip", currency = "XYZ", memberName = "Alice" });
+        var response = await Create("Lisbon trip", "XYZ", "Alice");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("currency must be a known ISO 4217 code", await response.Content.ReadAsStringAsync());
@@ -99,6 +99,17 @@ public class CreateGroupIntegrationTests(AppFixture app)
             new { groupName = "Lisbon trip", currency = "GBP", memberName = "Alice" });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────────
+
+    private Task<HttpResponseMessage> Create(string groupName, string currency, string memberName) =>
+        app.ClientFor(_alice).PostAsJsonAsync("/api/groups", new { groupName, currency, memberName });
+
+    private async Task<IReadOnlyList<object>> StreamOf(GroupId groupId)
+    {
+        await using var session = Store.QuerySession();
+        return (await session.Events.FetchStreamAsync(groupId.Value)).Select(e => e.Data).ToList();
     }
 
     private sealed record CreatedBody(GroupId GroupId, MemberId MemberId);

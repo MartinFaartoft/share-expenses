@@ -1,11 +1,12 @@
 // Fixture slices for SliceBoundaryTests: compiled into the test assembly so every
 // rule can be shown to pass on a conforming layout and fire on a violating one.
-// The rules read IL, so these types only need to compile, never to run.
+// The IL rules only need these to compile; the event-registration rule also calls
+// each catalog's Register.
 
 using Marten;
 using Marten.Schema;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
+using Wolverine.Http;
 
 // ── Conforming ────────────────────────────────────────────────────────────────
 
@@ -19,10 +20,10 @@ namespace ShareExpenses.Tests.Architecture.Fixtures.Good.Slices.Alpha
         public State Apply(AlphaHappened _) => this with { Count = Count + 1 };
     }
 
+    // Owns an event, so it has an entry point that registers it.
     public static class AlphaSlice
     {
-        public static void Register(StoreOptions opts) => opts.Events.AddEventType<AlphaHappened>();
-        public static void Map(IEndpointRouteBuilder api) => api.MapGet("/alpha", () => new State(0).Count);
+        public static void Register(StoreOptions opts) => opts.Events.MapEventType<AlphaHappened>("alpha_happened");
     }
 }
 
@@ -30,17 +31,23 @@ namespace ShareExpenses.Tests.Architecture.Fixtures.Good.Slices.Beta
 {
     using ShareExpenses.Tests.Architecture.Fixtures.Good.Slices.Alpha;
 
-    // Folding another slice's public event is the intended coupling.
+    // Folding another slice's public event is the intended coupling. Public, with
+    // its nested type, because it is in the endpoint's signature.
     [DocumentAlias("beta_state")]
-    internal sealed record State(int AlphaCount)
+    public sealed record State(Tally Tally)
     {
-        public State Apply(AlphaHappened _) => this with { AlphaCount = AlphaCount + 1 };
+        public State Apply(AlphaHappened _) => this with { Tally = new Tally(Tally.Count + 1) };
     }
 
-    public static class BetaSlice
+    public sealed record Tally(int Count);
+
+    public sealed record Request(int Add);
+
+    // A slice on Wolverine with no events: an endpoint, its contract types, and no entry point.
+    public static class Endpoint
     {
-        public static void Register(StoreOptions opts) { }
-        public static void Map(IEndpointRouteBuilder api) => api.MapGet("/beta", () => new State(0).AlphaCount);
+        [WolverinePost("/beta")]
+        public static int Post(Request request, State state) => state.Tally.Count + request.Add;
     }
 }
 
@@ -56,17 +63,7 @@ namespace ShareExpenses.Tests.Architecture.Fixtures.Good
 {
     public static class Catalog
     {
-        public static void Register(StoreOptions opts)
-        {
-            Slices.Alpha.AlphaSlice.Register(opts);
-            Slices.Beta.BetaSlice.Register(opts);
-        }
-
-        public static void Map(IEndpointRouteBuilder api)
-        {
-            Slices.Alpha.AlphaSlice.Map(api);
-            Slices.Beta.BetaSlice.Map(api);
-        }
+        public static void Register(StoreOptions opts) => Slices.Alpha.AlphaSlice.Register(opts);
     }
 }
 
@@ -74,18 +71,30 @@ namespace ShareExpenses.Tests.Architecture.Fixtures.Good
 
 namespace ShareExpenses.Tests.Architecture.Fixtures.Bad.Slices.Gamma
 {
-    public sealed record GammaHappened(Guid Id);
+    public sealed record GammaHappened(Guid Id);   // an event its Register never maps
 
     public class Leaky;                        // public, not a record
 
     public record Unsealed(int X);             // public record, not sealed
+
+    public static class Endpoint               // public, but no Wolverine route on it
+    {
+        public static int Post() => 0;
+    }
+
+    public sealed record GammaRequest(int X);  // public because the endpoint below takes it
+
+    public static class Endpoints
+    {
+        [WolverinePost("/gamma")]
+        public static int Post(GammaRequest request) => request.X;
+    }
 
     internal sealed record State(int X);       // no [DocumentAlias]
 
     public static class GammaSlice
     {
         public static void Register(StoreOptions opts) { }
-        public static void Map(IEndpointRouteBuilder api) { }
     }
 }
 
@@ -96,22 +105,25 @@ namespace ShareExpenses.Tests.Architecture.Fixtures.Bad.Slices.Delta
 
     internal static class Peek
     {
-        public static int Look(Gamma.State state) => state.X;   // another slice's internal
+        public static int Look(Gamma.State state) => state.X;           // another slice's internal
+        public static int Borrow(Gamma.GammaRequest request) => request.X; // public, but not an event
     }
 
     public static class DeltaSlice
     {
-        public static void Register(StoreOptions opts) { }
-        public static void Map(IEndpointRouteBuilder api) { } // never called by the catalog
+        public static void Register(StoreOptions opts) { }   // never called by the catalog
     }
 }
 
 namespace ShareExpenses.Tests.Architecture.Fixtures.Bad.Slices.Epsilon
 {
-    internal sealed record Orphan(int X);      // slice with no entry point
-
     [DocumentAlias("shared_state")]
     internal sealed record State(int Z);       // alias also used by Delta
+
+    public static class EpsilonSlice           // an entry point with no Register
+    {
+        public static void Map(IEndpointRouteBuilder api) { }
+    }
 }
 
 namespace ShareExpenses.Tests.Architecture.Fixtures.Bad.Shared
@@ -127,15 +139,6 @@ namespace ShareExpenses.Tests.Architecture.Fixtures.Bad
 {
     public static class Catalog
     {
-        public static void Register(StoreOptions opts)
-        {
-            Slices.Gamma.GammaSlice.Register(opts);
-            Slices.Delta.DeltaSlice.Register(opts);
-        }
-
-        public static void Map(IEndpointRouteBuilder api)
-        {
-            Slices.Gamma.GammaSlice.Map(api);
-        }
+        public static void Register(StoreOptions opts) => Slices.Gamma.GammaSlice.Register(opts);
     }
 }

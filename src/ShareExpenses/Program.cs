@@ -1,9 +1,10 @@
+using JasperFx;
 using Marten;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using ShareExpenses;
 using ShareExpenses.Infrastructure;
 using ShareExpenses.Infrastructure.Identity;
 using ShareExpenses.Infrastructure.Marten;
+using ShareExpenses.Infrastructure.Wolverine;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +14,7 @@ var connectionString = builder.Configuration.GetConnectionString("Postgres")
 builder.Services.AddLedgerStore(connectionString, builder.Environment);
 builder.Services.AddPasswordlessIdentity(connectionString, builder.Environment);
 builder.Services.AddPublicOrigin(builder.Configuration, builder.Environment);
+builder.AddWolverineEndpoints();
 
 // The clock, injected so time-dependent decisions (invite deadlines) stay testable.
 builder.Services.TryAddSingleton(TimeProvider.System);
@@ -24,7 +26,9 @@ await app.MigrateIdentityInDevelopmentAsync();
 app.UseAuthentication();
 app.UseAuthorization();
 
-AllSlices.Map(app.MapGroup("/api"));
+// Slice endpoints: discovered by Wolverine, under /api. To list them:
+//   dotnet run --project src/ShareExpenses -- describe
+app.MapWolverineEndpoints();
 app.MapDevSignIn();
 
 app.MapGet("/health", async (IQuerySession marten, IdentityDb identity, CancellationToken ct) =>
@@ -36,6 +40,7 @@ app.MapGet("/health", async (IQuerySession marten, IdentityDb identity, Cancella
         : Results.Problem("database unreachable", statusCode: 503);
 });
 
-app.Run();
+// JasperFx's command line; plain "dotnet run" starts the app as before.
+return await app.RunJasperFxCommands(args);
 
 public partial class Program;

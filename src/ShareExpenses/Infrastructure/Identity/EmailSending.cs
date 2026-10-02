@@ -2,7 +2,7 @@ namespace ShareExpenses.Infrastructure.Identity;
 
 /// <summary>
 /// Outgoing email. Every sign-in email carries a tappable link and a six-digit code
-/// (spec §4); every invite email carries the invite link (slice 3).
+/// (spec §4); every invite email carries the invite link (InviteMember).
 /// </summary>
 public interface IEmailSender
 {

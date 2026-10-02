@@ -8,7 +8,7 @@ namespace ShareExpenses.Slices.ViewInvite;
 
 /// <summary>An invite that can still be used, apart from its deadline.</summary>
 /// <param name="InvitedBy">The slot the inviting user held when inviting.</param>
-internal sealed record OpenInvite(string TokenHash, DateTimeOffset ExpiresAt, MemberId InvitedBy);
+public sealed record OpenInvite(string TokenHash, DateTimeOffset ExpiresAt, MemberId InvitedBy);
 
 /// <summary>
 /// What this slice folds from the group stream (spec §12 naming: every slice folds a
@@ -29,16 +29,20 @@ internal sealed record OpenInvite(string TokenHash, DateTimeOffset ExpiresAt, Me
 ///   GroupArchived       → decide whether invites stay viewable
 ///   MemberClaimReleased → (old invites stay dead; a new invite reopens the slot)
 ///
-/// Convention methods must be public for Marten's source generator; the type is
-/// internal. The alias is required: every slice has a State (spec §12).
+/// Public, as is <see cref="OpenInvite"/>: Wolverine fetches it for the endpoint, so
+/// it is in the endpoint's signature. The alias is required: every slice has a State
+/// (spec §12).
 /// </summary>
 [DocumentAlias("view_invite_state")]
-internal sealed record State(
+public sealed record State(
     string GroupName,
     ImmutableDictionary<MemberId, string> SlotNames,
     ImmutableDictionary<UserId, MemberId> Members,
     ImmutableDictionary<MemberId, OpenInvite> OpenInvites)
 {
+    /// <summary>The stream id, set by Marten; Wolverine needs it to type the aggregate's identity.</summary>
+    public GroupId Id { get; init; }
+
     public static State Create(GroupCreated e) => new(e.Name, [], [], []);
 
     public State Apply(MemberAdded e) => this with { SlotNames = SlotNames.SetItem(e.MemberId, e.DisplayName) };

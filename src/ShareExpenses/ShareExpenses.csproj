@@ -9,6 +9,8 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="WolverineFx.Http.Marten" Version="6.44.0" />
+    <PackageReference Include="WolverineFx.RuntimeCompilation" Version="6.44.0" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,44 +1,78 @@
 using System.Security.Claims;
-using Marten;
+using JasperFx;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using ShareExpenses.Infrastructure.Identity;
 using ShareExpenses.Shared;
+using Wolverine.Http;
+using Wolverine.Marten;
 
 namespace ShareExpenses.Slices.AddMember;
 
-internal sealed record Request(string? DisplayName);
+// Public: Wolverine generates code against the endpoint's signature (spec §12).
+public sealed record Request(string? DisplayName);
 
 internal sealed record Response(MemberId MemberId);
 
-/// <summary><c>POST /groups/{groupId}/members</c> — the Group setup screen's "add".</summary>
-internal static class Endpoint
+/// <summary>
+/// <c>POST /groups/{group}/members</c> — the Group setup screen's "add".
+///
+/// Wolverine's aggregate handler workflow: before this method runs, Wolverine has
+/// called <c>FetchForWriting&lt;State&gt;</c> for the route's group id; afterwards it
+/// appends the returned events at the version it read and saves. What is left here
+/// is decide, and map the decision to HTTP.
+/// </summary>
+public static class Endpoint
 {
-    public static void Map(IEndpointRouteBuilder api) =>
-        api.MapPost("/groups/{groupId}/members", Handle)
-            .RequireAuthorization()
-            .WithName("AddMember");
+    /// <summary>
+    /// The stream to fetch, from the route. A malformed id becomes one no stream has,
+    /// so it takes the unknown-group path: same answer, same work.
+    /// </summary>
+    public static GroupId GroupStream(string group) =>
+        GroupId.TryParse(group, out var id) ? id : GroupId.New();
 
-    // groupId is bound as a string, not a GroupId, so a malformed id is answered
-    // by us — 404, like a missing group — rather than by ASP.NET's binder (400).
-    private static async Task<IResult> Handle(
-        string groupId, Request request, ClaimsPrincipal user, IDocumentSession session, HttpContext http,
-        CancellationToken ct)
+    [WolverinePost("/groups/{group}/members", Name = "AddMember")]
+    [Authorize]
+    public static (IResult, Events) Post(
+        string group,
+        Request request,
+        // Required = false: a missing stream arrives as null and is answered by
+        // Decide, so "no such group" and "not a member" give the same 404 body.
+        [WriteAggregate(FromMethod = nameof(GroupStream), Required = false)] State? state,
+        ClaimsPrincipal user,
+        HttpContext http)
     {
-        if (!GroupId.TryParse(groupId, out var id))
-            return NotFound(Decider.GroupNotFound);
+        var memberId = MemberId.New();
+        // A malformed id resolves to a fresh one each time; harmless, as no stream has it.
+        var command = new Command(GroupStream(group), request.DisplayName, user.UserId());
 
-        var outcome = await Handler.Handle(session, new Command(id, request.DisplayName, user.UserId()), MemberId.New(), ct);
-
-        return outcome switch
+        return Decider.Decide(state, command, memberId) switch
         {
-            Outcome.Added a => Results.Created($"{http.Request.Path}/{a.MemberId}", new Response(a.MemberId)),
-            Outcome.Invalid i => Results.Problem(i.Reason, statusCode: StatusCodes.Status400BadRequest),
-            Outcome.NotFound n => NotFound(n.Reason),
-            Outcome.Conflict => Results.Problem(
-                "the group changed while you were adding; please try again", statusCode: StatusCodes.Status409Conflict),
-            _ => throw new InvalidOperationException($"Unhandled outcome {outcome}"),
+            Decision.Accepted accepted => (
+                Results.Created($"{http.Request.Path}/{memberId}", new Response(memberId)),
+                [.. accepted.Events]),
+            Decision.Rejected { Kind: Rejection.NotFound } rejected => (
+                Results.Problem(rejected.Reason, statusCode: StatusCodes.Status404NotFound),
+                []),
+            Decision.Rejected rejected => (
+                Results.Problem(rejected.Reason, statusCode: StatusCodes.Status400BadRequest),
+                []),
+            var other => throw new InvalidOperationException($"Unhandled decision {other}"),
         };
     }
 
-    private static IResult NotFound(string reason) =>
-        Results.Problem(reason, statusCode: StatusCodes.Status404NotFound);
+    /// <summary>Wolverine's save lost the race: another phone appended first.</summary>
+    // DECISION (AddMember): on a concurrency conflict the CLIENT retries — we return
+    // 409 and do nothing else. This is spec §11 as written ("the loser retries"),
+    // and keeps the conflict visible while learning.
+    //
+    // Revisit: a server-side retry (re-fetch, re-decide, re-append, a few times)
+    // would be correct, not a blind overwrite — the rules run again against the new
+    // state, so two phones adding "Bob" still yields one "already exists". It would
+    // turn most 409s into a single round trip.
+    public static ProblemDetails OnException(ConcurrencyException _) => new()
+    {
+        Status = StatusCodes.Status409Conflict,
+        Detail = "the group changed while you were adding; please try again",
+    };
 }

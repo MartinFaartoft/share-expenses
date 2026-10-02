@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using Marten;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -24,7 +25,13 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17")
         .Build();
 
-    public async Task InitializeAsync() => await _postgres.StartAsync();
+    public async Task InitializeAsync()
+    {
+        // Program ends in RunJasperFxCommands, which otherwise never starts the host
+        // under a test server.
+        JasperFx.CommandLine.JasperFxEnvironment.AutoStartHost = true;
+        await _postgres.StartAsync();
+    }
 
     async Task IAsyncLifetime.DisposeAsync()
     {
@@ -48,6 +55,9 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
     /// </summary>
     public TestClock Clock { get; } = new();
 
+    /// <summary>Injects a competing write into the app's next save (concurrency tests).</summary>
+    public BeforeNextSave BeforeNextSave { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
@@ -58,6 +68,7 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
                 .AddScheme<AuthenticationSchemeOptions, HeaderAuthentication>(HeaderAuthentication.SchemeName, null);
             services.AddSingleton<IEmailSender>(Emails);
             services.AddSingleton<TimeProvider>(Clock);
+            services.ConfigureMarten(opts => opts.Listeners.Add(BeforeNextSave));
         });
     }
 

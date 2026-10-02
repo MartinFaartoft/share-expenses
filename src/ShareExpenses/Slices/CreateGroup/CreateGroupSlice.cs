@@ -2,7 +2,7 @@ using Marten;
 
 namespace ShareExpenses.Slices.CreateGroup;
 
-/// <summary>Slice 1 — Create group. The slice's only public entry point (spec §12).</summary>
+/// <summary>Create group: what it contributes to the store (spec §12).</summary>
 public static class CreateGroupSlice
 {
     public static void Register(StoreOptions opts)
@@ -13,6 +13,4 @@ public static class CreateGroupSlice
         opts.Events.MapEventType<MemberAdded>("member_added");
         opts.Events.MapEventType<MemberClaimed>("member_claimed");
     }
-
-    public static void Map(IEndpointRouteBuilder api) => Endpoint.Map(api);
 }

@@ -9,7 +9,6 @@ using ShareExpenses.Infrastructure.Marten;
 using ShareExpenses.Shared;
 using ShareExpenses.Slices.InviteMember;
 using ShareExpenses.Tests.Infrastructure;
-using ShareExpenses.Tests.Specs;
 // Only the public events: tests can see every slice's internals, so a namespace
 // import would bring in CreateGroup's own Command too.
 using GroupCreated = ShareExpenses.Slices.CreateGroup.GroupCreated;
@@ -27,9 +26,6 @@ public class InviteMemberIntegrationTests(AppFixture app)
     private readonly MemberId _m2 = MemberId.New();
     private readonly UserId _alice = UserId.New();
     private readonly UserId _mallory = UserId.New();
-    private static readonly string H1 = InviteToken.Hash("t1");
-    private static readonly DateTimeOffset T0 = new(2026, 10, 1, 12, 0, 0, TimeSpan.Zero);
-
     private IDocumentStore Store => app.Services.GetRequiredService<IDocumentStore>();
 
     private object[] Lisbon =>
@@ -40,29 +36,56 @@ public class InviteMemberIntegrationTests(AppFixture app)
         new MemberAdded(_m2, "Bob", _alice),
     ];
 
-    /// <summary>Real store, no accounts: the directory knows nobody.</summary>
-    private StreamSpec<Command> Spec => new(Store, _g1.Value, async (session, command) =>
-        await Handler.Handle(session, new NoAccounts(), command, default) switch
-        {
-            Outcome.Invited => null,
-            Outcome.Invalid i => i.Reason,
-            Outcome.NotFound n => n.Reason,
-            var other => throw new InvalidOperationException($"Unhandled outcome {other}"),
-        });
-
     // ── Specs against the real store: Marten's fold must agree with the test fold ──
 
     [Fact]
-    public Task S1_invites_a_placeholder_member() =>
-        Spec.Given(Lisbon)
-            .When(new Command(_g1, _m2, "bob@example.com", H1, T0, _alice))
-            .Then(new MemberInvited(_m2, H1, T0.AddDays(30), _alice));
+    public async Task S1_invites_a_placeholder_member()
+    {
+        await Given(Lisbon);
+        var before = app.Clock.GetUtcNow();
+
+        var response = await Invite(_alice, _g1, _m2, "bob@example.com");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var hash = InviteToken.Hash(TokenOf(await LinkFrom(response)));
+        var stream = await StreamOf(_g1);
+        Assert.Equal(Lisbon, stream.Take(Lisbon.Length));
+        var invited = Assert.IsType<MemberInvited>(Assert.Single(stream.Skip(Lisbon.Length)));
+        Assert.Equal((_m2, hash, _alice), (invited.MemberId, invited.TokenHash, invited.By));
+        Assert.InRange(invited.ExpiresAt, before.AddDays(30), app.Clock.GetUtcNow().AddDays(30));
+    }
 
     [Fact]
-    public Task S2_the_group_must_exist() =>
-        Spec.Given()
-            .When(new Command(_g1, _m2, "bob@example.com", H1, T0, _alice))
-            .ThenRejected("group not found");
+    public async Task S2_the_group_must_exist()
+    {
+        var response = await Invite(_alice, _g1, _m2, "bob@example.com");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Contains("group not found", await response.Content.ReadAsStringAsync());
+        Assert.Empty(await StreamOf(_g1));
+    }
+
+    // ── Concurrency ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task A_lost_race_is_409_writes_nothing_and_sends_no_email()
+    {
+        await Given(Lisbon);
+        var address = $"{Guid.NewGuid():N}@example.com";
+
+        // Just before the invite saves, another phone adds Carol.
+        app.BeforeNextSave.Arm(async () =>
+            Assert.Equal(HttpStatusCode.Created,
+                (await app.ClientFor(_alice).PostAsJsonAsync($"/api/groups/{_g1}/members", new { displayName = "Carol" })).StatusCode));
+
+        var response = await Invite(_alice, _g1, _m2, address);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.DoesNotContain(await StreamOf(_g1), e => e is MemberInvited);
+        Assert.DoesNotContain(app.Emails.Invites, e => e.Email == address);
+        await using var session = Store.QuerySession();
+        Assert.Null(await session.LoadAsync<InviteDelivery>(_m2.Value));
+    }
 
     // ── Lookups for real: InviteDelivery and Identity ─────────────────────────────
 
@@ -235,6 +258,13 @@ public class InviteMemberIntegrationTests(AppFixture app)
 
     // ── helpers ───────────────────────────────────────────────────────────────────
 
+    private async Task Given(params object[] history)
+    {
+        await using var session = Store.LightweightSession();
+        session.Events.StartStream(_g1.Value, history);
+        await session.SaveChangesAsync();
+    }
+
     private async Task<(GroupId Group, MemberId Placeholder)> GroupWithPlaceholder(string name)
     {
         var created = await app.ClientFor(_alice).PostAsJsonAsync("/api/groups",
@@ -269,11 +299,6 @@ public class InviteMemberIntegrationTests(AppFixture app)
     {
         await using var session = Store.QuerySession();
         return (await session.Events.FetchStreamAsync(groupId.Value)).Select(e => e.Data).ToList();
-    }
-
-    private sealed class NoAccounts : IEmailDirectory
-    {
-        public Task<UserId?> AccountFor(string email, CancellationToken ct = default) => Task.FromResult<UserId?>(null);
     }
 
     private sealed record CreatedBody(GroupId GroupId, MemberId MemberId);
