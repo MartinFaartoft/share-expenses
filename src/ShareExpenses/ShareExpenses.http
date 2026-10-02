@@ -194,5 +194,12 @@ Content-Type: application/json
   "paidOn": "2026-10-01"
 }
 
-### 15. Health
+### 15. The group page: balances and expenses. Expect 200 with members (name,
+# status, balanceMinor — positive is owed) and expenses, newest first. Step 13 moved
+# the balances already: the ledger is projected inline, in the same transaction.
+# Stored as ledger.mt_doc_group_ledger; after changing how it folds, rebuild it from
+# the events: dotnet run --project src/ShareExpenses -- projections rebuild
+GET {{host}}/api/groups/{{groupId}}
+
+### 16. Health
 GET {{host}}/health

@@ -735,7 +735,7 @@ the truthful statement anyway.
 
 | Read model | Lifecycle | Serves |
 |---|---|---|
-| `GroupLedger` | **inline** | members, live expenses, per-member balances |
+| `GroupLedgerReadModel` | **inline** — the stored `GroupLedger` | members, live expenses, per-member balances |
 | `ActivityFeed` | **inline** | who did what, when |
 | `UserGroups` | **async** (multi-stream) | a user's group list |
 | `PendingInvitesReadModel` | **live** (folded on each request, nothing stored) | a user's invites: group, slot, inviter |
@@ -744,6 +744,13 @@ the truthful statement anyway.
 `Invite` documents name their groups, so showing them means folding a handful of
 group streams of a few hundred events each: cheap enough to do per request, and
 nothing is stored that could go stale.
+
+`GroupLedger` is what is stored: ViewBalances' state, a Marten snapshot projected
+inline as the `group_ledger` document. The read model is shaped from it per
+request, because part of it depends on the reader — "you", and whether an invite
+is still open, which changes with the clock and so cannot be stored. A stored
+projection holds facts; anything that depends on the time or the reader is
+computed on reading.
 
 Rationale for inline on the ledger: the core phone interaction is "add the
 expense, then immediately look at the balances". Inline projections commit in the
@@ -1377,6 +1384,11 @@ a documentation tool, not application code.
     and early — e.g. "Your sign-in code is 123456", in the subject and the first
     line. Verify on a real iPhone and Mac once the frontend and a mail relay (§4)
     exist; the log sender sends nothing to detect.
+  - **OPEN — several pending invites.** Work out the experience when a user has more
+    than one invite waiting (View invites lists them, soonest deadline first): where
+    signing in lands, whether a single invite is offered directly rather than as a
+    list of one, how a user already signed in learns of a new invite, and what
+    joining one does to the others (they stay; joining is per group).
 - **OPEN** Enforce consistency between `event-model.yaml` and the code, failing
   the build on any mismatch, so the model cannot drift from the code (§12, §13).
   For every non-draft slice:
@@ -1420,6 +1432,26 @@ a documentation tool, not application code.
     made while building AddMember.
   - Optional means advisory by default: it reports, and the caller decides
     whether to gate on it.
+- **OPEN** Architecture test: every endpoint requires authorization unless it is
+  on an explicit allow-list. Today each endpoint opts in with `[Authorize]` or
+  `RequireAuthorization()`, so a new slice that forgets it is silently public — and
+  a group's data leaks rather than 404s. The test fails the build when an endpoint
+  neither requires authorization nor appears on the allow-list, and when an
+  allow-listed endpoint no longer exists (so the list cannot rot).
+  - **Allow-list today:** `POST /api/sign-in/code`, `POST /api/sign-in`,
+    `GET /health`. Candidates later: an invite landing page, if one returns.
+  - **Mechanism:** build the app (the test host already does) and walk its
+    `EndpointDataSource`: every `RouteEndpoint`, Wolverine's and minimal APIs'
+    alike, carries its authorization metadata (`IAuthorizeData`,
+    `IAllowAnonymous`). Checking metadata at runtime, rather than attributes in IL,
+    covers both ways endpoints are declared, and group-level
+    `RequireAuthorization()` too. Like the slice rules, it runs against a fixture
+    that violates it, so it cannot pass vacuously.
+  - **Consider alongside:** secure by default — an authorization fallback policy
+    requiring a signed-in user (`FallbackPolicy`), so forgetting is safe rather than
+    merely caught, and the allow-list is the set of endpoints marked
+    `[AllowAnonymous]`. The test then guards the allow-list instead of every
+    endpoint.
 - **OPEN** Move the `slice-NN-*.md` specs into `event-model.yaml`, so each slice's
   given-when-thens sit next to its shape and the generator can check them: every
   event in a scenario is one the slice emits or reads, every payload matches the

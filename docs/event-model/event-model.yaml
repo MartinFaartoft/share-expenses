@@ -252,16 +252,34 @@ slices:
           by: UserId
 
   - slice: View balances
-    draft: true
     type: State Read
     screen:
       name: Balances
+      context:
+        groupId: GroupId
+      wireframe:
+        - "Lisbon trip          GBP"
+        - "Alice (you)       +60.00"
+        - "Bob               -30.00"
+        - "Carol (invited)   -30.00"
+        - ""
+        - "1 Oct  Dinner  90.00  Alice"
+    query:
+      userId: { type: UserId, source: system }             # the signed-in user: members only
+      now: { type: DateTimeOffset, source: system }        # an invite is open until its deadline
     readModel:
-      name: GroupLedger
+      # stored, inline: projected in the transaction that appends the events, so a
+      # balance moves the moment an expense is saved (spec §11). Balances follow
+      # spec §9 and always sum to zero.
+      name: GroupLedgerReadModel
       fields:
-        members: "Member[]"
-        expenses: "Expense[]"
-        balances: long
+        groupName: { type: string, source: [GroupCreated] }
+        currency: { type: string, source: [GroupCreated] }
+        you: { type: MemberId, source: [MemberClaimed] }   # the caller's own slot
+        # each slot with its name, status (joined, invited, placeholder) and balance
+        members: { type: "LedgerMember[]", source: [MemberAdded, MemberInvited, MemberClaimed, ExpenseRecorded] }
+        # newest first, with the split as entered and the amounts it produced
+        expenses: { type: "LedgerExpense[]", source: [ExpenseRecorded] }
       reads:
         - GroupCreated
         - MemberAdded

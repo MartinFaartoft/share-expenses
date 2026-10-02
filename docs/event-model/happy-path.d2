@@ -58,7 +58,7 @@ n4: "5 - Accept invite                       " { class: slicename }
 dvN5: "" { class: divN }
 n5: "6 - Record an expense                   " { class: slicename }
 dvN6: "" { class: divN }
-n6: "7 - View balances (draft)               " { class: slicename }
+n6: "7 - View balances                       " { class: slicename }
 dvN7: "" { class: divN }
 n7: "8 - Settle up (draft)                   " { class: slicename }
 
@@ -78,7 +78,7 @@ s4: "Your invites                 \n                             \nAlice invited
 dv2_5: "" { class: div }
 s5: "Add expense                  \n                             \nDinner          [ 120.00 ]   \npaid by         [ Alice v ]  \nsplit  (equal) exact shares  \n[x] Alice [x] Bob [ ] Carol  \non              [ 2 Oct ]    \n             [ Add ]         " { class: screen }
 dv2_6: "" { class: div }
-s6: "Balances                     \n                             \n                             \n                             \n                             \n                             " { class: screen }
+s6: "Balances                     \n                             \nLisbon trip          GBP     \nAlice (you)       +60.00     \nBob               -30.00     \nCarol (invited)   -30.00     \n                             \n1 Oct  Dinner  90.00  Alice  " { class: screen }
 dv2_7: "" { class: div }
 s7: "Settle up                    \n                             \n                             \n                             \n                             \n                             " { class: screen }
 
@@ -98,7 +98,7 @@ gp3_4: "" { class: gap }
 dv3_5: "" { class: div }
 gp3_5: "" { class: gap }
 dv3_6: "" { class: div }
-rm6: "GroupLedger                  \n                             \n- members: Member[]          \n- expenses: Expense[]        \n- balances: long             \n                             " { class: view }
+rm6: "GroupLedgerReadModel         \n                             \n- groupName: string          \n- currency: string           \n- you: MemberId              \n- members: LedgerMember[]    \n- expenses: LedgerExpense[]  \n> userId: UserId (sys)       \n> now: DateTimeOffset (sys)  " { class: view }
 dv3_7: "" { class: div }
 gp3_7: "" { class: gap }
 
