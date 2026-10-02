@@ -85,7 +85,7 @@ number" is answered by replaying what happened.
 **Plain documents, not event-sourced (supporting state):** users, sessions,
 login tokens, invite deliveries (the address an invite was sent to).
 
-Invite *lookups* were on this list and moved off it with slice 3: an invite's
+Invite *lookups* were on this list and moved off it with InviteMember: an invite's
 token *hash* is recorded on `MemberInvited`, and the lookup is folded from the
 group stream on demand (§11). The hash is safe to keep forever — a SHA-256 of 256
 random bits cannot be reversed or guessed, and claims nothing on its own — and
@@ -183,7 +183,8 @@ that gets misdiagnosed for weeks.
   group without being invited to one first.)
 - **Self-registration grants no visibility.** An account sees only groups it holds
   a slot in — its own, and those it has claimed via an invite. Everything else
-  answers "not found", exactly as for a group that does not exist (§5, slices 2–4).
+  answers "not found", exactly as for a group that does not exist (§5; AddMember, InviteMember,
+  ViewInvite).
 - **No user enumeration still holds:** requesting a link returns the same response
   whether or not the address has an account, and both cases send an email. Prefer
   creating the account when the link is *used*, not when it is requested, so
@@ -531,7 +532,7 @@ RecordSettlement, RemoveSettlement
 Commands are named for the user's intention, events for the resulting fact — they
 need not match. `AcceptInvite` emits `MemberClaimed`, the same fact CreateGroup
 records for the creator, who accepted no invite; naming the event after the
-command would make slice 1 record something false.
+command would make CreateGroup record something false.
 
 ### Events
 
@@ -727,7 +728,7 @@ not from a shared class, so splitting the checks across slices weakens nothing.
 - A member slot has at most one *current* claim; a released slot may be
   claimed again.
 - A user holds at most one member slot per group — otherwise their balance
-  is ambiguous. Enforced by AcceptInvite (slice 5) against the stream alone, before
+  is ambiguous. Enforced by AcceptInvite against the stream alone, before
   the invite token is even looked at; the stream version closes the race.
 
 Two of these cut across nearly every slice — "not archived" and "is a current
@@ -891,10 +892,10 @@ have a reason not to.
   code: Event Modeling and Marten use it as a synonym for read model, so a type
   named `View` that is *not* the read model invites confusion (tried briefly, and
   reverted for that reason). `Projection` is reserved for the process — a
-  projection class, such as `GroupLedger`'s inline projection in slice 7.
+  projection class, such as `GroupLedger`'s inline projection in ViewBalances.
 - **Every slice's `State` carries a unique `[DocumentAlias("<slice>_state")]`.**
   Marten names a type by its bare class name, so two slices' `State` types
-  collide on `ledger.state` — found by slice 3, where whichever slice was used
+  collide on `ledger.state` — found while building InviteMember, where whichever slice was used
   second failed with a 500. The attribute, not `Schema.For<State>()` in
   `Register`: registering makes Marten validate the type as a stored document,
   which demands an `Id` a live-folded state does not have. Enforced by the
@@ -920,8 +921,8 @@ have a reason not to.
 - **Deliberately not extracted (yet):** the handler skeleton (fetch → decide →
   append → save → 409) and the per-slice outcome-to-HTTP mapping still repeat in
   each slice. That repetition is what Phase 2 (§12) exists to measure: port to
-  Wolverine's aggregate handler workflow once slice 5 makes four state-change
-  slices, and compare. Other frameworks' answers, for reference: Marten's
+  Wolverine's aggregate handler workflow once AcceptInvite makes four
+  state-change slices, and compare. Other frameworks' answers, for reference: Marten's
   `WriteToAggregate`; Emmett's `CommandHandler` + `DeciderSpecification`;
   Eventuous's `CommandService` with `On<Cmd>().InState(...)`; Equinox's
   `Transact` — all a generic runner around a pure decide, plus typed errors.
@@ -964,9 +965,12 @@ events, which the activity feed reads anyway.
 
 ---
 
-## 13. Next step: an event modeling session
+## 13. Event model
 
-Nothing gets implemented yet. The next artifact is a full event model — a
+The event model lives in `docs/event-model/event-model.yaml` and is refined slice
+by slice, ahead of the code: a slice is modelled, its given-when-then specs written
+in `slice-NN-*.md`, and only then built. The happy path is laid out in full;
+slices not yet refined are marked `draft: true`. The model as a whole is a
 timeline / swimlane covering:
 
 1. The happy path end to end: create group → invite → claim → record expenses →
@@ -974,7 +978,8 @@ timeline / swimlane covering:
 2. Each step laid out as **command → event(s) → read model → screen**.
 3. Wireframe stubs per screen, to check that each read model actually serves one.
 4. The awkward paths: correcting an expense after a settlement, removing a member
-   mid-trip, claiming the wrong member slot, two phones writing at once.
+   mid-trip, claiming the wrong member slot, two phones writing at once. Not yet
+   modelled.
 
 The test of the model: every screen is served by a named read model, and every
 read model is derivable from the events in §11. Anything failing that test is a
@@ -1006,7 +1011,7 @@ left to right across the whole stream. Every element is 250x160, or 250x50 in th
 slice-name row.
 
 A command emitting several events spreads them horizontally along the stream, so
-the slice grows wider rather than taller — slice 1 emits three events and occupies
+the slice grows wider rather than taller — CreateGroup emits three events and occupies
 columns 2-4. **D2 grids have no colspan**, so that slice's screen and command sit
 in the first of its three columns rather than spanning all three. This is the one
 visible compromise in the layout.
@@ -1133,7 +1138,7 @@ copy of the model (`generate.py --check <copy>`).
 
 Not yet checked: that a screen's `context` is itself available — from a read
 model that feeds the screen. That is Event Modeling's own completeness rule, and
-needs the read models (slice 7's `GroupLedger`) to exist first.
+needs the read models (ViewBalances' `GroupLedger`) to exist first.
 
 **`draft: true`** marks a slice not yet refined. It keeps every structural check
 but skips completeness, and is labelled "(draft)" on the diagram. Refining a slice
@@ -1141,7 +1146,7 @@ ends with removing the flag. On cards, a field's source is tagged unless it come
 from the client: `(sys)`, `(str)`, `(lku)`; a screen's context values are `(ctx)`.
 
 Deferred: field-level checks inside composite types such as `Member[]` (with
-slice 7), and that a screen's context is fed by a read model (above).
+ViewBalances), and that a screen's context is fed by a read model (above).
 
 **Slices are typed with the four canonical Event Modeling types**, spelled
 verbatim in the `type` field: `State Change` (a user action that changes state and
@@ -1198,14 +1203,14 @@ a documentation tool, not application code.
 ## 14. Open questions
 
 - **OPEN** Frontend framework and rendering approach. Deferred deliberately.
-  Whatever is chosen, the invite flow needs this behaviour (decided with slice 5):
+  Whatever is chosen, the invite flow needs this behaviour (decided with AcceptInvite):
   - **Keep the invite token across sign-in in `localStorage`**, not
     `sessionStorage`: a magic link tapped in a webmail tab opens a *new* tab, where
     `sessionStorage` is empty. Store it with a timestamp; clear it after the claim,
     or after a few hours, so it does not linger on a shared device.
   - **Losing it must be harmless, not impossible.** A sign-in link opened in a mail
     app's in-app browser, or on another device, defeats every client-side store,
-    cookies included. So: when the landing page (slice 4) finds the user already
+    cookies included. So: when the landing page (ViewInvite) finds the user already
     signed in, it offers **"Join as Bob"** directly — tapping the invite link again
     always recovers, with no second sign-in.
   - **Steer towards the six-digit code** on the landing page: typing it keeps the
@@ -1222,8 +1227,9 @@ a documentation tool, not application code.
     that first emits it, with the same field names and types (typed ids
     included), and no extra fields.
   - **Commands:** the internal `Command` record carries the model's fields, with
-    names and types matching. Fields with `source: route | session | generated`
-    must not come from the request body; `source: screen` fields must. Each
+    names and types matching. Fields with `source: system | stream | lookup`
+    must not come from the request at all — neither route nor body; `source:
+    client` fields must (where in the request is transport, per §13). Each
     `feeds` (explicit or by name) must hold in code: the command field's value
     ends up in that event field. This last part is the hard one — it needs either
     a convention the test can read, or a check that runs `Decide` with marked
@@ -1231,7 +1237,8 @@ a documentation tool, not application code.
   - **Specs:** every scenario in `slice-NN-*.md` has a test, and every spec test
     corresponds to a scenario. Needs a stable scenario id (the leading number) and
     a naming convention for tests (`S<n>_…`, already in use).
-  - **Read models:** fields and types match the projected document (from slice 6).
+  - **Read models:** fields and types match the projected document (from
+    ViewBalances).
   
   Mechanism: an xUnit test that reads the YAML and the `.md` files and reflects
   over the assembly, so `dotnet test` — and therefore the build gate — fails on a
@@ -1252,10 +1259,42 @@ a documentation tool, not application code.
     section of the YAML may change.
   - **Everything else** (`Shared/`, `Infrastructure/`, other slices): a failure,
     unless overridden explicitly (e.g. `--allow Shared/Names.cs`), so cross-slice
-    changes are deliberate and named — like the name-limit change to slice 1 made
-    while building slice 2.
+    changes are deliberate and named — like the name-limit change to CreateGroup
+    made while building AddMember.
   - Optional means advisory by default: it reports, and the caller decides
     whether to gate on it.
+- **OPEN** Move the `slice-NN-*.md` specs into `event-model.yaml`, so each slice's
+  given-when-thens sit next to its shape and the generator can check them: every
+  event in a scenario is one the slice emits or reads, every payload matches the
+  event's declared fields, and every command matches the command's fields. This
+  would also replace the `.md` side of the consistency check above, and drop the
+  slice numbers from file names.
+  **Precondition: define the format first, before moving any spec.** Plain
+  strings copied over from the `.md` files would be just as unchecked in YAML. To
+  decide:
+  - **What a spec is:** a stable id (tests are named `S<n>_…`), a title, given,
+    when, and then. Then is one of: events, `rejected` or `not found` (the typed
+    rejections, §12), or a read model for State Read slices (`ReadSpec`) — the
+    read slices' query inputs, including `now`, need a place in the when.
+  - **Event payloads:** named fields (`MemberAdded: {memberId: m2, displayName:
+    Bob, by: alice}`) are checkable but long; positional ones
+    (`MemberAdded(m2, "Bob", alice)`) read like the current specs but rely on
+    field order. Possibly positional in the source, checked against declared field
+    order.
+  - **Symbolic values:** ids and actors (`g1`, `m2`, `alice`), system-supplied
+    values (new ids, `now`, generated tokens and their hashes), and placeholders
+    such as `<51 characters>` — what each one means and how a test turns it into
+    a real value.
+  - **Shared givens:** the "unless stated otherwise" background, and extending it
+    (`GIVEN ... AND …`) versus replacing it (`GIVEN (empty stream)`).
+  - **Prose:** each `.md` also has notes, rules deferred to later slices, the
+    endpoint, and concurrency notes. These need a home in the YAML (free-text
+    fields) or stay in a slimmer `.md`. Decide which before moving anything, so
+    the reasoning is not lost along the way.
+  - **The diagram:** specs stay off the grid (§13: a wide text block wrecks
+    alignment). Either the generator ignores them, or it renders them separately.
+  Once the format is settled, move every non-draft slice in one go. Slices refined
+  after that write their specs straight into the YAML.
 - **DEFERRED** Transactional outbox for emails. Invite (and later sign-in) emails
   are sent after the save, best-effort: a transient relay failure loses the email,
   though the invite stands and its link is in the response. An outbox would record
@@ -1274,12 +1313,12 @@ a documentation tool, not application code.
     short-lived secret at rest); store it encrypted with ASP.NET Data Protection,
     whose key ring is already in Postgres (§4); or generate the token at send time
     and record its hash then — which would mean the response can no longer return
-    the link, reversing slice 3's "emailed *and* returned" decision.
+    the link, reversing InviteMember's "emailed *and* returned" decision.
 - **DEFERRED** Completeness inside composite read model types (`Member[]`), and
-  checking that a screen's `context` is fed by a read model — both with slice 7's
-  `GroupLedger` (§13).
+  checking that a screen's `context` is fed by a read model — both with
+  ViewBalances' `GroupLedger` (§13).
 - **DEFERRED** Rate limiting the unauthenticated invite lookup
-  (`POST /api/invites/{groupId}/lookup`, slice 4). Guessing a 256-bit token is
+  (`POST /api/invites/{groupId}/lookup`, ViewInvite). Guessing a 256-bit token is
   hopeless, but each request folds a group stream, so the endpoint is a cheap way
   to load the server. Add ASP.NET's per-IP rate limiter together with the
   sign-in endpoints (§4), so one limiter policy is designed for both.

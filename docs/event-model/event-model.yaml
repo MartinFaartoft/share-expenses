@@ -245,7 +245,7 @@ slices:
         - MemberInvited
         - MemberClaimed
         - ExpenseRecorded
-        - SettlementRecorded   # emitted in slice 7: drawn dashed
+        - SettlementRecorded   # emitted in Settle up: drawn dashed
 
   - slice: Settle up
     draft: true
