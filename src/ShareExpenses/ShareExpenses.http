@@ -151,7 +151,7 @@ Content-Type: application/json
 }
 
 ###
-POST {{host}}/api/invites/{{groupId}}/claim
+POST {{host}}/api/invites/{{groupId}}/accept
 Content-Type: application/json
 
 {

@@ -6,19 +6,19 @@ using Marten.Services;
 using Microsoft.Extensions.DependencyInjection;
 using ShareExpenses.Infrastructure.Invites;
 using ShareExpenses.Shared;
-using ShareExpenses.Slices.ClaimMember;
+using ShareExpenses.Slices.AcceptInvite;
 using ShareExpenses.Tests.Infrastructure;
 using ShareExpenses.Tests.Specs;
 using MemberClaimed = ShareExpenses.Slices.CreateGroup.MemberClaimed;
 
-namespace ShareExpenses.Tests.Slices.ClaimMember;
+namespace ShareExpenses.Tests.Slices.AcceptInvite;
 
 /// <summary>
 /// The invite flow end to end: Alice creates, adds and invites through the real
 /// endpoints; the invitee claims through this slice's, against the real store.
 /// </summary>
 [Collection(AppCollection.Name)]
-public class ClaimMemberIntegrationTests(AppFixture app)
+public class AcceptInviteIntegrationTests(AppFixture app)
 {
     private readonly UserId _alice = UserId.New();
     private readonly UserId _bob = UserId.New();
@@ -121,8 +121,8 @@ public class ClaimMemberIntegrationTests(AppFixture app)
         [
             await Claim(_carol, groupId, "wrong-token"),
             await Claim(_carol, GroupId.New(), token),
-            await client.PostAsJsonAsync("/api/invites/not-a-guid/claim", new { token }),
-            await client.PostAsJsonAsync($"/api/invites/{groupId}/claim", new { }),
+            await client.PostAsJsonAsync("/api/invites/not-a-guid/accept", new { token }),
+            await client.PostAsJsonAsync($"/api/invites/{groupId}/accept", new { }),
         ];
 
         Assert.All(dead, r => Assert.Equal(HttpStatusCode.NotFound, r.StatusCode));
@@ -134,7 +134,7 @@ public class ClaimMemberIntegrationTests(AppFixture app)
     {
         var (groupId, _, token) = await InvitedBob();
 
-        var response = await app.CreateClient().PostAsJsonAsync($"/api/invites/{groupId}/claim", new { token });
+        var response = await app.CreateClient().PostAsJsonAsync($"/api/invites/{groupId}/accept", new { token });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -170,7 +170,7 @@ public class ClaimMemberIntegrationTests(AppFixture app)
     }
 
     private Task<HttpResponseMessage> Claim(UserId user, GroupId groupId, string token) =>
-        app.ClientFor(user).PostAsJsonAsync($"/api/invites/{groupId}/claim", new { token });
+        app.ClientFor(user).PostAsJsonAsync($"/api/invites/{groupId}/accept", new { token });
 
     private async Task<IReadOnlyList<object>> StreamOf(GroupId groupId)
     {

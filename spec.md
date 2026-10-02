@@ -520,13 +520,18 @@ built in v1; revisit when a real stream actually gets long.
 
 ```
 CreateGroup, RenameGroup, ArchiveGroup, UnarchiveGroup
-AddMember, InviteMember, ClaimMember, ReleaseMemberClaim, RenameMember,
+AddMember, InviteMember, AcceptInvite, ReleaseMemberClaim, RenameMember,
   RemoveMember
 RecordExpense, RemoveExpense
 CorrectExpenseDescription, CorrectExpenseAmount, CorrectExpensePayer,
   ChangeExpenseSplit, CorrectExpenseDate
 RecordSettlement, RemoveSettlement
 ```
+
+Commands are named for the user's intention, events for the resulting fact — they
+need not match. `AcceptInvite` emits `MemberClaimed`, the same fact CreateGroup
+records for the creator, who accepted no invite; naming the event after the
+command would make slice 1 record something false.
 
 ### Events
 
@@ -722,7 +727,7 @@ not from a shared class, so splitting the checks across slices weakens nothing.
 - A member slot has at most one *current* claim; a released slot may be
   claimed again.
 - A user holds at most one member slot per group — otherwise their balance
-  is ambiguous. Enforced by ClaimMember (slice 5) against the stream alone, before
+  is ambiguous. Enforced by AcceptInvite (slice 5) against the stream alone, before
   the invite token is even looked at; the stream version closes the race.
 
 Two of these cut across nearly every slice — "not archived" and "is a current

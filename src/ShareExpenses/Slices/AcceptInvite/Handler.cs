@@ -4,7 +4,7 @@ using ShareExpenses.Infrastructure.Invites;
 using ShareExpenses.Shared;
 using ShareExpenses.Slices.CreateGroup;
 
-namespace ShareExpenses.Slices.ClaimMember;
+namespace ShareExpenses.Slices.AcceptInvite;
 
 internal abstract record Outcome
 {

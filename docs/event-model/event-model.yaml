@@ -196,7 +196,7 @@ slices:
         - MemberInvited
         - MemberClaimed
 
-  - slice: Claim a slot
+  - slice: Accept invite
     type: State Change
     screen:
       name: Sign in / claim
@@ -208,7 +208,7 @@ slices:
         - ""
         - "(sign in, then join)"
     command:
-      name: ClaimMember
+      name: AcceptInvite
       fields:
         groupId: GroupId                                   # selects the stream
         token: string                                      # matched against open invites

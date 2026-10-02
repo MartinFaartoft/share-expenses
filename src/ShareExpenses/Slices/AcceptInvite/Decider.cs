@@ -1,7 +1,7 @@
 using ShareExpenses.Shared;
 using ShareExpenses.Slices.CreateGroup;
 
-namespace ShareExpenses.Slices.ClaimMember;
+namespace ShareExpenses.Slices.AcceptInvite;
 
 /// <summary>The command, as in <c>event-model.yaml</c>. The slot is not on it: deciding finds it.</summary>
 /// <param name="Token">From the invite link's fragment, posted in the body.</param>

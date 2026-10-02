@@ -1,9 +1,9 @@
 using Marten;
 
-namespace ShareExpenses.Slices.ClaimMember;
+namespace ShareExpenses.Slices.AcceptInvite;
 
-/// <summary>Slice 5 — Claim a slot. The slice's only public entry point (spec §12).</summary>
-public static class ClaimMemberSlice
+/// <summary>Slice 5 — Accept invite. The slice's only public entry point (spec §12).</summary>
+public static class AcceptInviteSlice
 {
     /// <summary>
     /// Nothing to register: it emits <c>MemberClaimed</c>, owned and registered by

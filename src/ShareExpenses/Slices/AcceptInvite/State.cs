@@ -4,13 +4,13 @@ using ShareExpenses.Shared;
 using ShareExpenses.Slices.CreateGroup;
 using ShareExpenses.Slices.InviteMember;
 
-namespace ShareExpenses.Slices.ClaimMember;
+namespace ShareExpenses.Slices.AcceptInvite;
 
 /// <summary>An invite that can still be claimed, apart from its deadline.</summary>
 internal sealed record OpenInvite(string TokenHash, DateTimeOffset ExpiresAt);
 
 /// <summary>
-/// What ClaimMember decides against, folded from the group stream by Marten
+/// What AcceptInvite decides against, folded from the group stream by Marten
 /// (<c>FetchForWriting</c>). No stream means no state: the group does not exist.
 ///
 /// Close to ViewInvite's state, deliberately not shared (spec §11, §12): slices fold
@@ -27,7 +27,7 @@ internal sealed record OpenInvite(string TokenHash, DateTimeOffset ExpiresAt);
 /// Convention methods must be public for Marten's source generator; the type is
 /// internal. The alias is required: every slice has a State (spec §12).
 /// </summary>
-[DocumentAlias("claim_member_state")]
+[DocumentAlias("accept_invite_state")]
 internal sealed record State(
     ImmutableDictionary<MemberId, string> SlotNames,
     ImmutableDictionary<UserId, MemberId> Members,

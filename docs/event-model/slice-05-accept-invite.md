@@ -1,19 +1,26 @@
-# Slice 5 — `ClaimMember`
+# Slice 5 — `AcceptInvite`
 
 Type: **State Change**. Screen → command → events.
 
 | | |
 |---|---|
 | Screen | Sign in / claim — "Sign me in" on the invite landing page, after signing in |
-| Command | `ClaimMember(groupId, token, now, userId)`; the slot is found by deciding |
+| Command | `AcceptInvite(groupId, token, now, userId)`; the slot is found by deciding |
 | Events | `MemberClaimed` (owned by slice 1) |
 | Also writes | deletes the slot's `InviteDelivery` — the address is not kept once claimed |
-| Code | `src/ShareExpenses/Slices/ClaimMember/` |
-| Endpoint | `POST /api/invites/{groupId}/claim`, body `{ "token": "…" }` — sign-in required |
+| Code | `src/ShareExpenses/Slices/AcceptInvite/` |
+| Endpoint | `POST /api/invites/{groupId}/accept`, body `{ "token": "…" }` — sign-in required |
 
 The invite binds the slot (spec §4): whoever holds a live link may claim the slot
 it was issued for, and the signed-in address need not match the invited one.
 Claiming is what turns a placeholder into a member — the right to change the group.
+
+**Why the slice is "Accept invite" but the event is `MemberClaimed`.** The command
+names the user's intention — Bob accepts an invite. The event names the resulting
+fact about the group — a user now holds this slot. CreateGroup records the same
+fact for the creator, who accepted no invite, so the event keeps the name that is
+true for both, and so does its reversal, `MemberClaimReleased`. Which invite was
+accepted is told by the `MemberInvited` before it; nothing needs a second event.
 
 ## Specifications
 
@@ -29,45 +36,45 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 
 ```
 1 - claims the invited slot
-    WHEN   ClaimMember(g1, t1, bob)  at t0+1d
+    WHEN   AcceptInvite(g1, t1, bob)  at t0+1d
     THEN   MemberClaimed(m2, bob)
 
 2 - a forwarded link works for whoever holds it
-    WHEN   ClaimMember(g1, t1, carol)  at t0+1d
+    WHEN   AcceptInvite(g1, t1, carol)  at t0+1d
     THEN   MemberClaimed(m2, carol)
 
 3 - a wrong token claims nothing
-    WHEN   ClaimMember(g1, tX, bob)  at t0+1d
+    WHEN   AcceptInvite(g1, tX, bob)  at t0+1d
     THEN   rejected (not found) - invite not found
 
 4 - an unknown group
     GIVEN  (empty stream)
-    WHEN   ClaimMember(g1, t1, bob)  at t0+1d
+    WHEN   AcceptInvite(g1, t1, bob)  at t0+1d
     THEN   rejected (not found) - invite not found
 
 5 - a link is dead at its deadline
-    WHEN   ClaimMember(g1, t1, bob)  at t0+30d
+    WHEN   AcceptInvite(g1, t1, bob)  at t0+30d
     THEN   rejected (not found) - invite not found
     (and at t0+30d less one second: claimed)
 
 6 - a superseded link claims nothing
     GIVEN  ... AND MemberInvited(m2, h2, t0+31d, alice)
-    WHEN   ClaimMember(g1, t1, bob)  at t0+1d
+    WHEN   AcceptInvite(g1, t1, bob)  at t0+1d
     THEN   rejected (not found) - invite not found
 
 7 - a used link claims nothing
     GIVEN  ... AND MemberClaimed(m2, carol)
-    WHEN   ClaimMember(g1, t1, dave)  at t0+1d
+    WHEN   AcceptInvite(g1, t1, dave)  at t0+1d
     THEN   rejected (not found) - invite not found
 
 8 - a member cannot claim a second slot
     GIVEN  ... AND MemberAdded(m3, "Bobby", alice) AND MemberInvited(m3, h2, t0+30d, alice)
-    WHEN   ClaimMember(g1, t2, alice)  at t0+1d
+    WHEN   AcceptInvite(g1, t2, alice)  at t0+1d
     THEN   rejected (already a member) - you're already in this group as Alice
 
 9 - tapping the link again after joining
     GIVEN  ... AND MemberClaimed(m2, bob)
-    WHEN   ClaimMember(g1, t1, bob)  at t0+1d
+    WHEN   AcceptInvite(g1, t1, bob)  at t0+1d
     THEN   rejected (already a member) - you're already in this group as Bob
 ```
 

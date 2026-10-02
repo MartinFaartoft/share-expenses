@@ -3,22 +3,22 @@ using Marten;
 using ShareExpenses.Infrastructure.Identity;
 using ShareExpenses.Shared;
 
-namespace ShareExpenses.Slices.ClaimMember;
+namespace ShareExpenses.Slices.AcceptInvite;
 
 internal sealed record Request(string? Token);
 
 internal sealed record Response(GroupId GroupId, MemberId MemberId);
 
 /// <summary>
-/// <c>POST /invites/{groupId}/claim</c> — "Sign me in" on the invite landing page,
+/// <c>POST /invites/{groupId}/accept</c> — "Sign me in" on the invite landing page,
 /// after signing in. The token travels in the body, never in a URL (spec §11).
 /// </summary>
 internal static class Endpoint
 {
     public static void Map(IEndpointRouteBuilder api) =>
-        api.MapPost("/invites/{groupId}/claim", Handle)
+        api.MapPost("/invites/{groupId}/accept", Handle)
             .RequireAuthorization()
-            .WithName("ClaimMember");
+            .WithName("AcceptInvite");
 
     // groupId is bound as a string so a malformed one is "invite not found" like any
     // other dead link, not ASP.NET's 400.

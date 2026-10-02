@@ -9,7 +9,7 @@ namespace ShareExpenses.Infrastructure.Invites;
 ///
 /// Lives in Infrastructure, not in a slice, because two slices touch it: InviteMember
 /// writes it (re-inviting overwrites it, in the same session as <c>MemberInvited</c>)
-/// and ClaimMember deletes it (in the same session as <c>MemberClaimed</c>) — once a
+/// and AcceptInvite deletes it (in the same session as <c>MemberClaimed</c>) — once a
 /// slot is claimed, the address is not needed, so it is not kept. Plain documents are
 /// supporting state, like Identity's users, not slice logic.
 ///
