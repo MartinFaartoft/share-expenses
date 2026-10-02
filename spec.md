@@ -170,14 +170,26 @@ Recorded as a decision rather than an implementation note because getting it
 wrong produces a bug that presents as random, intermittent logouts — the kind
 that gets misdiagnosed for weeks.
 
-### Rate limiting and user enumeration
+### Rate limiting, self-registration and user enumeration
 
 - ASP.NET's built-in rate limiter on the request-link endpoint, keyed per email
-  address and per IP.
-- **Decision:** requesting a link for an unknown address returns exactly the same
-  response as for a known one, and sends nothing. No user enumeration.
-- Consequence: nobody self-registers. New people arrive via an invite link
-  carrying the `MemberInvited` email address, and sign in from there.
+  address and per IP. Load-bearing now that any address gets an email: without
+  it, the endpoint can be used to flood someone's inbox.
+- **Decision: anyone can sign up.** Requesting a sign-in link for an address with
+  no account sends a link that, once used, creates the account. A new user can
+  create a group straight away; an invite is not a precondition for an account.
+  (Reversed from an earlier "nobody self-registers" decision: it made the first
+  sign-in of every invitee a special case, and blocked anyone from starting a
+  group without being invited to one first.)
+- **Self-registration grants no visibility.** An account sees only groups it holds
+  a slot in — its own, and those it has claimed via an invite. Everything else
+  answers "not found", exactly as for a group that does not exist (§5, slices 2–4).
+- **No user enumeration still holds:** requesting a link returns the same response
+  whether or not the address has an account, and both cases send an email. Prefer
+  creating the account when the link is *used*, not when it is requested, so
+  requests for addresses nobody controls leave no rows behind — subject to what
+  Identity's token providers need (they sign against a user), to be settled with
+  the sign-in work.
 
 ### Persistence: EF Core, firewalled
 
@@ -710,7 +722,8 @@ not from a shared class, so splitting the checks across slices weakens nothing.
 - A member slot has at most one *current* claim; a released slot may be
   claimed again.
 - A user holds at most one member slot per group — otherwise their balance
-  is ambiguous.
+  is ambiguous. Enforced by ClaimMember (slice 5) against the stream alone, before
+  the invite token is even looked at; the stream version closes the race.
 
 Two of these cut across nearly every slice — "not archived" and "is a current
 member". Each slice folds the few events involved itself. The duplication is a
@@ -1070,13 +1083,28 @@ on an event.** Every field says where its value comes from, so the generator can
 check *information completeness*: that nothing on an event or a read model
 appears from nowhere.
 
-- **Screens** list their `inputs:` — what the user types or picks.
-- **Command fields** carry `source:` — `screen` (the default), `route`,
-  `session` or `generated` — and `feeds:`, the event fields they fill. A field
-  always feeds same-named fields of the events its slice emits, so `feeds` lists
-  only the exceptions (`createdBy` → `MemberAdded.by`). `stream: true` marks a
-  field that only selects the stream.
-- **Read model fields** carry `source:`, the events they are built from.
+- **Screens** list their `inputs:` — what the user types or picks — and their
+  `context:` — what the screen already holds: the group being viewed, the slot
+  tapped, the token from a link.
+- **Command fields** carry `source:`, classified by **trust**, not transport:
+  - `client` (the default) — sent by the caller, typed or held by the screen.
+    Untrusted: deciding validates it.
+  - `system` — supplied by the server: the signed-in user, the clock, new ids
+    and tokens.
+  - `stream` — derived by deciding, from the folded stream. Trusted and
+    consistent: the only kind an invariant may rest on.
+  - `lookup` — read from outside the stream (Identity, plain documents). Trusted
+    but possibly stale: it may feed guards, never an event field.
+
+  `stream` vs `lookup` is the invariants-vs-guards line of §11, made visible.
+  Route vs body vs link fragment is transport, not model: it is recorded in the
+  slice's `.md` and enforced in code (e.g. invite tokens only ever travel in a
+  fragment or a body, never a URL path).
+- **`feeds:`** lists the event fields a command field fills; a field always feeds
+  same-named fields of the events its slice emits, so `feeds` lists only the
+  exceptions (`createdBy` → `MemberAdded.by`).
+- **Read model fields** carry `source:`, the events they are built from. A
+  State Read slice declares its `query:` inputs, `client` or `system`.
 - **Event fields carry a type only.** Where an event's values come from is not a
   property of the event: `MemberAdded.by` is `createdBy` when CreateGroup emits it
   and `by` when AddMember does. A source on the event's single declaration would
@@ -1084,24 +1112,31 @@ appears from nowhere.
   on each slice's command, pointing forward. This is what lets an event be both
   declared once and filled differently per slice.
 
-Checks, each confirmed to fire by mutating a copy of the model (`generate.py
---check <copy>`): every field of every emitted event is fed by exactly one command
-field, of the same type; every `feeds` target is a field of an event this slice
-emits; every command field feeds something or selects the stream; every
-screen-sourced command field is an input of its screen, of the same type; every
-read model field is built from events the read model reads; misspelled keys and
-unknown sources are errors; a source on an event field is an error that explains
-why. Screen inputs no command uses, and read events no field is built from, are
-warnings.
+**Decision: checks look backward only — every value used is available from a step
+before it.** Every field of every emitted event is fed by exactly one command
+field, of the same type, and never by a `lookup`; every `feeds` target exists;
+every `client` value — command field or query input — is an input or context of
+its screen, of the same type; every read model field is built from events the
+read model reads. Misspelled keys and unknown sources are errors; a source on an
+event field is an error that explains why.
+
+Whether a value is *used* afterwards is deliberately not checked: a command field
+that feeds no event (a stream selector, an address for an email) is legitimate,
+and declaring every such use (`stream: true`, `uses:`) was tried and dropped as
+bookkeeping that caught nothing. Each rule was confirmed to fire by mutating a
+copy of the model (`generate.py --check <copy>`).
+
+Not yet checked: that a screen's `context` is itself available — from a read
+model that feeds the screen. That is Event Modeling's own completeness rule, and
+needs the read models (slice 7's `GroupLedger`) to exist first.
 
 **`draft: true`** marks a slice not yet refined. It keeps every structural check
 but skips completeness, and is labelled "(draft)" on the diagram. Refining a slice
-ends with removing the flag. On cards, a command field not typed on the screen is
-tagged `(gen)`, `(ses)` or `(url)`.
+ends with removing the flag. On cards, a field's source is tagged unless it comes
+from the client: `(sys)`, `(str)`, `(lku)`; a screen's context values are `(ctx)`.
 
 Deferred: field-level checks inside composite types such as `Member[]` (with
-slice 6), and values decided from stream state rather than supplied by the
-command (with slice 4, which looks up the invited slot).
+slice 7), and that a screen's context is fed by a read model (above).
 
 **Slices are typed with the four canonical Event Modeling types**, spelled
 verbatim in the `type` field: `State Change` (a user action that changes state and
@@ -1158,6 +1193,23 @@ a documentation tool, not application code.
 ## 14. Open questions
 
 - **OPEN** Frontend framework and rendering approach. Deferred deliberately.
+  Whatever is chosen, the invite flow needs this behaviour (decided with slice 5):
+  - **Keep the invite token across sign-in in `localStorage`**, not
+    `sessionStorage`: a magic link tapped in a webmail tab opens a *new* tab, where
+    `sessionStorage` is empty. Store it with a timestamp; clear it after the claim,
+    or after a few hours, so it does not linger on a shared device.
+  - **Losing it must be harmless, not impossible.** A sign-in link opened in a mail
+    app's in-app browser, or on another device, defeats every client-side store,
+    cookies included. So: when the landing page (slice 4) finds the user already
+    signed in, it offers **"Join as Bob"** directly — tapping the invite link again
+    always recovers, with no second sign-in.
+  - **Steer towards the six-digit code** on the landing page: typing it keeps the
+    user in the same tab, so the stored token survives.
+  - Rejected: exchanging the token for a short-lived `HttpOnly` cookie scoped to
+    sign-up and claim. Its only gain over `localStorage` is hiding the token from
+    injected script — which could call the claim endpoint with the session anyway
+    — and it fixes no case `localStorage` does not, at the cost of a new endpoint,
+    a protected cookie and its expiry.
 - **OPEN** Enforce consistency between `event-model.yaml` and the code, failing
   the build on any mismatch, so the model cannot drift from the code (§12, §13).
   For every non-draft slice:
@@ -1218,13 +1270,21 @@ a documentation tool, not application code.
     whose key ring is already in Postgres (§4); or generate the token at send time
     and record its hash then — which would mean the response can no longer return
     the link, reversing slice 3's "emailed *and* returned" decision.
-- **DEFERRED** Completeness inside composite read model types (`Member[]`), with
-  slice 6; values decided from stream state (`source: state`), with slice 4 (§13).
+- **DEFERRED** Completeness inside composite read model types (`Member[]`), and
+  checking that a screen's `context` is fed by a read model — both with slice 7's
+  `GroupLedger` (§13).
 - **DEFERRED** Rate limiting the unauthenticated invite lookup
   (`POST /api/invites/{groupId}/lookup`, slice 4). Guessing a 256-bit token is
   hopeless, but each request folds a group stream, so the endpoint is a cheap way
   to load the server. Add ASP.NET's per-IP rate limiter together with the
   sign-in endpoints (§4), so one limiter policy is designed for both.
+- **DEFERRED** Invite-aware sign-in, if cross-device sign-up proves common. The
+  sign-in request would optionally carry the invite (`groupId` + token), and the
+  magic-link email would carry it on in its fragment, so signing in completes the
+  claim on whichever device opens that email — the one option that survives a
+  change of browser or device. Costs: the invite token travels in a second email,
+  and the sign-in endpoint gains an invite-aware path. Until then, re-tapping the
+  invite link while signed in recovers (see the frontend item above).
 - **DEFERRED** Transactional relay — shortlisted in §4; `LogEmailSender` until then.
 - **DEFERRED** `PeriodClosed` / stream archival, until a stream is actually long.
 - **DEFERRED** Wolverine port (phase 2 above).

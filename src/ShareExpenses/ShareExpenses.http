@@ -139,5 +139,24 @@ Content-Type: application/json
   "token": "paste-the-token-after-#-here"
 }
 
-### 11. Health
+### 11. Claim Bob's slot. Claiming needs a DIFFERENT signed-in user — Alice already
+# holds a slot, so as Alice this is 409 "you're already in this group as Alice".
+# First sign in as Bob (overwrites the cookie), then paste step 8's token.
+# Expect 200 { groupId, memberId }; claim again → 409; as anyone else → 404.
+POST {{host}}/dev/sign-in
+Content-Type: application/json
+
+{
+  "email": "bob@example.com"
+}
+
+###
+POST {{host}}/api/invites/{{groupId}}/claim
+Content-Type: application/json
+
+{
+  "token": "paste-the-token-after-#-here"
+}
+
+### 12. Health
 GET {{host}}/health

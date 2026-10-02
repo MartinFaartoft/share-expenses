@@ -27,10 +27,17 @@ internal abstract record Decision
     /// Also the answer for "exists, but not for you", so nothing can be probed.
     /// </summary>
     public static Decision NotFound(string reason) => new Rejected(reason, Rejection.NotFound);
+
+    /// <summary>
+    /// The actor already holds a slot in this group, so the command — which would give
+    /// them one — cannot apply (HTTP 409). Telling them is safe: they are a member.
+    /// </summary>
+    public static Decision AlreadyMember(string reason) => new Rejected(reason, Rejection.AlreadyMember);
 }
 
 internal enum Rejection
 {
     Invalid,
     NotFound,
+    AlreadyMember,
 }

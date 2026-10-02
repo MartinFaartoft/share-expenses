@@ -1,3 +1,4 @@
+using ShareExpenses.Infrastructure.Invites;
 using JasperFx;
 using Marten;
 using ShareExpenses.Infrastructure.Identity;

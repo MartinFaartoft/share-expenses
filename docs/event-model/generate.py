@@ -19,24 +19,20 @@ FIELDS AND WHERE THEIR VALUES COME FROM (information completeness)
   A field is `name: Type`, or a mapping when it needs more than a type.
   Events declare shape only: where an event's values come from depends on which
   slice emits it, so that is written on the emitting slice's command instead.
-    screen inputs     what the user types, `inputs:` on the screen
-    command fields    `source`: screen (default), route, session, generated,
-                      clock (the current time, passed in so deciding stays pure),
-                      lookup
-                      (read from outside the stream to feed a guard; never
-                      allowed to feed an event field);
+    screen            `inputs:` what the user types or picks;
+                      `context:` what the screen already holds (the group being
+                      viewed, the slot tapped, the token from a link)
+    command fields    `source`, by trust: client (default), system, stream, lookup;
                       `feeds`: event fields it fills beyond the same-named ones
-                      (a field always feeds same-named fields of emitted events);
-                      `stream: true` when it only selects the stream;
-                      `uses: "<text>"` when its value goes somewhere other than
-                      an event, e.g. a plain document or an email
+                      (a field always feeds same-named fields of emitted events)
     read model fields `source`: the events the field is built from
-    State Read query `query:` {input: {type, source}} - what selects the shown
-                      data; source: route, session, fragment (after '#' in a
-                      link, never sent to a server in a URL), clock.  Drawn on
-                      the read model card as `> input: Type (tag)`
-  Every field of every emitted event must be fed by exactly one command field,
-  and every screen-sourced command field must be an input of its screen.
+    State Read query  `query:` {input: {type, source}}, source client or system.
+                      Drawn on the read model card as `> input: Type (tag)`
+  Checks look BACKWARD only - every value used is available from a step before
+  it: every event field is fed by exactly one command field of the same type
+  (never a lookup); every client value is an input or context of its screen;
+  every read model field is built from events the read model reads.  Whether a
+  value is then used anywhere is not checked.
   Slices marked `draft: true` are not yet refined and skip these checks.
 
 ARROWS
@@ -78,24 +74,25 @@ TYPES = (STATE_CHANGE, STATE_READ, AUTOMATION, TRANSLATION)
 # Automation and Translation are recognised vocabulary but have no layout yet
 RENDERABLE = (STATE_CHANGE, STATE_READ)
 
-# where a command field's value comes from; `screen` is the default.  `lookup`
-# is read from outside the stream by the handler (e.g. Identity) to feed a guard;
-# `clock` is the current time, read by the caller so deciding stays pure.
-COMMAND_SOURCES = ("screen", "route", "session", "generated", "lookup", "clock")
-# where a State Read slice's query inputs come from.  `fragment` is the part of a
-# link after '#': read by the page itself, never sent to a server in a URL.
-QUERY_SOURCES = ("route", "session", "fragment", "clock")
+# where a command field's or query input's value comes from, by trust:
+#   client  sent by the caller (typed, or held by the screen) - untrusted; the default
+#   system  supplied by the server: signed-in user, clock, new ids/tokens - trusted
+#   stream  derived by deciding, from the folded stream - trusted and consistent,
+#           so the only kind an invariant may rest on
+#   lookup  read from outside the stream (Identity, plain documents) - trusted but
+#           possibly stale, so it may feed guards only, never an event field
+COMMAND_SOURCES = ("client", "system", "stream", "lookup")
+QUERY_SOURCES = ("client", "system")
 # the keys a field mapping may carry, per element kind
 FIELD_KEYS = {
-    "command": {"type", "source", "feeds", "stream", "uses"},
+    "command": {"type", "source", "feeds"},
     "readModel": {"type", "source"},
     "event": {"type"},
     "screen": {"type"},
     "query": {"type", "source"},
 }
-# drawn after a field's type when it is not typed on the screen
-SOURCE_TAGS = {"route": "url", "session": "ses", "generated": "gen", "lookup": "lku",
-               "clock": "clk", "fragment": "frg"}
+# drawn after a field's type; client values are the unmarked default
+SOURCE_TAGS = {"system": "sys", "stream": "str", "lookup": "lku", "context": "ctx"}
 
 
 class Report:
@@ -137,7 +134,7 @@ class Model:
             rep.error("the model has no `chapter`")
         self.decl = {}          # (kind, name) -> {"slice": i, "spec": {...}}
         self._resolve()
-        self.fields = {}        # (kind, name) -> {field: {type, source, feeds, stream}}
+        self.fields = {}        # (kind, name) -> {field: {type, source, feeds}}
         self._parse_fields()
         self._check_sources()
 
@@ -224,7 +221,7 @@ class Model:
 
     # ---------------------------------------------------------- fields
     def _parse_fields(self):
-        """Normalise every declared field list to {name: {type, source, feeds, stream}}."""
+        """Normalise every declared field list to {name: {type, source, feeds}}."""
         self.queries = {}       # slice index -> {input: {type, source}}
         for i, sl in enumerate(self.slices):
             raw = sl.get("query")
@@ -240,25 +237,29 @@ class Model:
                 continue
             parsed = {}
             for fname, fv in raw.items():
-                if not isinstance(fv, dict) or "source" not in fv:
-                    self.rep.error("%s: query input %s needs a type and a source" % (where, fname))
-                    continue
                 f = self._parse_field("query", where, fname, fv)
                 if f is not None:
                     parsed[fname] = f
             self.queries[i] = parsed
         for (kind, name), d in self.decl.items():
-            key = "inputs" if kind == "screen" else "fields"
-            raw = (d["spec"] or {}).get(key) or {}
+            spec = d["spec"] or {}
             where = "%s %s" % (kind, name)
-            if not isinstance(raw, dict):
-                self.rep.error("%s: `%s` must be a mapping of name: Type" % (where, key))
-                raw = {}
+            sections = [("inputs", None), ("context", "context")] if kind == "screen" else [("fields", None)]
             parsed = {}
-            for fname, fv in raw.items():
-                f = self._parse_field(kind, where, fname, fv)
-                if f is not None:
-                    parsed[fname] = f
+            for key, tag in sections:
+                raw = spec.get(key) or {}
+                if not isinstance(raw, dict):
+                    self.rep.error("%s: `%s` must be a mapping of name: Type" % (where, key))
+                    continue
+                for fname, fv in raw.items():
+                    if fname in parsed:
+                        self.rep.error("%s: %s is both an input and context" % (where, fname))
+                        continue
+                    f = self._parse_field(kind, where, fname, fv)
+                    if f is not None:
+                        if kind == "screen":
+                            f["source"] = tag        # drawn as (ctx) for context, untagged for inputs
+                        parsed[fname] = f
             self.fields[(kind, name)] = parsed
 
     def _parse_field(self, kind, where, fname, fv):
@@ -278,9 +279,9 @@ class Model:
             rep.error("%s: field %s has unknown key(s) %s - expected: %s"
                       % (where, fname, ", ".join(extra), ", ".join(sorted(FIELD_KEYS[kind]))))
 
-        f = {"type": fv["type"], "source": None, "feeds": [], "stream": False, "uses": None}
+        f = {"type": fv["type"], "source": None, "feeds": []}
         if kind == "command":
-            f["source"] = fv.get("source", "screen")
+            f["source"] = fv.get("source", "client")
             if f["source"] not in COMMAND_SOURCES:
                 rep.error("%s: field %s has source %r - expected one of: %s"
                           % (where, fname, f["source"], ", ".join(COMMAND_SOURCES)))
@@ -289,14 +290,6 @@ class Model:
                 rep.error("%s: field %s: `feeds` must be a list of Event.field" % (where, fname))
                 feeds = []
             f["feeds"] = feeds
-            f["stream"] = fv.get("stream", False)
-            if not isinstance(f["stream"], bool):
-                rep.error("%s: field %s: `stream` must be true or false" % (where, fname))
-                f["stream"] = False
-            f["uses"] = fv.get("uses")
-            if f["uses"] is not None and not (isinstance(f["uses"], str) and f["uses"].strip()):
-                rep.error("%s: field %s: `uses` must say where the value goes, as text" % (where, fname))
-                f["uses"] = None
         elif kind == "readModel":
             src = fv.get("source") or []
             f["source"] = [src] if isinstance(src, str) else src
@@ -304,15 +297,15 @@ class Model:
                 rep.error("%s: field %s: `source` must be a list of events" % (where, fname))
                 f["source"] = []
         elif kind == "query":
-            f["source"] = fv.get("source")
+            f["source"] = fv.get("source", "client")
             if f["source"] not in QUERY_SOURCES:
                 rep.error("%s: query input %s has source %r - expected one of: %s"
                           % (where, fname, f["source"], ", ".join(QUERY_SOURCES)))
         return f
 
     def _check_sources(self):
-        """Information completeness: every value on an event or read model has a source."""
-        used_inputs, drafts = set(), []
+        """Information completeness, looking backward: every value used is available."""
+        drafts = []
         for i, sl in enumerate(self.slices):
             where = "slice %d (%s)" % (i + 1, sl.get("slice", "?"))
             draft = sl.get("draft", False)
@@ -321,33 +314,42 @@ class Model:
                 draft = False
             if draft:
                 drafts.append(str(i + 1))
+                continue
             sname, _ = as_element(sl.get("screen"))
-            inputs = self.fields.get(("screen", sname), {})
+            screen = self.fields.get(("screen", sname), {})
 
             if sl.get("type") == STATE_CHANGE:
                 cname, _ = as_element(sl.get("command"))
                 cmd = self.fields.get(("command", cname), {})
-                used_inputs |= {(sname, n) for n, f in cmd.items()
-                                if f["source"] == "screen" and n in inputs}
-                if not draft:
-                    self._check_command(where, sl, sname, inputs, cname, cmd)
+                self._check_client_values(where, sname, screen, cname, cmd)
+                self._check_command(where, sl, cname, cmd)
             elif sl.get("type") == STATE_READ:
                 rname, _ = as_element(sl.get("readModel"))
-                self._check_read_model(where, rname, draft)
-                if not draft and i not in self.queries:
+                self._check_read_model(where, rname)
+                if i not in self.queries:
                     self.rep.error("%s: %s has no `query` - list the inputs that select what it "
-                                   "shows (e.g. the group id from the route), or `query: {}` "
+                                   "shows (e.g. the group id the screen holds), or `query: {}` "
                                    "if it needs none" % (where, rname))
+                else:
+                    self._check_client_values(where, sname, screen, "query", self.queries[i])
 
-        for (kind, name), fields in self.fields.items():
-            if kind == "screen":
-                for n in fields:
-                    if (name, n) not in used_inputs:
-                        self.rep.warn("screen %s: input %s is not used by any command" % (name, n))
         if drafts:
             self.rep.note("draft slice(s) %s: completeness not checked" % ", ".join(drafts))
 
-    def _check_command(self, where, sl, sname, inputs, cname, cmd):
+    def _check_client_values(self, where, sname, screen, owner, values):
+        """Every value the client sends must be on its screen: typed there, or held there."""
+        for n, f in values.items():
+            if f["source"] != "client":
+                continue
+            src = "%s.%s" % (owner, n)
+            if n not in screen:
+                self.rep.error("%s: %s comes from the client, but screen %r has no input or "
+                               "context %s" % (where, src, sname, n))
+            elif screen[n]["type"] != f["type"]:
+                self.rep.error("%s: %s is %s, but screen %r has %s as %s"
+                               % (where, src, f["type"], sname, n, screen[n]["type"]))
+
+    def _check_command(self, where, sl, cname, cmd):
         rep = self.rep
         if not cmd:
             rep.error("%s: command %s has no fields" % (where, cname))
@@ -361,14 +363,6 @@ class Model:
         feeders = {}                                        # (event, field) -> [command field]
         for n, f in cmd.items():
             src = "%s.%s" % (cname, n)
-            if f["source"] == "screen":
-                if n not in inputs:
-                    rep.error("%s: %s is typed on screen %r, which has no input %s"
-                              % (where, src, sname, n))
-                elif inputs[n]["type"] != f["type"]:
-                    rep.error("%s: %s is %s, but screen %r input %s is %s"
-                              % (where, src, f["type"], sname, n, inputs[n]["type"]))
-
             targets = [(e, n) for e in events if n in evfields[e]]      # by name
             for t in f["feeds"]:
                 e, _, ef = t.partition(".")
@@ -380,10 +374,6 @@ class Model:
                     rep.warn("%s: %s lists %s in `feeds`, which it already feeds by name" % (where, src, t))
                 else:
                     targets.append((e, ef))
-            if not targets and not f["stream"] and not f["uses"] and f["source"] != "lookup":
-                rep.error("%s: %s feeds no event field - list targets in `feeds`, mark it "
-                          "`stream: true` if it only selects the stream, or say in `uses` where "
-                          "else its value goes" % (where, src))
             if f["source"] == "lookup" and targets:
                 rep.error("%s: %s is looked up from outside the stream, so it may only feed a "
                           "guard, never an event field" % (where, src))
@@ -403,27 +393,21 @@ class Model:
                     rep.error("%s: %s.%s is fed by more than one field of %s: %s"
                               % (where, e, ef, cname, ", ".join(fed)))
 
-    def _check_read_model(self, where, rname, draft):
+    def _check_read_model(self, where, rname):
         reads = self.spec("readModel", rname).get("reads") or []
-        used = set()
         for n, f in self.fields.get(("readModel", rname), {}).items():
-            if not f["source"] and not draft:
+            if not f["source"]:
                 self.rep.error("%s: %s.%s has no source - list the events it is built from"
                                % (where, rname, n))
             for e in f["source"]:
-                used.add(e)
                 if e not in reads:
                     self.rep.error("%s: %s.%s is built from %s, which %s does not read"
                                    % (where, rname, n, e, rname))
-        if not draft:
-            for e in reads:
-                if e not in used:
-                    self.rep.warn("%s: %s reads %s, but no field is built from it" % (where, rname, e))
 
 
 # --------------------------------------------------------------- rendering
 def field_line(name, f):
-    """`- name: Type`, tagged when a command field is not typed on the screen."""
+    """`- name: Type`, tagged unless the value comes from the client (the default)."""
     tag = SOURCE_TAGS.get(f["source"]) if isinstance(f["source"], str) else None
     return "- %s: %s%s" % (name, f["type"], " (%s)" % tag if tag else "")
 

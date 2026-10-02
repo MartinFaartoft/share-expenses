@@ -39,26 +39,29 @@
 # FIELDS - shape, and where every value comes from (information completeness).
 #   A field is `name: Type`, or a mapping when it needs more than a type.
 #   Shapes are declared once, like every element.  Sources sit on the field:
-#     screen      `inputs:` - what the user types or picks
-#     command     `source:` screen (default) | route | session | generated | clock | lookup
-#                           (clock: the current time, passed in so deciding stays
-#                           pure; lookup: read from outside the stream to feed a
-#                           guard; may never feed an event field)
+#     screen      `inputs:`  - what the user types or picks
+#                 `context:` - what the screen already holds: the group being
+#                              viewed, the slot tapped, the token from a link
+#     command     `source:` by trust -
+#                   client  sent by the caller: typed, or held by the screen (default)
+#                   system  supplied by the server: signed-in user, clock, new ids
+#                   stream  derived by deciding, from the folded stream
+#                   lookup  read from outside the stream, e.g. Identity; stale-able,
+#                           so it may feed guards only, never an event field
 #                 `feeds:`  [Event.field, ...] - event fields it fills that are
 #                           NOT already same-named (same name feeds implicitly)
-#                 `stream: true` - only selects the stream, feeds no event field
-#                 `uses:`   "text" - where the value goes when not into an event
-#                           (a plain document, an email)
 #     event       a type only.  Where an event's values come from depends on the
 #                 slice emitting it, so that lives on that slice's command.
 #     read model  `source:` [Event, ...] - the events the field is built from
-#     query       on a State Read slice: `query:` {input: {type, source}} - what
-#                 selects the data shown; source: route | session | clock |
-#                 fragment (after '#' in a link; never sent to a server in a URL)
-#   The generator checks that every field of every emitted event is fed by
-#   exactly one command field, with the same type; that every screen-sourced
-#   command field is an input of its screen; and that every read model field
-#   is built from events the read model reads.
+#     query       on a State Read slice: `query:` {input: {type, source}},
+#                 source client or system
+#   The generator checks BACKWARD only - every value used is available from a
+#   step before it: every event field is fed by exactly one command field of the
+#   same type; every client value is an input or context of its screen; every
+#   read model field is built from events the read model reads.  Whether a value
+#   is used afterwards is not checked.
+#   How a client value travels (route, body, link fragment) is transport, not
+#   model: it is recorded in the slice's .md and enforced in code.
 #   `draft: true` marks a slice not yet refined: it skips these checks and is
 #   labelled "(draft)" on the diagram.  Remove the flag as part of refining.
 
@@ -86,12 +89,12 @@ slices:
         groupName: { type: string, feeds: [GroupCreated.name] }
         currency: string
         memberName: { type: string, feeds: [MemberAdded.displayName] }
-        createdBy:
+        createdBy:                                         # the signed-in user
           type: UserId
-          source: session
+          source: system
           feeds: [MemberAdded.by, MemberClaimed.userId]
-        groupId: { type: GroupId, source: generated }
-        memberId: { type: MemberId, source: generated }   # feeds both events by name
+        groupId: { type: GroupId, source: system }         # new id
+        memberId: { type: MemberId, source: system }       # new id; feeds both events by name
     events:
       # three events from one command: a group whose creator is not a member is
       # a meaningless state, so the creator is seated and claimed here
@@ -115,36 +118,41 @@ slices:
     type: State Change
     screen:
       name: Group setup
+      context:
+        groupId: GroupId
       inputs:
         displayName: string
     command:
       name: AddMember
       fields:
-        groupId: { type: GroupId, source: route, stream: true }
+        groupId: GroupId                                   # selects the stream
         displayName: string
-        by: { type: UserId, source: session }
-        memberId: { type: MemberId, source: generated }
+        by: { type: UserId, source: system }               # the signed-in user
+        memberId: { type: MemberId, source: system }       # new id
     events:  [MemberAdded]
         
   - slice: Invite a member
     type: State Change
     screen:
       name: Invite member
+      context:
+        groupId: GroupId
+        memberId: MemberId
       inputs:
         email: string
     command:
       name: InviteMember
       fields:
-        groupId: { type: GroupId, source: route, stream: true }
-        memberId: { type: MemberId, source: route }
-        # no email in the ledger: it goes to an erasable plain document
-        email: { type: string, uses: "InviteDelivery document, invite email" }
+        groupId: GroupId                                   # selects the stream
+        memberId: MemberId
+        # no email in the ledger: it goes to an erasable plain document and the email
+        email: string
         # SHA-256 of a random token generated per invite; the raw token is
         # returned and emailed once, and recorded nowhere
-        tokenHash: { type: string, source: generated }
-        # the link's deadline is decided now and recorded: expiresAt = now + 30 days
-        now: { type: DateTimeOffset, source: clock, feeds: [MemberInvited.expiresAt] }
-        by: { type: UserId, source: session }
+        tokenHash: { type: string, source: system }
+        # the clock; the link's deadline is decided now and recorded: now + 30 days
+        now: { type: DateTimeOffset, source: system, feeds: [MemberInvited.expiresAt] }
+        by: { type: UserId, source: system }               # the signed-in user
         # guards (spec §11): may be stale; the claim enforces one user, one slot
         emailHolder: { type: "UserId?", source: lookup }     # Identity: account with this email
         invitedTo: { type: "MemberId[]", source: lookup }    # InviteDelivery: slots invited at it
@@ -160,15 +168,18 @@ slices:
     type: State Read
     screen:
       name: Invite landing
+      context:
+        groupId: GroupId
+        token: string                                      # from the link's fragment
       wireframe:
         - "Alice invited you to"
         - "Lisbon trip as Bob"
         - ""
         - "  [ Sign me in ]"
     query:
-      groupId: { type: GroupId, source: route }
-      token: { type: string, source: fragment }    # matched against tokenHash
-      now: { type: DateTimeOffset, source: clock } # live while now < expiresAt
+      groupId: GroupId
+      token: string                                        # matched against tokenHash
+      now: { type: DateTimeOffset, source: system }        # live while now < expiresAt
     readModel:
       # live: folded from the one group stream named in the link, per request.
       # Shows an invite only if its token matches and it is open and unexpired;
@@ -186,12 +197,25 @@ slices:
         - MemberClaimed
 
   - slice: Claim a slot
-    draft: true
     type: State Change
     screen:
       name: Sign in / claim
+      context:
+        groupId: GroupId
+        token: string                                      # kept from the link across sign-in
+      wireframe:
+        - "  [ Sign me in ]"
+        - ""
+        - "(sign in, then join)"
     command:
       name: ClaimMember
+      fields:
+        groupId: GroupId                                   # selects the stream
+        token: string                                      # matched against open invites
+        now: { type: DateTimeOffset, source: system }      # the clock: now < expiresAt
+        userId: { type: UserId, source: system }           # the signed-in user, claiming
+        # the slot whose open, unexpired invite the token matches - found by deciding
+        memberId: { type: MemberId, source: stream }
     events: [MemberClaimed]
 
   - slice: Record an expense

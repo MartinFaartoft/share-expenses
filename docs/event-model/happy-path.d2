@@ -54,7 +54,7 @@ n2: "3 - Invite a member                     " { class: slicename }
 dvN3: "" { class: divN }
 n3: "4 - View invite                         " { class: slicename }
 dvN4: "" { class: divN }
-n4: "5 - Claim a slot (draft)                " { class: slicename }
+n4: "5 - Claim a slot                        " { class: slicename }
 dvN5: "" { class: divN }
 n5: "6 - Record an expense (draft)           " { class: slicename }
 dvN6: "" { class: divN }
@@ -68,13 +68,13 @@ s0: "New group                    \n                             \nname       [.
 gp2_0_1: "" { class: gap }
 gp2_0_2: "" { class: gap }
 dv2_1: "" { class: div }
-s1: "Group setup                  \n                             \n- displayName: string        \n                             \n                             \n                             " { class: screen }
+s1: "Group setup                  \n                             \n- displayName: string        \n- groupId: GroupId (ctx)     \n                             \n                             " { class: screen }
 dv2_2: "" { class: div }
-s2: "Invite member                \n                             \n- email: string              \n                             \n                             \n                             " { class: screen }
+s2: "Invite member                \n                             \n- email: string              \n- groupId: GroupId (ctx)     \n- memberId: MemberId (ctx)   \n                             " { class: screen }
 dv2_3: "" { class: div }
 s3: "Invite landing               \n                             \nAlice invited you to         \nLisbon trip as Bob           \n                             \n  [ Sign me in ]             " { class: screen }
 dv2_4: "" { class: div }
-s4: "Sign in / claim              \n                             \n                             \n                             \n                             \n                             " { class: screen }
+s4: "Sign in / claim              \n                             \n  [ Sign me in ]             \n                             \n(sign in, then join)         \n                             " { class: screen }
 dv2_5: "" { class: div }
 s5: "Add expense                  \n                             \n                             \n                             \n                             \n                             " { class: screen }
 dv2_6: "" { class: div }
@@ -92,7 +92,7 @@ gp3_1: "" { class: gap }
 dv3_2: "" { class: div }
 gp3_2: "" { class: gap }
 dv3_3: "" { class: div }
-rm3: "InviteReadModel              \n                             \n- groupName: string          \n- memberName: string         \n- invitedBy: string          \n> groupId: GroupId (url)     \n> token: string (frg)        \n> now: DateTimeOffset (clk)  " { class: view }
+rm3: "InviteReadModel              \n                             \n- groupName: string          \n- memberName: string         \n- invitedBy: string          \n> groupId: GroupId           \n> token: string              \n> now: DateTimeOffset (sys)  " { class: view }
 dv3_4: "" { class: div }
 gp3_4: "" { class: gap }
 dv3_5: "" { class: div }
@@ -104,17 +104,17 @@ gp3_7: "" { class: gap }
 
 # ===== row 4: commands =====
 l4: "COMMANDS" { class: lanelabel }
-c0: "CreateGroup                  \n                             \n- groupName: string          \n- currency: string           \n- memberName: string         \n- createdBy: UserId (ses)    \n- groupId: GroupId (gen)     \n- memberId: MemberId (gen)   " { class: command }
+c0: "CreateGroup                  \n                             \n- groupName: string          \n- currency: string           \n- memberName: string         \n- createdBy: UserId (sys)    \n- groupId: GroupId (sys)     \n- memberId: MemberId (sys)   " { class: command }
 gp4_0_1: "" { class: gap }
 gp4_0_2: "" { class: gap }
 dv4_1: "" { class: div }
-c1: "AddMember                    \n                             \n- groupId: GroupId (url)     \n- displayName: string        \n- by: UserId (ses)           \n- memberId: MemberId (gen)   " { class: command }
+c1: "AddMember                    \n                             \n- groupId: GroupId           \n- displayName: string        \n- by: UserId (sys)           \n- memberId: MemberId (sys)   " { class: command }
 dv4_2: "" { class: div }
-c2: "InviteMember                 \n                             \n- groupId: GroupId (url)     \n- memberId: MemberId (url)   \n- email: string              \n- tokenHash: string (gen)    \n- now: DateTimeOffset (clk)  \n- by: UserId (ses)           \n- emailHolder: UserId? (lku) \n- invitedTo: MemberId[] (lku)" { class: command }
+c2: "InviteMember                 \n                             \n- groupId: GroupId           \n- memberId: MemberId         \n- email: string              \n- tokenHash: string (sys)    \n- now: DateTimeOffset (sys)  \n- by: UserId (sys)           \n- emailHolder: UserId? (lku) \n- invitedTo: MemberId[] (lku)" { class: command }
 dv4_3: "" { class: div }
 gp4_3: "" { class: gap }
 dv4_4: "" { class: div }
-c4: "ClaimMember                  \n                             \n                             \n                             \n                             \n                             " { class: command }
+c4: "ClaimMember                  \n                             \n- groupId: GroupId           \n- token: string              \n- now: DateTimeOffset (sys)  \n- userId: UserId (sys)       \n- memberId: MemberId (str)   " { class: command }
 dv4_5: "" { class: div }
 c5: "RecordExpense                \n                             \n                             \n                             \n                             \n                             " { class: command }
 dv4_6: "" { class: div }
