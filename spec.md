@@ -1298,6 +1298,23 @@ a documentation tool, not application code.
   an address, then the code, in the same page; after signing in they land on their
   invites. (An earlier link-based design had to keep an invite token across sign-in
   in `localStorage`; codes and address-matched invites removed that.)
+  - **Friendly URLs — decide with the frontend.** API routes carry Guids, which no
+    user sees: invite emails carry no ids, so only the frontend's own addresses are
+    user-facing. **Preferred, if short shareable addresses are wanted: a separate
+    short public id** — e.g. `/groups/k3Xb9a` — carried on `GroupCreated` and
+    resolved by a lookup document (short id → Guid, unique index), optionally with
+    a decorative name slug after it (`/groups/k3Xb9a/lisbon-trip`, the id
+    authoritative). The Guid stays the stream id and every internal reference; only
+    the edge changes. The short id comes from a sequence or is random with a retry
+    on collision, and its format is fixed forever once links exist. Members, and
+    later expenses, need no global short id: a number within the group
+    (`/members/4`) suffices.
+    Considered: the Guid in a shorter encoding (base64url, 22 characters — still
+    noise); slugs unique only among the user's own groups (no new id, but members
+    get different URLs for one group, so links do not share); sqids of 6–8
+    characters as the ids themselves (too small for random ids, so a sequence,
+    string stream ids in Marten, and every id-carrying event reshaped); a Guid prefix
+    (v7 Guids start with a timestamp, so prefixes collide).
 - **OPEN** Enforce consistency between `event-model.yaml` and the code, failing
   the build on any mismatch, so the model cannot drift from the code (§12, §13).
   For every non-draft slice:
