@@ -62,7 +62,7 @@ n6: "7 - View balances                       " { class: slicename }
 dvN7: "" { class: divN }
 n7: "8 - Record settlement                   " { class: slicename }
 dvN8: "" { class: divN }
-n8: "9 - View settlement plan (draft)        " { class: slicename }
+n8: "9 - View settlement plan                " { class: slicename }
 
 # ===== row 2: screens =====
 l2: "SCREENS" { class: lanelabel }
@@ -70,9 +70,9 @@ s0: "New group                         \n                                  \nnam
 gp2_0_1: "" { class: gap }
 gp2_0_2: "" { class: gap }
 dv2_1: "" { class: div }
-s1: "Group setup                       \n                                  \n- displayName: string             \n- groupId: GroupId (ctx)          \n                                  \n                                  " { class: screen }
+s1: "Group setup                       \n                                  \n- groupId: GroupId                \n- displayName: string             \n                                  \n                                  " { class: screen }
 dv2_2: "" { class: div }
-s2: "Invite member                     \n                                  \n- email: string                   \n- groupId: GroupId (ctx)          \n- memberId: MemberId (ctx)        \n                                  " { class: screen }
+s2: "Invite member                     \n                                  \n- groupId: GroupId                \n- memberId: MemberId              \n- email: string                   \n                                  " { class: screen }
 dv2_3: "" { class: div }
 s3: "Your invites                      \n                                  \nAlice invited you to              \nLisbon trip as Bob                \n            [ Join ]              \n                                  " { class: screen }
 dv2_4: "" { class: div }
@@ -96,17 +96,17 @@ gp3_1: "" { class: gap }
 dv3_2: "" { class: div }
 gp3_2: "" { class: gap }
 dv3_3: "" { class: div }
-rm3: "PendingInvitesReadModel           \n                                  \n- invites: PendingInvite[]        \n> userId: UserId (sys)            \n> invites: InviteId[] (lku)       \n> now: DateTimeOffset (sys)       " { class: view }
+rm3: "PendingInvitesReadModel           \n                                  \n- userId: UserId (sys)            \n- invitedAs: InviteId[] (lku)     \n- now: DateTimeOffset (sys)       \n- invites: PendingInvite[]        " { class: view }
 dv3_4: "" { class: div }
 gp3_4: "" { class: gap }
 dv3_5: "" { class: div }
 gp3_5: "" { class: gap }
 dv3_6: "" { class: div }
-rm6: "GroupLedgerReadModel              \n                                  \n- groupName: string               \n- currency: string                \n- you: MemberId                   \n- members: LedgerMember[]         \n- history: LedgerEntry[]          \n> userId: UserId (sys)            \n> now: DateTimeOffset (sys)       " { class: view }
+rm6: "GroupLedgerReadModel              \n                                  \n- userId: UserId (sys)            \n- now: DateTimeOffset (sys)       \n- groupId: GroupId                \n- groupName: string               \n- currency: string                \n- you: MemberId                   \n- members: LedgerMember[]         \n- history: LedgerEntry[]          " { class: view }
 dv3_7: "" { class: div }
 gp3_7: "" { class: gap }
 dv3_8: "" { class: div }
-rm8: "SettlementPlanReadModel           \n                                  \n- transfers: Transfer[]           \n                                  \n                                  \n                                  " { class: view }
+rm8: "SettlementPlanReadModel           \n                                  \n- userId: UserId (sys)            \n- currency: string                \n- you: MemberId                   \n- transfers: Transfer[]           " { class: view }
 
 # ===== row 4: commands =====
 l4: "COMMANDS" { class: lanelabel }
@@ -181,7 +181,9 @@ e4_0 -> rm6
 e5_0 -> rm6
 e7_0 -> rm6: "loops back" { style.stroke-dash: 4 }
 rm6 -> s6
+e0_0 -> rm8
 e1_0 -> rm8
+e4_0 -> rm8
 e5_0 -> rm8
 e7_0 -> rm8
 rm8 -> s8

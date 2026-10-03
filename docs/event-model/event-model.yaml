@@ -39,9 +39,9 @@
 # FIELDS - shape, and where every value comes from (information completeness).
 #   A field is `name: Type`, or a mapping when it needs more than a type.
 #   Shapes are declared once, like every element.  Sources sit on the field:
-#     screen      `inputs:`  - what the user types or picks
-#                 `context:` - what the screen already holds: the group being
-#                              viewed, the slot or invite tapped
+#     screen      a type only: what the screen holds, shows or takes in - typed,
+#                 picked, or already there (the group viewed, the slot tapped).
+#                 No source: values come from the read model, or go to a command
 #     command     `source:` by trust -
 #                   client  sent by the caller: typed, or held by the screen (default)
 #                   system  supplied by the server: signed-in user, clock, new ids
@@ -53,15 +53,16 @@
 #                           NOT already same-named (same name feeds implicitly)
 #     event       a type only.  Where an event's values come from depends on the
 #                 slice emitting it, so that lives on that slice's command.
-#     read model  `source:` [Event, ...] - the events the field is built from
-#     query       on a State Read slice: `query:` {input: {type, source}},
-#                 source client, system or lookup
+#     read model  `source:` [Event, ...] - the events the field is built from; or
+#                 system / lookup - supplied by the server to the read: the
+#                 signed-in user, the clock, a document looked up
 #   The generator checks BACKWARD only - every value used is available from a
 #   step before it: every event field is fed by exactly one command field of the
-#   same type; every client value is an input or context of its screen; every
+#   same type; every client command field is a field of its screen; every field of
+#   a screen declared by a State Read slice is a field of its read model; every
 #   read model field is built from events the read model reads.  Whether a value
 #   is used afterwards is not checked.
-#   How a client value travels (route, body, link fragment) is transport, not
+#   How a client value travels (route, body) is transport, not
 #   model: it is recorded in the slice's .md and enforced in code.
 #   `draft: true` marks a slice not yet refined: it skips these checks and is
 #   labelled "(draft)" on the diagram.  Remove the flag as part of refining.
@@ -74,7 +75,7 @@ slices:
     type: State Change
     screen:
       name: New group
-      inputs:
+      fields:
         groupName: string
         currency: string
         memberName: string
@@ -119,9 +120,8 @@ slices:
     type: State Change
     screen:
       name: Group setup
-      context:
+      fields:
         groupId: GroupId
-      inputs:
         displayName: string
     command:
       name: AddMember
@@ -135,10 +135,9 @@ slices:
     type: State Change
     screen:
       name: Invite member
-      context:
+      fields:
         groupId: GroupId
         memberId: MemberId
-      inputs:
         email: string
     command:
       name: InviteMember
@@ -166,23 +165,21 @@ slices:
     type: State Read
     screen:
       name: Your invites
-      context:
-        groupId: GroupId                                   # the invite tapped
       wireframe:
         - "Alice invited you to"
         - "Lisbon trip as Bob"
         - "            [ Join ]"
-    query:
-      userId: { type: UserId, source: system }             # the signed-in user
-      # Invite documents addressed to the user's (verified) account email
-      invites: { type: "InviteId[]", source: lookup }
-      now: { type: DateTimeOffset, source: system }        # live while now < expiresAt
     readModel:
       # live: each invited group's stream is folded per request. An invite shows
       # only while it is its slot's current one, unclaimed and unexpired, in a
       # group the user is not already in.
       name: PendingInvitesReadModel
       fields:
+        userId: { type: UserId, source: system }           # the signed-in user
+        # Invite documents addressed to the user's (verified) account email
+        invitedAs: { type: "InviteId[]", source: lookup }
+        now: { type: DateTimeOffset, source: system }      # live while now < expiresAt
+        # each with its group id, which "Join" sends
         invites: { type: "PendingInvite[]", source: [GroupCreated, MemberAdded, MemberInvited, MemberClaimed] }
       reads:
         - GroupCreated
@@ -209,9 +206,8 @@ slices:
     type: State Change
     screen:
       name: Add expense
-      context:
+      fields:
         groupId: GroupId
-      inputs:
         description: string
         amountMinor: long                                  # in the group currency's minor unit
         payerMemberId: MemberId
@@ -255,7 +251,7 @@ slices:
     type: State Read
     screen:
       name: Balances
-      context:
+      fields:
         groupId: GroupId
       wireframe:
         - "Lisbon trip          GBP"
@@ -265,15 +261,15 @@ slices:
         - ""
         - "1 Oct  Dinner  90.00  Alice"
         - "2 Oct  Bob -> Alice  30.00"
-    query:
-      userId: { type: UserId, source: system }             # the signed-in user: members only
-      now: { type: DateTimeOffset, source: system }        # an invite is open until its deadline
     readModel:
       # stored, inline: projected in the transaction that appends the events, so a
       # balance moves the moment an expense or settlement is saved (spec §11).
       # Balances follow spec §9 and always sum to zero.
       name: GroupLedgerReadModel
       fields:
+        userId: { type: UserId, source: system }           # the signed-in user: members only
+        now: { type: DateTimeOffset, source: system }      # an invite is open until its deadline
+        groupId: { type: GroupId, source: [GroupCreated] }
         groupName: { type: string, source: [GroupCreated] }
         currency: { type: string, source: [GroupCreated] }
         you: { type: MemberId, source: [MemberClaimed] }   # the caller's own slot
@@ -294,9 +290,8 @@ slices:
     type: State Change
     screen:
       name: Settle up
-      context:
+      fields:
         groupId: GroupId
-      inputs:
         fromMemberId: MemberId                             # who paid
         toMemberId: MemberId                               # who received
         amountMinor: long                                  # in the group currency's minor unit
@@ -329,15 +324,22 @@ slices:
           by: UserId
 
   - slice: View settlement plan
-    draft: true
     type: State Read
     screen: Settle up
     readModel:
-      # computed per request, never stored and never an event (spec §10, §11)
+      # computed per request from a live fold of the group stream; never stored and
+      # never an event (spec §10, §11). A pure function of the balances, with shared
+      # history only breaking ties.
       name: SettlementPlanReadModel
       fields:
-        transfers: "Transfer[]"
+        userId: { type: UserId, source: system }           # the signed-in user: members only
+        currency: { type: string, source: [GroupCreated] }
+        you: { type: MemberId, source: [MemberClaimed] }   # the caller's own slot
+        # who pays whom, with names, ordered by payer then recipient (member-added)
+        transfers: { type: "Transfer[]", source: [MemberAdded, ExpenseRecorded, SettlementRecorded] }
       reads:
+        - GroupCreated
         - MemberAdded
+        - MemberClaimed
         - ExpenseRecorded
         - SettlementRecorded

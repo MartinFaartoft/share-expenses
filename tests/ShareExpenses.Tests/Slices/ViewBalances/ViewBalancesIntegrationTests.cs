@@ -25,7 +25,7 @@ public class ViewBalancesIntegrationTests(AppFixture app)
 
         var ledger = await View(groupId);
 
-        Assert.Equal(("Lisbon trip", "GBP", alice), (ledger.GroupName, ledger.Currency, ledger.You));
+        Assert.Equal((groupId, "Lisbon trip", "GBP", alice), (ledger.GroupId, ledger.GroupName, ledger.Currency, ledger.You));
         Assert.Equal([("Alice", "joined", 0L), ("Bob", "placeholder", 0L), ("Carol", "placeholder", 0L)], Members(ledger));
         Assert.Empty(ledger.History);
     }
@@ -160,7 +160,7 @@ public class ViewBalancesIntegrationTests(AppFixture app)
     private sealed record AddedBody(MemberId MemberId);
 
     private sealed record LedgerBody(
-        string GroupName, string Currency, MemberId You, IReadOnlyList<MemberBody> Members, IReadOnlyList<JsonElement> History);
+        GroupId GroupId, string GroupName, string Currency, MemberId You, IReadOnlyList<MemberBody> Members, IReadOnlyList<JsonElement> History);
 
     private sealed record MemberBody(MemberId MemberId, string Name, string Status, long BalanceMinor);
 }

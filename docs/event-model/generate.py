@@ -21,18 +21,18 @@ FIELDS AND WHERE THEIR VALUES COME FROM (information completeness)
   A field is `name: Type`, or a mapping when it needs more than a type.
   Events declare shape only: where an event's values come from depends on which
   slice emits it, so that is written on the emitting slice's command instead.
-    screen            `inputs:` what the user types or picks;
-                      `context:` what the screen already holds (the group being
-                      viewed, the slot or invite tapped)
+    screen fields     a type only: what the screen holds, shows or takes in.  No
+                      source - a screen is where values meet, not where they come from
     command fields    `source`, by trust: client (default), system, stream, lookup;
                       `feeds`: event fields it fills beyond the same-named ones
                       (a field always feeds same-named fields of emitted events)
-    read model fields `source`: the events the field is built from
-    State Read query  `query:` {input: {type, source}}, source client, system or lookup.
-                      Drawn on the read model card as `> input: Type (tag)`
+    read model fields `source`: the events the field is built from, or `system` /
+                      `lookup` for a value the server supplies to the read (the
+                      signed-in user, the clock, a document looked up)
   Checks look BACKWARD only - every value used is available from a step before
   it: every event field is fed by exactly one command field of the same type
-  (never a lookup); every client value is an input or context of its screen;
+  (never a lookup); every client command field is a field of its screen; every
+  field of a screen declared by a State Read slice is a field of its read model;
   every read model field is built from events the read model reads.  Whether a
   value is then used anywhere is not checked.
   Slices marked `draft: true` are not yet refined and skip these checks.
@@ -78,7 +78,7 @@ TYPES = (STATE_CHANGE, STATE_READ, AUTOMATION, TRANSLATION)
 # Automation and Translation are recognised vocabulary but have no layout yet
 RENDERABLE = (STATE_CHANGE, STATE_READ)
 
-# where a command field's or query input's value comes from, by trust:
+# where a command field's value comes from, by trust:
 #   client  sent by the caller (typed, or held by the screen) - untrusted; the default
 #   system  supplied by the server: signed-in user, clock, new ids/tokens - trusted
 #   stream  derived by deciding, from the folded stream - trusted and consistent,
@@ -86,17 +86,17 @@ RENDERABLE = (STATE_CHANGE, STATE_READ)
 #   lookup  read from outside the stream (Identity, plain documents) - trusted but
 #           possibly stale, so it may feed guards only, never an event field
 COMMAND_SOURCES = ("client", "system", "stream", "lookup")
-QUERY_SOURCES = ("client", "system", "lookup")
+# a read model field is built from events, or supplied by the server to the read
+READ_SOURCES = ("system", "lookup")
 # the keys a field mapping may carry, per element kind
 FIELD_KEYS = {
     "command": {"type", "source", "feeds"},
     "readModel": {"type", "source"},
     "event": {"type"},
     "screen": {"type"},
-    "query": {"type", "source"},
 }
 # drawn after a field's type; client values are the unmarked default
-SOURCE_TAGS = {"system": "sys", "stream": "str", "lookup": "lku", "context": "ctx"}
+SOURCE_TAGS = {"system": "sys", "stream": "str", "lookup": "lku"}
 
 
 class Report:
@@ -226,44 +226,27 @@ class Model:
     # ---------------------------------------------------------- fields
     def _parse_fields(self):
         """Normalise every declared field list to {name: {type, source, feeds}}."""
-        self.queries = {}       # slice index -> {input: {type, source}}
         for i, sl in enumerate(self.slices):
-            raw = sl.get("query")
-            if raw is None:
-                continue
-            where = "slice %d (%s)" % (i + 1, sl.get("slice", "?"))
-            if sl.get("type") != STATE_READ:
-                self.rep.error("%s: only a %s slice has a `query`; a %s slice's inputs "
-                               "are its command's fields" % (where, STATE_READ, STATE_CHANGE))
-                continue
-            if not isinstance(raw, dict):
-                self.rep.error("%s: `query` must be a mapping of input: {type, source}" % where)
-                continue
-            parsed = {}
-            for fname, fv in raw.items():
-                f = self._parse_field("query", where, fname, fv)
-                if f is not None:
-                    parsed[fname] = f
-            self.queries[i] = parsed
+            if "query" in sl:
+                self.rep.error("slice %d (%s): `query` is gone - a value the screen holds is a "
+                               "screen field; one the server supplies is a read model field with "
+                               "source system or lookup" % (i + 1, sl.get("slice", "?")))
         for (kind, name), d in self.decl.items():
             spec = d["spec"] or {}
             where = "%s %s" % (kind, name)
-            sections = [("inputs", None), ("context", "context")] if kind == "screen" else [("fields", None)]
+            if kind == "screen":
+                for old in ("inputs", "context"):
+                    if old in spec:
+                        self.rep.error("%s: `%s` is merged into `fields`" % (where, old))
+            raw = spec.get("fields") or {}
+            if not isinstance(raw, dict):
+                self.rep.error("%s: `fields` must be a mapping of name: Type" % where)
+                raw = {}
             parsed = {}
-            for key, tag in sections:
-                raw = spec.get(key) or {}
-                if not isinstance(raw, dict):
-                    self.rep.error("%s: `%s` must be a mapping of name: Type" % (where, key))
-                    continue
-                for fname, fv in raw.items():
-                    if fname in parsed:
-                        self.rep.error("%s: %s is both an input and context" % (where, fname))
-                        continue
-                    f = self._parse_field(kind, where, fname, fv)
-                    if f is not None:
-                        if kind == "screen":
-                            f["source"] = tag        # drawn as (ctx) for context, untagged for inputs
-                        parsed[fname] = f
+            for fname, fv in raw.items():
+                f = self._parse_field(kind, where, fname, fv)
+                if f is not None:
+                    parsed[fname] = f
             self.fields[(kind, name)] = parsed
 
     def _parse_field(self, kind, where, fname, fv):
@@ -274,7 +257,10 @@ class Model:
             rep.error("%s: field %s needs a type" % (where, fname))
             return None
         extra = sorted(set(fv) - FIELD_KEYS[kind])
-        if extra and kind == "event":
+        if extra and kind == "screen":
+            rep.error("%s: field %s carries %s, but screen fields declare only a type"
+                      % (where, fname, ", ".join(extra)))
+        elif extra and kind == "event":
             rep.error("%s: field %s carries %s, but event fields declare only a type - "
                       "where a value comes from depends on the emitting slice, so it is "
                       "written on that slice's command (`source`, `feeds`)"
@@ -296,15 +282,14 @@ class Model:
             f["feeds"] = feeds
         elif kind == "readModel":
             src = fv.get("source") or []
-            f["source"] = [src] if isinstance(src, str) else src
-            if not isinstance(f["source"], list):
-                rep.error("%s: field %s: `source` must be a list of events" % (where, fname))
-                f["source"] = []
-        elif kind == "query":
-            f["source"] = fv.get("source", "client")
-            if f["source"] not in QUERY_SOURCES:
-                rep.error("%s: query input %s has source %r - expected one of: %s"
-                          % (where, fname, f["source"], ", ".join(QUERY_SOURCES)))
+            if src in READ_SOURCES:
+                f["source"] = src                    # supplied by the server, drawn tagged
+            else:
+                f["source"] = [src] if isinstance(src, str) else src
+                if not isinstance(f["source"], list):
+                    rep.error("%s: field %s: `source` must be a list of events, or one of: %s"
+                              % (where, fname, ", ".join(READ_SOURCES)))
+                    f["source"] = []
         return f
 
     def _check_sources(self):
@@ -330,25 +315,35 @@ class Model:
             elif sl.get("type") == STATE_READ:
                 rname, _ = as_element(sl.get("readModel"))
                 self._check_read_model(where, rname)
-                if i not in self.queries:
-                    self.rep.error("%s: %s has no `query` - list the inputs that select what it "
-                                   "shows (e.g. the group id the screen holds), or `query: {}` "
-                                   "if it needs none" % (where, rname))
-                else:
-                    self._check_client_values(where, sname, screen, "query", self.queries[i])
+                # A screen a read slice declares shows its read model, so its values come from
+                # it. A screen declared by a State Change slice is about input; a read slice
+                # that reuses it adds what it shows, unchecked.
+                if self.decl.get(("screen", sname), {}).get("slice") == i:
+                    self._check_screen_fed(where, sname, screen, rname)
 
         if drafts:
             self.rep.note("draft slice(s) %s: completeness not checked" % ", ".join(drafts))
 
+    def _check_screen_fed(self, where, sname, screen, rname):
+        """Every field of a read slice's screen comes from its read model."""
+        model = self.fields.get(("readModel", rname), {})
+        for n, f in screen.items():
+            if n not in model:
+                self.rep.error("%s: screen %r shows %s, but read model %s has no field %s"
+                               % (where, sname, n, rname, n))
+            elif model[n]["type"] != f["type"]:
+                self.rep.error("%s: screen %r has %s as %s, but %s.%s is %s"
+                               % (where, sname, n, f["type"], rname, n, model[n]["type"]))
+
     def _check_client_values(self, where, sname, screen, owner, values):
-        """Every value the client sends must be on its screen: typed there, or held there."""
+        """Every value the client sends must come from its screen."""
         for n, f in values.items():
             if f["source"] != "client":
                 continue
             src = "%s.%s" % (owner, n)
             if n not in screen:
-                self.rep.error("%s: %s comes from the client, but screen %r has no input or "
-                               "context %s" % (where, src, sname, n))
+                self.rep.error("%s: %s comes from the client, but screen %r has no field %s"
+                               % (where, src, sname, n))
             elif screen[n]["type"] != f["type"]:
                 self.rep.error("%s: %s is %s, but screen %r has %s as %s"
                                % (where, src, f["type"], sname, n, screen[n]["type"]))
@@ -400,9 +395,11 @@ class Model:
     def _check_read_model(self, where, rname):
         reads = self.spec("readModel", rname).get("reads") or []
         for n, f in self.fields.get(("readModel", rname), {}).items():
+            if f["source"] in READ_SOURCES:
+                continue
             if not f["source"]:
-                self.rep.error("%s: %s.%s has no source - list the events it is built from"
-                               % (where, rname, n))
+                self.rep.error("%s: %s.%s has no source - list the events it is built from, "
+                               "or say system / lookup" % (where, rname, n))
             for e in f["source"]:
                 if e not in reads:
                     self.rep.error("%s: %s.%s is built from %s, which %s does not read"
@@ -417,26 +414,17 @@ def field_line(name, f):
 
 
 def card_fields(m, kind, name):
-    """A screen with a wireframe shows the wireframe; otherwise its inputs."""
+    """A screen with a wireframe shows the wireframe; otherwise its fields."""
     if kind == "screen" and m.spec("screen", name).get("wireframe"):
         return []
     return [field_line(n, f) for n, f in m.fields.get((kind, name), {}).items()]
 
 
-def query_lines(m, i):
-    """A State Read slice's query inputs, drawn under its read model's fields as `> name`."""
-    return ["> %s" % field_line(n, f)[2:] for n, f in m.queries.get(i, {}).items()]
-
-
 def longest_card(m):
-    """Most body lines on any card (fields, inputs, wireframe, query inputs)."""
+    """Most body lines on any card (fields, or wireframe)."""
     most = 0
     for (kind, name), d in m.decl.items():
         most = max(most, len(card_fields(m, kind, name)) + len((d["spec"] or {}).get("wireframe") or []))
-    for i, sl in enumerate(m.slices):
-        rname, _ = as_element(sl.get("readModel"))
-        if rname:
-            most = max(most, len(card_fields(m, "readModel", rname)) + len(query_lines(m, i)))
     return most
 
 
@@ -456,9 +444,6 @@ def pad_width(m):
             widest = max(widest, len(line))
         for raw in spec.get("wireframe") or []:
             widest = max(widest, len(raw))
-    for i in m.queries:
-        for line in query_lines(m, i):
-            widest = max(widest, len(line))
     return widest
 
 
@@ -559,7 +544,7 @@ def render(m):
                                 wireframe=sp.get("wireframe"), W=W))
             elif row == 3 and sl.get("type") == STATE_READ:
                 out.append(card("rm%d" % i, "view", name,
-                                lines=card_fields(m, "readModel", name) + query_lines(m, i), W=W))
+                                lines=card_fields(m, "readModel", name), W=W))
             elif row == 4 and sl.get("type") == STATE_CHANGE:
                 out.append(card("c%d" % i, "command", name,
                                 lines=card_fields(m, "command", name), W=W))

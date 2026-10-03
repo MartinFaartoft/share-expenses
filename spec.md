@@ -564,8 +564,23 @@ social legibility of the second.
 4. Deterministic final tiebreak on member-added order, so identical group state
    always produces an identical plan — reloading never reshuffles it.
 
+**The tie rules, pinned** (with View settlement plan, so the procedure can be
+tested exactly):
+
+- **Exact matches:** every debtor/creditor pair of equal magnitude is a candidate.
+  Candidates are taken by score (highest first), then debtor, then creditor in
+  member-added order, skipping any whose debtor or creditor is already matched.
+  Simple and deterministic; it does not search for the set of pairs with the
+  greatest total score — not worth the complexity for a tiebreak.
+- **Greedy:** of the creditors with the largest credit and the debtors with the
+  largest debt, the pair with the highest score; then creditor, then debtor, in
+  member-added order.
+- **The plan is listed** by payer, then recipient, in member-added order, so each
+  payer's lines sit together.
+
 **Shared-history score** for a pair: the number of live expenses in which both
-members appear, as payer or as participant.
+members appear, as payer or as a member of the split (even with a zero exact
+amount). Expenses only: a settlement is a repayment, not shared spending (§7).
 
 ### Honest bounds
 
@@ -1270,9 +1285,12 @@ on an event.** Every field says where its value comes from, so the generator can
 check *information completeness*: that nothing on an event or a read model
 appears from nowhere.
 
-- **Screens** list their `inputs:` — what the user types or picks — and their
-  `context:` — what the screen already holds: the group being viewed, the slot
-  or invite tapped.
+- **Screens** list their `fields` — what the screen holds, shows or takes in:
+  typed, picked, or already there (the group being viewed, the slot tapped).
+  **A screen field has a type and no source.** A screen is where values meet,
+  not where they come from: on a State Read slice they come from the read model,
+  on a State Change slice they go into the command. (Merged from separate
+  `inputs` and `context` lists, and a State Read slice's own `query` block.)
 - **Command fields** carry `source:`, classified by **trust**, not transport:
   - `client` (the default) — sent by the caller, typed or held by the screen.
     Untrusted: deciding validates it.
@@ -1281,21 +1299,27 @@ appears from nowhere.
     consistent: the only kind an invariant may rest on.
   - `lookup` — read from outside the stream (Identity, plain documents). Trusted
     but possibly stale: it may feed guards, or propose candidates that deciding
-    confirms against the stream (§11), but never an event field. A State Read
-    slice's query may use lookups too: View invites finds its groups that way.
+    confirms against the stream (§11), but never an event field.
+
+  **Server-supplied values stay with the command or read model they serve,**
+  never on a screen: the signed-in user, the clock and a lookup are added by the
+  server, out of the user's sight.
 
   `stream` vs `lookup` is the invariants-vs-guards line of §11, made visible.
   Route vs body vs link fragment is transport, not model: it is recorded in the
   slice's `.md` and enforced in code (e.g. a sign-in code only ever travels in a
   body, never a URL). The id that selects the stream is not a
-  command or query field either: it comes from the screen's `context`, and the
+  command or read model input either: it is a field of the screen, and the
   stream is fetched before deciding (by Wolverine, §12), so deciding receives the
   group as its folded state rather than as an input.
 - **`feeds:`** lists the event fields a command field fills; a field always feeds
   same-named fields of the events its slice emits, so `feeds` lists only the
   exceptions (`createdBy` → `MemberAdded.by`).
-- **Read model fields** carry `source:`, the events they are built from. A
-  State Read slice declares its `query:` inputs, `client` or `system`.
+- **Read model fields** carry `source:` — the events they are built from, or
+  `system` / `lookup` for a value the server supplies to the read (the signed-in
+  user, the clock, View invites' `Invite` documents). Those are inputs to the read,
+  not output, but listing them on the read model keeps every server-supplied value
+  beside what it serves, as on a command.
 - **Event fields carry a type only.** Where an event's values come from is not a
   property of the event: `MemberAdded.by` is `createdBy` when CreateGroup emits it
   and `by` when AddMember does. A source on the event's single declaration would
@@ -1306,9 +1330,10 @@ appears from nowhere.
 **Decision: checks look backward only — every value used is available from a step
 before it.** Every field of every emitted event is fed by exactly one command
 field, of the same type, and never by a `lookup`; every `feeds` target exists;
-every `client` value — command field or query input — is an input or context of
-its screen, of the same type; every read model field is built from events the
-read model reads. Misspelled keys and unknown sources are errors; a source on an
+every `client` command field is a field of its screen, of the same type; every
+field of a screen declared by a State Read slice is a field of its read model, of
+the same type — the values a screen shows come from the read model; every read
+model field is built from events the read model reads. Misspelled keys and unknown sources are errors; a source on an
 event field is an error that explains why.
 
 Whether a value is *used* afterwards is deliberately not checked: a command field
@@ -1317,17 +1342,19 @@ and declaring every such use (`stream: true`, `uses:`) was tried and dropped as
 bookkeeping that caught nothing. Each rule was confirmed to fire by mutating a
 copy of the model (`generate.py --check <copy>`).
 
-Not yet checked: that a screen's `context` is itself available — from a read
-model that feeds the screen. That is Event Modeling's own completeness rule, and
-needs the read models (ViewBalances' `GroupLedger`) to exist first.
+The screen rule applies where a State Read slice *declares* the screen. A screen
+declared by a State Change slice is about input; a read slice that reuses it
+(Settle up, shared by Record settlement and View settlement plan) adds what it
+shows, unchecked. Values a State Change screen holds (the group being viewed) are
+not traced back to a read model yet.
 
 **`draft: true`** marks a slice not yet refined. It keeps every structural check
 but skips completeness, and is labelled "(draft)" on the diagram. Refining a slice
 ends with removing the flag. On cards, a field's source is tagged unless it comes
-from the client: `(sys)`, `(str)`, `(lku)`; a screen's context values are `(ctx)`.
+from the client: `(sys)`, `(str)`, `(lku)`. Screen fields are never tagged.
 
-Deferred: field-level checks inside composite types such as `Member[]` (with
-ViewBalances), and that a screen's context is fed by a read model (above).
+Deferred: field-level checks inside composite types such as `LedgerMember[]`, and
+tracing a State Change screen's held values back to a read model (above).
 
 **Slices are typed with the four canonical Event Modeling types**, spelled
 verbatim in the `type` field: `State Change` (a user action that changes state and
@@ -1462,6 +1489,23 @@ a documentation tool, not application code.
     made while building AddMember.
   - Optional means advisory by default: it reports, and the caller decides
     whether to gate on it.
+- **OPEN** Give State Read screens the fields they show. Today the read slices'
+  screens (Your invites, Balances) declare at most a `groupId`, and Settle up only
+  its command inputs; what each screen displays lives only in its wireframe. List,
+  per screen, the read-model fields it needs — group name and currency, each
+  member's name, status and balance, the history, the plan's transfers — so the
+  generator's read-screen check (§13) proves the read model serves the screen, not
+  just that it has no stray fields. To decide along the way:
+  - **Composite fields:** a screen shows parts of `LedgerMember[]` or
+    `PendingInvite[]`. Either list the composite (`members: LedgerMember[]`), or
+    reach inside it — which needs the deferred field-level checks inside composite
+    types (below) and a notation for them.
+  - **Shared screens:** Settle up is declared by Record settlement (inputs) and
+    reused by View settlement plan (display). Its displayed fields are unchecked
+    today (§13); a way to say "these fields come from this read model" on a shared
+    screen, or a screen split, is needed for the check to reach them.
+  - **Wireframe and fields together:** a card shows its wireframe instead of its
+    fields; decide whether listing fields changes what the diagram draws.
 - **OPEN** Move the `slice-NN-*.md` specs into `event-model.yaml`, so each slice's
   given-when-thens sit next to its shape and the generator can check them: every
   event in a scenario is one the slice emits or reads, every payload matches the
@@ -1505,9 +1549,8 @@ a documentation tool, not application code.
   inbox/outbox); adopting it means switching durability mode, and the email becomes
   a message handled after the commit. A superseded invite needs no special care:
   the worker can check its `Invite` still exists before sending.
-- **DEFERRED** Completeness inside composite read model types (`Member[]`), and
-  checking that a screen's `context` is fed by a read model — both with
-  ViewBalances' `GroupLedger` (§13).
+- **DEFERRED** Completeness inside composite read model types (`LedgerMember[]`),
+  and tracing the values a State Change screen holds back to a read model (§13).
 - **DEFERRED** Email change, several addresses per account, and account merging.
   An account *is* its address (§4), and invites are claimed by address — so an
   invite to an old or second address can today only be fixed by re-inviting. A

@@ -12,6 +12,7 @@ internal sealed record Query(UserId UserId, DateTimeOffset Now);
 /// <param name="You">The caller's own slot.</param>
 /// <param name="Currency">ISO 4217; amounts are in its minor unit.</param>
 internal sealed record GroupLedgerReadModel(
+    GroupId GroupId,
     string GroupName,
     string Currency,
     MemberId You,
@@ -77,7 +78,7 @@ internal static class Reader
             .Select(x => x.Entry)
             .ToList();
 
-        return new GroupLedgerReadModel(state.GroupName, state.Currency, you.MemberId, members, history);
+        return new GroupLedgerReadModel(GroupId.From(state.Id), state.GroupName, state.Currency, you.MemberId, members, history);
     }
 
     private static string StatusOf(Slot slot, DateTimeOffset now) =>
