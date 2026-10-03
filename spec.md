@@ -1489,6 +1489,31 @@ a documentation tool, not application code.
     made while building AddMember.
   - Optional means advisory by default: it reports, and the caller decides
     whether to gate on it.
+- **OPEN** Explore user notifications: telling a person about something that
+  concerns them, without their having to look. Examples: "Bob accepted your invite
+  to Lisbon trip"; "could not send the invite to Bob — check the address for
+  typos"; "Bob changed your expense Dinner from £120 to £140". §1 rules out *push*
+  notifications for v1, not notifications as such. To explore:
+  - **Who is told:** the person an event concerns — the inviter when an invite is
+    claimed, the recorder or payer when an expense is corrected, the parties to a
+    settlement — never the actor themselves. Needs a rule per event; the slot→user
+    join already exists in the claim events.
+  - **Channel:** in-app first (a list, an unread count), email for some (the
+    sign-in mail path exists), push not in v1. Per-user preferences, and
+    batching — a busy evening must not send ten emails.
+  - **Model:** an Automation slice (spec §13: recognised, no layout yet) reacting to
+    events, and a per-user read model (`Notifications`, async, multi-stream —
+    like `UserGroups`). Read/unread is supporting state, not ledger: a plain
+    document (§3). Most notifications are a filtered activity feed (§11
+    `ActivityFeed`) addressed to one person, so design the two together.
+  - **Failed delivery** is different: "could not send" is not a domain event but an
+    outcome of the mail relay, which today only logs (InviteMember). It depends on
+    the transactional outbox and delivery status on `Invite` (deferred above), and a
+    relay that reports bounces (§4). Typos often surface only as a bounce, minutes
+    later.
+  - **Corrections need the old value**, which correction events deliberately do not
+    carry (§11): the notification is composed from the fold, which holds the state
+    before the event — as the activity feed does.
 - **OPEN** Give State Read screens the fields they show. Today the read slices'
   screens (Your invites, Balances) declare at most a `groupId`, and Settle up only
   its command inputs; what each screen displays lives only in its wireframe. List,

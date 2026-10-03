@@ -215,5 +215,10 @@ Content-Type: application/json
 # the events: `just rebuild-projections`
 GET {{host}}/api/groups/{{groupId}}
 
-### 17. Health
+### 17. The settle-up plan: who pays whom to clear every balance (spec §10). Expect 200
+# with transfers [{ fromMemberId, fromName, toMemberId, toName, amountMinor }]. Computed
+# on every request from the events, never stored. "Paid" on a line is step 15 with its values.
+GET {{host}}/api/groups/{{groupId}}/settlement-plan
+
+### 18. Health
 GET {{host}}/health
