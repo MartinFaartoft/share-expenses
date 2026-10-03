@@ -19,7 +19,15 @@ namespace ShareExpenses.Tests.Architecture;
 [Collection(AppCollection.Name)]
 public class AuthorizationTests(AppFixture app)
 {
-    private static readonly string[] AllowList = ["GET /health", "POST /api/sign-in", "POST /api/sign-in/code"];
+    private static readonly string[] AllowList =
+    [
+        "GET /health",
+        "GET /sign-in",
+        "POST /api/sign-in",
+        "POST /api/sign-in/code",
+        "POST /sign-in",
+        "POST /sign-in/code",
+    ];
 
     /// <summary>
     /// Exact equality: fails when an unexpected endpoint is anonymous, and when an

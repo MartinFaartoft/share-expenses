@@ -1,0 +1,24 @@
+@* Step 2: the code from the email. one-time-code lets iOS and macOS offer it from Mail (spec §14). *@
+<form method="post" action="/sign-in" hx-post="/sign-in" hx-target="#sign-in">
+    <AntiforgeryToken />
+    <p>We sent a code to <strong>@Email</strong>. It works for 10 minutes.</p>
+    <input name="email" type="hidden" value="@Email" />
+    <label>
+        Code
+        <input name="code" class="code" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*"
+               maxlength="6" required autofocus />
+    </label>
+    @if (Error is not null)
+    {
+        <p class="error" role="alert">@Error</p>
+    }
+    <button type="submit">Sign in</button>
+</form>
+<form method="get" action="/sign-in">
+    <button type="submit" class="link">Use another address</button>
+</form>
+
+@code {
+    [Parameter, EditorRequired] public string Email { get; set; } = "";
+    [Parameter] public string? Error { get; set; }
+}

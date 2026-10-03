@@ -1,0 +1,19 @@
+@* The sign-in screen (spec §4): an address, then the code — one page, one tab. *@
+<Page Title="Sign in">
+    <div id="sign-in">
+        @if (AskForCode)
+        {
+            <CodeStep Email="@Email" Error="@Error" />
+        }
+        else
+        {
+            <EmailStep Email="@Email" Error="@Error" />
+        }
+    </div>
+</Page>
+
+@code {
+    [Parameter] public string Email { get; set; } = "";
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public bool AskForCode { get; set; }
+}

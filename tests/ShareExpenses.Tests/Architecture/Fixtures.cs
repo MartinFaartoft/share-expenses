@@ -43,6 +43,9 @@ namespace ShareExpenses.Tests.Architecture.Fixtures.Good.Slices.Beta
 
     public sealed record Request(int Add);
 
+    // Its screen: a component, public because Razor generates it so.
+    public class BetaScreen : Microsoft.AspNetCore.Components.ComponentBase;
+
     // A slice on Wolverine with no events: an endpoint, its contract types, and no entry point.
     public static class Endpoint
     {

@@ -6,6 +6,7 @@
 #   1. First time only: `just setup` (dotnet-ef, the generator's venv, the HTTPS dev cert).
 #   2. Start the app over HTTPS, starting the database first: `just run`
 #      (the auth cookie is Secure, so plain HTTP won't sign in).
+#   Or use the screens: https://localhost:7194/sign-in (the code is in the app's log).
 #   3. Run the requests below top to bottom. The VS Code REST Client and the
 #      JetBrains HTTP Client both keep the sign-in cookie between requests.
 #      Sign-in codes are not emailed in Development: they are in the app's log.

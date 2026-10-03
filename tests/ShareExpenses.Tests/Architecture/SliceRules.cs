@@ -18,6 +18,9 @@ internal enum PublicRole
     /// <summary>A static class of Wolverine endpoints, public so Wolverine discovers it.</summary>
     Endpoint,
 
+    /// <summary>A Razor Component — the slice's screen (spec §3). Razor always generates it public.</summary>
+    Component,
+
     /// <summary>A type in an endpoint's signature (request, response, state…), public because Wolverine's generated code uses it.</summary>
     Contract,
 
@@ -52,6 +55,7 @@ internal static class SliceRules
         return inSlices.ToDictionary(t => t, t =>
             IsEntryPoint(t, SliceOf(t, layout)!) ? PublicRole.EntryPoint
             : IsWolverineEndpoint(t) ? PublicRole.Endpoint
+            : IsComponent(t) ? PublicRole.Component
             : contracts.Contains(t) ? PublicRole.Contract
             : IsSealedRecord(t) ? PublicRole.Event
             : PublicRole.Stray);
@@ -69,7 +73,7 @@ internal static class SliceRules
         PublicRoles(module, layout)
             .Where(r => r.Value == PublicRole.Stray)
             .Select(r => $"{SliceOf(r.Key, layout)}: {r.Key.FullName} is public, but is neither a sealed record event, " +
-                         $"the {SliceOf(r.Key, layout)}Slice entry point, a Wolverine endpoint, nor in an endpoint's signature")
+                         $"the {SliceOf(r.Key, layout)}Slice entry point, a Wolverine endpoint, a component, nor in an endpoint's signature")
             .ToList();
 
     /// <summary>
@@ -186,6 +190,10 @@ internal static class SliceRules
 
     private static readonly HashSet<string> WolverineRouteAttributes =
         ["Get", "Post", "Put", "Delete", "Patch", "Head", "Options"];
+
+    /// <summary>A Razor Component: derives from <c>ComponentBase</c>, as generated components do.</summary>
+    private static bool IsComponent(TypeDefinition type) =>
+        type.BaseType?.FullName == "Microsoft.AspNetCore.Components.ComponentBase";
 
     /// <summary>A static class with at least one <c>[Wolverine&lt;Verb&gt;]</c> route method.</summary>
     private static bool IsWolverineEndpoint(TypeDefinition type) =>

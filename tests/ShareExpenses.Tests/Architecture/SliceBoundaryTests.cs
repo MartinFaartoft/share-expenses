@@ -53,13 +53,13 @@ public class SliceBoundaryTests
     public void Conforming_fixture_passes(string rule) => Assert.Empty(Check(rule, TestAssembly, Tests, Good));
 
     [Fact]
-    public void Only_events_entry_points_wolverine_endpoints_and_their_signatures_are_public() =>
+    public void Only_events_entry_points_wolverine_endpoints_components_and_endpoint_signatures_are_public() =>
         Assert.Equal(
             [
-                $"Epsilon: {Fixtures}.Bad.Slices.Epsilon.EpsilonSlice is public, but is neither a sealed record event, the EpsilonSlice entry point, a Wolverine endpoint, nor in an endpoint's signature",
-                $"Gamma: {Fixtures}.Bad.Slices.Gamma.Endpoint is public, but is neither a sealed record event, the GammaSlice entry point, a Wolverine endpoint, nor in an endpoint's signature",
-                $"Gamma: {Fixtures}.Bad.Slices.Gamma.Leaky is public, but is neither a sealed record event, the GammaSlice entry point, a Wolverine endpoint, nor in an endpoint's signature",
-                $"Gamma: {Fixtures}.Bad.Slices.Gamma.Unsealed is public, but is neither a sealed record event, the GammaSlice entry point, a Wolverine endpoint, nor in an endpoint's signature",
+                $"Epsilon: {Fixtures}.Bad.Slices.Epsilon.EpsilonSlice is public, but is neither a sealed record event, the EpsilonSlice entry point, a Wolverine endpoint, a component, nor in an endpoint's signature",
+                $"Gamma: {Fixtures}.Bad.Slices.Gamma.Endpoint is public, but is neither a sealed record event, the GammaSlice entry point, a Wolverine endpoint, a component, nor in an endpoint's signature",
+                $"Gamma: {Fixtures}.Bad.Slices.Gamma.Leaky is public, but is neither a sealed record event, the GammaSlice entry point, a Wolverine endpoint, a component, nor in an endpoint's signature",
+                $"Gamma: {Fixtures}.Bad.Slices.Gamma.Unsealed is public, but is neither a sealed record event, the GammaSlice entry point, a Wolverine endpoint, a component, nor in an endpoint's signature",
             ],
             SliceRules.PublicSurface(Tests, Bad).Order());
 

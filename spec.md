@@ -57,10 +57,56 @@ the simplest thing that works.
   `jsonb` in the same database, so read models and the event log commit together.
 - **Hosting:** a single self-managed VPS with its own domain, running both the
   app and PostgreSQL on the same host.
-- **Frontend:** **OPEN — deferred.** The API and event model come first; the
-  client is chosen later. Assume a mobile-web client for UX purposes: the primary
+- **Frontend:** server-rendered HTML, built into each slice (below). The primary
   target is a phone screen, one-handed, and the sign-in and join flow must not
   require an install.
+
+### Frontend: server-rendered screens in the slices
+
+**Decision: each screen is a Razor Component in its slice's folder, rendered on
+the server, made interactive with htmx.** `Slices/RecordExpense/AddExpense.razor`
+sits beside `Decider.cs` and `Endpoint.cs`; a Wolverine endpoint returns it as a
+`RazorComponentResult`. Components are rendered statically — no Blazor
+interactivity, so no live server connection and no WebAssembly download. htmx
+(HTML attributes, no hand-written JavaScript) posts forms and swaps in the
+fragment the endpoint answers with: a rejection shown in place, a list updated.
+
+Rationale: the requirement is that a slice's screen live with the slice's code.
+Rendered on the server, that colocation is real — one folder, one language, one
+project — and the screen uses the slice's internal `Reader`, read model and
+`Decision` reasons directly, with no JSON contract or generated types between
+them. It suits the target: small pages, nothing to install or download first,
+plain HTML forms (so the sign-in code's autofill is one attribute). One origin, so
+the `SameSite=Lax` cookie needs no CORS. §2 holds too: the learning goals are event
+modelling and event sourcing, not a frontend stack.
+
+Rejected: a JavaScript SPA (React, Svelte, …) with its files inside the slice
+folders — colocation by folder only, the slice's types unreachable without
+generating them, and a second toolchain and test runner; interactive Blazor —
+server mode needs a live connection that a phone in a restaurant drops, and
+WebAssembly a heavy first download. Accepted: each interaction is a round trip, and
+offline use is out (already a non-goal, §1).
+
+**The JSON endpoints stay as they are.** HTML endpoints sit beside them in the same
+slice, deciding through the same `Decide`; the JSON API keeps its tests and serves
+anything that is not a browser.
+
+**Verified by spike (Wolverine 6.44, .NET 10), not assumed:**
+- A Wolverine endpoint returns a `RazorComponentResult`, page or fragment, and a
+  form endpoint can use `[WriteAggregate]` and return `(IResult, Events)` exactly as
+  the JSON ones do.
+- **Antiforgery must be opted into per form endpoint, with `[ValidateAntiforgery]`.**
+  Wolverine documents that a `[FromForm]` parameter adds it automatically; in 6.44
+  it did not, and a post with no token was accepted. Forms render
+  `<AntiforgeryToken />` (namespace `Microsoft.AspNetCore.Components.Forms`).
+- **A failed antiforgery check must be answered by middleware.** ASP.NET's
+  middleware only records the failure; Wolverine's generated code then reads the
+  form, which throws — a 500. A small middleware right after `UseAntiforgery()`
+  answers 400 when the request's `IAntiforgeryValidationFeature` is invalid.
+- **Components are always public.** The generated class cannot be made
+  `internal`, so the slice architecture rule must allow them, as it allows
+  Wolverine endpoints (§12).
+- JSON endpoints are unaffected: no antiforgery, no change.
 
 ### Hosting consequences
 
@@ -146,16 +192,17 @@ mail client opens; a code needs neither.
 **Decision: every endpoint requires a signed-in user unless it is explicitly
 anonymous.** An authorization `FallbackPolicy` requires an authenticated user for
 every endpoint without authorization metadata; the public ones say so with
-`[AllowAnonymous]` / `.AllowAnonymous()`. Unauthenticated calls get 401, not a
-redirect. The explicit `[Authorize]` on slice endpoints stays — redundant now, but
+`[AllowAnonymous]` / `.AllowAnonymous()`. Unauthenticated calls to the JSON API
+(`/api/…`) get 401; a screen asked for while signed out redirects to `/sign-in`. The explicit `[Authorize]` on slice endpoints stays — redundant now, but
 it states the intent.
 
 Rationale: endpoints used to opt in with `[Authorize]`, so a new slice that forgot
 it was silently public — and a group's data leaked rather than 404'd. With the
 fallback, forgetting is safe rather than merely caught.
 
-**The allow-list is pinned by an architecture test.** Today: `POST
-/api/sign-in/code`, `POST /api/sign-in`, `GET /health`; candidates later, an
+**The allow-list is pinned by an architecture test.** Today: the sign-in JSON
+endpoints `POST /api/sign-in/code` and `POST /api/sign-in`, the sign-in screen's
+`GET /sign-in`, `POST /sign-in/code` and `POST /sign-in`, and `GET /health`; candidates later, an
 invite landing page if one returns. `AuthorizationTests` walks the running app's
 `EndpointDataSource` — Wolverine's endpoints and minimal APIs alike — and requires
 the set carrying `IAllowAnonymous` to equal the allow-list exactly, so it fails on
@@ -928,10 +975,18 @@ diff touching two slice folders is a signal worth noticing in review.
 src/ShareExpenses/
   Program.cs          hosting only
   AllSlices.cs        what the slices register with the store
-  Infrastructure/     Identity (EF), Marten store and Wolverine setup
+  Infrastructure/     Identity (EF, sign-in; its screen in Identity/Screens/), Marten store, Wolverine
   Shared/             pure, framework-free code used by several slices
+  Web/                the HTML side every screen shares: page shell, wiring (§3)
   Slices/<Name>/      one folder per slice
+  wwwroot/            static files: the stylesheet, htmx (pinned, served by the app)
 ```
+
+`Web/` is to screens what `Shared/` is to domain code — shared by several slices —
+but framework code, so it is kept apart and `Shared/` stays pure. Outside the
+slices, a screen sits in a `Screens/` folder beside the code it serves — sign-in's
+in `Infrastructure/Identity/Screens/` — so frontend and backend code are told apart
+at a glance without drifting apart.
 
 **Decision: a single application project.** A slice owns its endpoint, so it needs
 ASP.NET and Marten; a framework-free domain project would split every slice
@@ -1032,6 +1087,7 @@ later slices follow it unless they have a reason not to.
 | `State.cs` | public | what the slice folds, with an `Id` for Wolverine |
 | `Decider.cs` | internal | `Command` and the pure `Decide` returning `Decision` |
 | `Endpoint.cs` | public class | the Wolverine endpoint: route, `Request` (public), `Response` (internal); decides and maps `Decision` to HTTP; `OnException` for the 409 |
+| `<Screen>.razor` | public (forced) | the slice's screen, rendered on the server (§3); HTML endpoints beside the JSON ones |
 
 A State Read slice has `Reader.cs` (internal `Query`, read model and pure `Read`)
 in place of `Decider.cs`, and no events.
@@ -1410,14 +1466,36 @@ a documentation tool, not application code.
 
 ## 14. Open questions
 
-- **OPEN** Frontend framework and rendering approach. Deferred deliberately.
+- **OPEN** Frontend — decided: server-rendered Razor Components in the slices, with
+  htmx (§3). Built with the sign-in screen: the wiring (`Web/WebSetup.cs`:
+  components, antiforgery and its 400 middleware, static files ahead of
+  authentication, a redirect to `/sign-in` for screens asked for while signed out);
+  the page shell and stylesheet (`Web/Page.razor`, `wwwroot/css/site.css`, phone
+  first); htmx 2.0.4 served from `wwwroot`; the slice architecture rule allowing
+  components, with a fixture. Conventions set by sign-in, for later screens to
+  follow or revise:
+  - **A screen works without htmx.** Forms carry `method`/`action` as well as
+    `hx-post`; an endpoint answers an htmx request with the fragment it swaps in,
+    and a plain post with the whole page (`request.IsHtmx()`); success after a
+    post redirects — `HX-Redirect` for htmx, a 302 otherwise.
+  - **A rejection shows in place,** under the form, as `role="alert"`, with the
+    same reason the JSON API gives.
+  - **Screens are tested over HTTP** as a browser would use them: load the page,
+    keep its cookies, post the form with the token it carries, with and without the
+    `HX-Request` header; assertions on the HTML.
+  Still to do:
+  - **How a 409 asks to retry** in a form — with the first slice screen.
+  - **Server gaps every screen hits:** a group list to land on after signing in
+    (`UserGroups`, §11); each currency's decimal places for typing and showing
+    amounts (`Shared/Currency.cs` has them; the screens can use it directly).
   Sign-in and joining need no state carried between pages or tabs: the user types
   an address, then the code, in the same page; after signing in they land on their
   invites. (An earlier link-based design had to keep an invite token across sign-in
   in `localStorage`; codes and address-matched invites removed that.)
-  - **Friendly URLs — decide with the frontend.** API routes carry Guids, which no
-    user sees: invite emails carry no ids, so only the frontend's own addresses are
-    user-facing. **Preferred, if short shareable addresses are wanted: a separate
+  - **Friendly URLs — decide with the first screens.** The JSON API's routes
+    (`/api/…`) carry Guids no user sees, but the HTML screens' routes, served by the
+    same app, are the addresses users see and share: `/groups/{guid}` until decided.
+    Invite emails carry no ids. **Preferred, if short shareable addresses are wanted: a separate
     short public id** — e.g. `/groups/k3Xb9a` — carried on `GroupCreated` and
     resolved by a lookup document (short id → Guid, unique index), optionally with
     a decorative name slug after it (`/groups/k3Xb9a/lisbon-trip`, the id
@@ -1436,11 +1514,12 @@ a documentation tool, not application code.
     Apple devices (iOS and macOS offer a code found in a recent Mail message as an
     AutoFill suggestion above the keyboard): the code input carries
     `autocomplete="one-time-code"`, with `inputmode="numeric"` and `maxlength="6"`
-    for the numeric keypad and a clean paste. Detection in email is Apple's
+    for the numeric keypad and a clean paste — **done, in the sign-in screen's code
+    step, and pinned by a test.** Still to do: detection in email is Apple's
     heuristic, not a standard, so the sign-in email should state the code plainly
     and early — e.g. "Your sign-in code is 123456", in the subject and the first
-    line. Verify on a real iPhone and Mac once the frontend and a mail relay (§4)
-    exist; the log sender sends nothing to detect.
+    line — with the mail relay (§4); then verify on a real iPhone and Mac. The log
+    sender sends nothing to detect.
   - **OPEN — several pending invites.** Work out the experience when a user has more
     than one invite waiting (View invites lists them, soonest deadline first): where
     signing in lands, whether a single invite is offered directly rather than as a
