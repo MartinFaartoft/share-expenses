@@ -264,36 +264,80 @@ slices:
         - "Carol (invited)   -30.00"
         - ""
         - "1 Oct  Dinner  90.00  Alice"
+        - "2 Oct  Bob -> Alice  30.00"
     query:
       userId: { type: UserId, source: system }             # the signed-in user: members only
       now: { type: DateTimeOffset, source: system }        # an invite is open until its deadline
     readModel:
       # stored, inline: projected in the transaction that appends the events, so a
-      # balance moves the moment an expense is saved (spec §11). Balances follow
-      # spec §9 and always sum to zero.
+      # balance moves the moment an expense or settlement is saved (spec §11).
+      # Balances follow spec §9 and always sum to zero.
       name: GroupLedgerReadModel
       fields:
         groupName: { type: string, source: [GroupCreated] }
         currency: { type: string, source: [GroupCreated] }
         you: { type: MemberId, source: [MemberClaimed] }   # the caller's own slot
         # each slot with its name, status (joined, invited, placeholder) and balance
-        members: { type: "LedgerMember[]", source: [MemberAdded, MemberInvited, MemberClaimed, ExpenseRecorded] }
-        # newest first, with the split as entered and the amounts it produced
-        expenses: { type: "LedgerExpense[]", source: [ExpenseRecorded] }
+        members: { type: "LedgerMember[]", source: [MemberAdded, MemberInvited, MemberClaimed, ExpenseRecorded, SettlementRecorded] }
+        # the money: expenses and settlements in one list, each marked by kind,
+        # newest first; an expense with its split as entered and the amounts it produced
+        history: { type: "LedgerEntry[]", source: [ExpenseRecorded, SettlementRecorded] }
       reads:
         - GroupCreated
         - MemberAdded
         - MemberInvited
         - MemberClaimed
         - ExpenseRecorded
-        - SettlementRecorded   # emitted in Settle up: drawn dashed
+        - SettlementRecorded   # emitted in Record settlement: drawn dashed
 
-  - slice: Settle up
-    draft: true
+  - slice: Record settlement
     type: State Change
     screen:
       name: Settle up
+      context:
+        groupId: GroupId
+      inputs:
+        fromMemberId: MemberId                             # who paid
+        toMemberId: MemberId                               # who received
+        amountMinor: long                                  # in the group currency's minor unit
+        paidOn: DateOnly
+      wireframe:
+        - "Bob pays Alice  30.00 [Paid]"
+        - ""
+        - "or record any payment:"
+        - "[ Bob v ] -> [ Alice v ]"
+        - "[ 30.00 ]  on [ 2 Oct ]"
+        - "             [ Record ]"
     command:
       name: RecordSettlement
+      fields:
+        settlementId: { type: SettlementId, source: system } # new id
+        fromMemberId: MemberId
+        toMemberId: MemberId
+        amountMinor: long
+        paidOn: DateOnly
+        now: { type: DateTimeOffset, source: system }      # the clock: paidOn is not in the future
+        by: { type: UserId, source: system }               # the signed-in user: any member
     events:
       - name: SettlementRecorded
+        fields:
+          settlementId: SettlementId
+          fromMemberId: MemberId
+          toMemberId: MemberId
+          amountMinor: long
+          paidOn: DateOnly
+          by: UserId
+
+  - slice: View settlement plan
+    draft: true
+    type: State Read
+    screen: Settle up
+    readModel:
+      # computed per request, never stored and never an event (spec §10, §11)
+      name: SettlementPlanReadModel
+      fields:
+        transfers: "Transfer[]"
+      reads:
+        - MemberAdded
+        - ExpenseRecorded
+        - SettlementRecorded

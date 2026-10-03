@@ -196,12 +196,24 @@ Content-Type: application/json
   "paidOn": "2026-10-01"
 }
 
-### 15. The group page: balances and expenses. Expect 200 with members (name,
-# status, balanceMinor — positive is owed) and expenses, newest first. Step 13 moved
-# the balances already: the ledger is projected inline, in the same transaction.
+### 15. Bob pays Alice back. Expect 201 with settlementId. Any member may record it.
+POST {{host}}/api/groups/{{groupId}}/settlements
+Content-Type: application/json
+
+{
+  "fromMemberId": "{{bobId}}",
+  "toMemberId": "{{aliceId}}",
+  "amountMinor": 5000,
+  "paidOn": "2026-10-02"
+}
+
+### 16. The group page: balances and history. Expect 200 with members (name,
+# status, balanceMinor — positive is owed) and history, newest first: expenses and
+# settlements, each marked by kind. Steps 13 and 15 moved the balances already: the
+# ledger is projected inline, in the same transaction.
 # Stored as ledger.mt_doc_group_ledger; after changing how it folds, rebuild it from
 # the events: `just rebuild-projections`
 GET {{host}}/api/groups/{{groupId}}
 
-### 16. Health
+### 17. Health
 GET {{host}}/health

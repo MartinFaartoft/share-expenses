@@ -486,9 +486,16 @@ replays, and the residual difference appears as a new balance rather than as
 corruption. **Partial settlements need no code at all**: owe 50, record 30,
 balance is 20.
 
-**Decision: settlements are recorded by either party, with no confirmation step.**
-Whoever gets there first records it; the event is appended immediately and the
-balance clears. Any member can remove it if it was a mistake.
+**Decision: settlements are recorded by any member, with no confirmation step.**
+Usually one of the two parties records it; the event is appended immediately and
+the balance clears. Any member can remove it if it was a mistake. Any member, not
+only the parties: trust is flat (§5), and a placeholder cannot sign in — if Carol,
+a placeholder, pays Alice, someone else records it. The activity feed shows who.
+
+**Decision: a settlement carries the day the money moved** (`paidOn`), as an
+expense does. Payments are often recorded days later, and the history shows when
+the money moved, not when someone got round to saying so; the recording time stays
+Marten metadata (§11).
 
 Rationale: accepts a window where the app reads "settled" while money is still in
 transit. That failure mode is small and socially self-correcting ("mate, nothing
@@ -718,7 +725,7 @@ Transactions:
 ExpenseRecorded(expenseId, description, amountMinor, payerMemberId, split,
                 splits[memberId, amountMinor], paidOn, by)
 ExpenseRemoved(expenseId, by)
-SettlementRecorded(settlementId, fromMemberId, toMemberId, amountMinor, by)
+SettlementRecorded(settlementId, fromMemberId, toMemberId, amountMinor, paidOn, by)
 SettlementRemoved(settlementId, by)
 ```
 
@@ -750,16 +757,17 @@ Two consequences worth stating explicitly:
   before-values is a common reflex worth resisting.
 
 **Settlements have no correction events.** A wrong settlement is removed and
-re-recorded. Rationale: it has four fields, and "that transfer never happened" is
+re-recorded. Rationale: it has five fields, and "that transfer never happened" is
 the truthful statement anyway.
 
 ### Read models and projection lifecycles
 
 | Read model | Lifecycle | Serves |
 |---|---|---|
-| `GroupLedgerReadModel` | **inline** — the stored `GroupLedger` | members, live expenses, per-member balances |
+| `GroupLedgerReadModel` | **inline** — the stored `GroupLedger` | members, per-member balances, and the money history (expenses and settlements) |
 | `ActivityFeed` | **inline** | who did what, when |
 | `UserGroups` | **async** (multi-stream) | a user's group list |
+| `SettlementPlanReadModel` | **live** — computed per request (§10) | the settle-up plan: who pays whom |
 | `PendingInvitesReadModel` | **live** (folded on each request, nothing stored) | a user's invites: group, slot, inviter |
 
 `PendingInvitesReadModel` is live deliberately — the third lifecycle. The user's
@@ -1099,7 +1107,7 @@ in place of `Decider.cs`, and no events.
 
 **Decision: `GroupId`, `MemberId` and `UserId` are distinct types, in code and in
 `event-model.yaml`** — `readonly record struct`s wrapping a `Guid`, hand-written in
-`Shared/Ids.cs`, plus `InviteId` and `ExpenseId`. Later: `SettlementId`.
+`Shared/Ids.cs`, plus `InviteId`, `ExpenseId` and `SettlementId`.
 
 Rationale: events carry several ids side by side — `MemberClaimed(memberId,
 userId)`, later `MemberClaimReleased(memberId, userId, releasedBy)` and an

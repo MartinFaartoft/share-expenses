@@ -27,7 +27,7 @@ public class ViewBalancesIntegrationTests(AppFixture app)
 
         Assert.Equal(("Lisbon trip", "GBP", alice), (ledger.GroupName, ledger.Currency, ledger.You));
         Assert.Equal([("Alice", "joined", 0L), ("Bob", "placeholder", 0L), ("Carol", "placeholder", 0L)], Members(ledger));
-        Assert.Empty(ledger.Expenses);
+        Assert.Empty(ledger.History);
     }
 
     [Fact]
@@ -39,9 +39,29 @@ public class ViewBalancesIntegrationTests(AppFixture app)
         var ledger = await View(groupId);
 
         Assert.Equal([("Alice", "joined", 6000L), ("Bob", "placeholder", -3000L), ("Carol", "placeholder", -3000L)], Members(ledger));
-        var expense = Assert.Single(ledger.Expenses);
-        Assert.Equal(("Dinner", 9000L, alice), (expense.Description, expense.AmountMinor, expense.PayerMemberId));
-        Assert.Equal("equal", expense.Split.GetProperty("mode").GetString());
+        var expense = Assert.Single(ledger.History);
+        Assert.Equal("expense", expense.GetProperty("kind").GetString());
+        Assert.Equal("Dinner", expense.GetProperty("description").GetString());
+        Assert.Equal("equal", expense.GetProperty("split").GetProperty("mode").GetString());
+    }
+
+    [Fact]
+    public async Task A_settlement_moves_balances_and_joins_the_history_marked_by_kind()
+    {
+        var (groupId, alice, bob, carol) = await Lisbon();
+        await Record(groupId, alice, 9000, [alice, bob, carol]);
+
+        var paid = await app.ClientFor(_alice).PostAsJsonAsync($"/api/groups/{groupId}/settlements",
+            new { fromMemberId = bob, toMemberId = alice, amountMinor = 3000, paidOn = "2026-10-02" });
+        Assert.Equal(HttpStatusCode.Created, paid.StatusCode);
+        var ledger = await View(groupId);
+
+        Assert.Equal([("Alice", "joined", 3000L), ("Bob", "placeholder", 0L), ("Carol", "placeholder", -3000L)], Members(ledger));
+        Assert.Equal(["settlement", "expense"], ledger.History.Select(h => h.GetProperty("kind").GetString()));
+        var settlement = ledger.History[0];
+        Assert.Equal((bob.ToString(), alice.ToString(), 3000L),
+            (settlement.GetProperty("fromMemberId").GetString(), settlement.GetProperty("toMemberId").GetString(),
+                settlement.GetProperty("amountMinor").GetInt64()));
     }
 
     [Fact]
@@ -140,10 +160,7 @@ public class ViewBalancesIntegrationTests(AppFixture app)
     private sealed record AddedBody(MemberId MemberId);
 
     private sealed record LedgerBody(
-        string GroupName, string Currency, MemberId You, IReadOnlyList<MemberBody> Members, IReadOnlyList<ExpenseBody> Expenses);
+        string GroupName, string Currency, MemberId You, IReadOnlyList<MemberBody> Members, IReadOnlyList<JsonElement> History);
 
     private sealed record MemberBody(MemberId MemberId, string Name, string Status, long BalanceMinor);
-
-    private sealed record ExpenseBody(
-        ExpenseId ExpenseId, string Description, long AmountMinor, MemberId PayerMemberId, DateOnly PaidOn, JsonElement Split);
 }

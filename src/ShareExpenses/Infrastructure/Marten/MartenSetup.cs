@@ -35,6 +35,7 @@ public static class MartenSetup
                 opts.RegisterValueType(typeof(UserId));
                 opts.RegisterValueType(typeof(InviteId));
                 opts.RegisterValueType(typeof(ExpenseId));
+                opts.RegisterValueType(typeof(SettlementId));
 
                 // Supporting state shared by slices (spec §3).
                 Invite.Register(opts);

@@ -4,17 +4,17 @@ Type: **State Read**. Events → read model → screen.
 
 | | |
 |---|---|
-| Screen | Balances — the group page: who is owed, who owes, and the expenses behind it |
+| Screen | Balances — the group page: who is owed, who owes, and the history behind it |
 | Read model | `GroupLedgerReadModel`, from the **stored, inline** `GroupLedger` projection |
 | Query | `ViewBalances(userId, now)` — the signed-in user, and the clock for invite status; the group from the route selects the stream |
 | Code | `src/ShareExpenses/Slices/ViewBalances/` |
 | Endpoint | `GET /api/groups/{group}` — sign-in required |
 
 The group as its members see it: each member slot with its balance, and the
-expenses, newest first. The first **stored** read model (spec §11): the slice's
-state is projected *inline* — in the same transaction that appends the events — so
-a balance moves the moment an expense is saved. No window where you enter £120 and
-the balance has not moved.
+history — expenses and settlements, newest first. The first **stored** read model
+(spec §11): the slice's state is projected *inline* — in the same transaction that
+appends the events — so a balance moves the moment an expense or settlement is
+saved. No window where you enter £120 and the balance has not moved.
 
 ## Specifications
 
@@ -23,7 +23,8 @@ is not a query field (spec §13).
 
 Amounts are in minor units (pence). Every query is made at `now = t0`; invites are
 written with their deadline. A member is written `Alice joined +6000`: name,
-status, balance. Unless stated otherwise, every scenario starts from:
+status, balance. History entries are written `expense e1 …` or
+`settlement s1 …`. Unless stated otherwise, every scenario starts from:
 
 ```
 GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
@@ -37,15 +38,15 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
     WHEN   ViewBalances(alice)
     THEN   { "Lisbon trip", GBP, you: m1,
              members: [Alice joined 0, Bob joined 0, Carol placeholder 0],
-             expenses: [] }
+             history: [] }
 
 2 - an expense moves balances: the payer is owed, the sharers owe
     GIVEN  ... AND ExpenseRecorded(e1, "Dinner", 9000, m1, equal [m1, m2, m3],
                                    {m1: 3000, m2: 3000, m3: 3000}, 2026-10-01, alice)
     WHEN   ViewBalances(alice)
     THEN   members: [Alice joined +6000, Bob joined -3000, Carol placeholder -3000]
-           expenses: [e1 "Dinner" 9000 paid by m1 on 2026-10-01,
-                      equal [m1, m2, m3], {m1: 3000, m2: 3000, m3: 3000}]
+           history: [expense e1 "Dinner" 9000 paid by m1 on 2026-10-01,
+                     equal [m1, m2, m3], {m1: 3000, m2: 3000, m3: 3000}]
 
 3 - a payer who does not share is owed it all
     GIVEN  ... AND ExpenseRecorded(e1, "Bob's ticket", 4500, m1, equal [m2], {m2: 4500}, …)
@@ -73,12 +74,12 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
     WHEN   ViewBalances(alice)
     THEN   members: [Alice joined 0, Bob joined 0, Carol joined 0]
 
-8 - expenses newest first: by date, then most recently recorded
+8 - history newest first: by date, then most recently recorded
     GIVEN  ... AND ExpenseRecorded(e1, "Flights", …, 2026-06-15, …)
            AND ExpenseRecorded(e2, "Dinner",  …, 2026-10-01, …)
            AND ExpenseRecorded(e3, "Coffee",  …, 2026-10-01, …)
     WHEN   ViewBalances(alice)
-    THEN   expenses: [e3 "Coffee", e2 "Dinner", e1 "Flights"]
+    THEN   history: [expense e3 "Coffee", expense e2 "Dinner", expense e1 "Flights"]
 
 9 - "you" is the caller's own slot
     WHEN   ViewBalances(bob)
@@ -92,6 +93,20 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 11 - only members may view
     WHEN   ViewBalances(mallory)
     THEN   not found
+
+12 - a settlement moves balances: the payer's up, the recipient's down
+    GIVEN  ... AND ExpenseRecorded(e1, "Dinner", 9000, m1, …, {m1: 3000, m2: 3000, m3: 3000}, …)
+           AND SettlementRecorded(s1, m2, m1, 3000, 2026-10-02, bob)
+    WHEN   ViewBalances(alice)
+    THEN   members: [Alice joined +3000, Bob joined 0, Carol placeholder -3000]
+
+13 - settlements and expenses share one history, by date
+    GIVEN  ... AND ExpenseRecorded(e1, "Dinner", 9000, m1, …, 2026-10-01, …)
+           AND SettlementRecorded(s1, m2, m1, 3000, 2026-10-02, bob)
+           AND ExpenseRecorded(e2, "Flights", 60000, m1, …, 2026-06-15, …)
+    WHEN   ViewBalances(alice)
+    THEN   history: [settlement s1 m2 → m1 3000 on 2026-10-02,
+                     expense e1 "Dinner", expense e2 "Flights"]
 ```
 
 ## Notes
@@ -110,8 +125,14 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 - **Statuses:** `joined` (a user holds the slot), `invited` (an open, unexpired
   invite), `placeholder` (neither). A slot's balance does not depend on its status:
   placeholders owe and are owed like anyone (spec §4).
-- **Expenses carry their split as entered** (spec §7) and the amounts it produced,
-  so a later edit form can show the split as it was entered.
+- **History is the money, in one list:** each entry marked by `kind` — `expense`
+  (with its split as entered and the amounts it produced, so a later edit form can
+  show the split as it was entered) or `settlement` (from, to, amount). Ordered by
+  the day the money moved (`paidOn`), newest first, then most recently recorded.
+  Not the activity log: who did what, including membership changes and
+  corrections, is a separate read model (spec §11, `ActivityFeed`).
+- **A settlement moves balances like an expense** paid by `from` and shared by `to`
+  alone (spec §7, §9): `from` is credited the amount, `to` debited it.
 - **Members only:** a non-member, a missing group and a malformed group id are the
   same 404 — the group's existence is not disclosed (spec §4).
 - **Amounts stay in minor units,** with the group's currency code; the client
@@ -119,8 +140,8 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 
 ## Deferred to the slices that introduce the events
 
-- **Settlements** move balances — with `SettlementRecorded` (Settle up).
-- **A removed expense** stops counting — with `ExpenseRemoved`.
+- **A removed expense or settlement** stops counting — with `ExpenseRemoved`,
+  `SettlementRemoved`.
 - **Corrected expenses** — with the correction events (§11).
 - **Renamed members and groups** show their new names — with `MemberRenamed`, `GroupRenamed`.
 - **A released claim** returns the slot to placeholder — with `MemberClaimReleased`.

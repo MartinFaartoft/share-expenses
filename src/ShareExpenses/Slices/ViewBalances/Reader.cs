@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using ShareExpenses.Shared;
 
 namespace ShareExpenses.Slices.ViewBalances;
@@ -15,11 +16,21 @@ internal sealed record GroupLedgerReadModel(
     string Currency,
     MemberId You,
     IReadOnlyList<LedgerMember> Members,
-    IReadOnlyList<LedgerExpense> Expenses);
+    IReadOnlyList<LedgerEntry> History);
 
 /// <param name="Status"><c>joined</c>, <c>invited</c> or <c>placeholder</c>.</param>
 /// <param name="BalanceMinor">Positive is owed, negative owes (spec §9).</param>
 internal sealed record LedgerMember(MemberId MemberId, string Name, string Status, long BalanceMinor);
+
+/// <summary>
+/// One entry in the money history, marked by <c>kind</c>: <c>expense</c> or <c>settlement</c>.
+/// Only ever written, never read back, so System.Text.Json's built-in polymorphism
+/// serves; it writes the discriminator because the list is typed as the base.
+/// </summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+[JsonDerivedType(typeof(LedgerExpense), "expense")]
+[JsonDerivedType(typeof(LedgerSettlement), "settlement")]
+internal abstract record LedgerEntry(DateOnly PaidOn, long AmountMinor);
 
 internal sealed record LedgerExpense(
     ExpenseId ExpenseId,
@@ -28,7 +39,14 @@ internal sealed record LedgerExpense(
     MemberId PayerMemberId,
     DateOnly PaidOn,
     ExpenseSplit Split,
-    IReadOnlyList<Split> Splits);
+    IReadOnlyList<Split> Splits) : LedgerEntry(PaidOn, AmountMinor);
+
+internal sealed record LedgerSettlement(
+    SettlementId SettlementId,
+    MemberId FromMemberId,
+    MemberId ToMemberId,
+    long AmountMinor,
+    DateOnly PaidOn) : LedgerEntry(PaidOn, AmountMinor);
 
 /// <summary>Specs: <c>docs/event-model/slice-07-view-balances.md</c>.</summary>
 internal static class Reader
@@ -48,16 +66,18 @@ internal static class Reader
             .Select(s => new LedgerMember(s.MemberId, s.Name, StatusOf(s, query.Now), s.BalanceMinor))
             .ToList();
 
-        // Newest first: by the day spent, then the most recently recorded.
-        var expenses = state.Expenses
-            .Select((e, recorded) => (e, recorded))
-            .OrderByDescending(x => x.e.PaidOn)
-            .ThenByDescending(x => x.recorded)
-            .Select(x => new LedgerExpense(
-                x.e.ExpenseId, x.e.Description, x.e.AmountMinor, x.e.PayerMemberId, x.e.PaidOn, x.e.Split, x.e.Splits))
+        // One history, newest first: by the day the money moved, then most recently recorded.
+        var history = state.Expenses
+            .Select(e => (e.Recorded, Entry: (LedgerEntry)new LedgerExpense(
+                e.ExpenseId, e.Description, e.AmountMinor, e.PayerMemberId, e.PaidOn, e.Split, e.Splits)))
+            .Concat(state.Settlements.Select(s => (s.Recorded, Entry: (LedgerEntry)new LedgerSettlement(
+                s.SettlementId, s.FromMemberId, s.ToMemberId, s.AmountMinor, s.PaidOn))))
+            .OrderByDescending(x => x.Entry.PaidOn)
+            .ThenByDescending(x => x.Recorded)
+            .Select(x => x.Entry)
             .ToList();
 
-        return new GroupLedgerReadModel(state.GroupName, state.Currency, you.MemberId, members, expenses);
+        return new GroupLedgerReadModel(state.GroupName, state.Currency, you.MemberId, members, history);
     }
 
     private static string StatusOf(Slot slot, DateTimeOffset now) =>
