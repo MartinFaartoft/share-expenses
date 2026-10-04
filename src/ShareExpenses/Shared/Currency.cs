@@ -184,4 +184,7 @@ internal static class Currency
     }
     
     public static int MinorUnitsOf(string code) => MinorUnits[code];
+
+    /// <summary>Every code a group may use, alphabetical: what a currency picker offers.</summary>
+    public static IReadOnlyList<string> Codes { get; } = [.. MinorUnits.Keys.Order(StringComparer.Ordinal)];
 }

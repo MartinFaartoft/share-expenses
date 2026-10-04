@@ -1137,6 +1137,14 @@ in place of `Decider.cs`, and no events.
   variable `groupId` after its type, and the two would collide in generated code.
 - **Ids are generated in the endpoint and passed in**, so `Decide` is
   deterministic and spec tests can pin them. Ids are `Guid.CreateVersion7()`.
+- **A form that creates something carries its new id, chosen when the form is
+  shown** (a hidden field), so submitting it twice — a double tap, a retry, back
+  and resubmit — creates one thing, not two: the second submit finds it exists and
+  goes to it. The id comes from the client, so it is not trusted: a malformed one
+  is replaced by a fresh id, and an existing one only ever leads to what the user
+  could reach anyway. Set by New group (slice-01-create-group.md); Add member, Add
+  expense and Record settlement should follow it. Ids the server alone needs (the
+  creator's member slot) stay chosen on submit.
 - **`Decision` (in `Shared/`) is the decide result; each endpoint maps it to
   HTTP,** because the mapping differs per slice (AcceptInvite's 409 carries the
   way in). What can go wrong *after* deciding — a stream collision, a concurrency
@@ -1501,10 +1509,13 @@ a documentation tool, not application code.
   first); htmx 2.0.4 served from `wwwroot`; the slice architecture rule allowing
   components, with a fixture. Conventions set by sign-in, for later screens to
   follow or revise:
-  - **A screen works without htmx.** Forms carry `method`/`action` as well as
-    `hx-post`; an endpoint answers an htmx request with the fragment it swaps in,
-    and a plain post with the whole page (`request.IsHtmx()`); success after a
-    post redirects — `HX-Redirect` for htmx, a 302 otherwise.
+  - **A plain form is the default; htmx where swapping in place pays.** Sign-in
+    (two steps in one page) uses it; New group, one step that redirects on
+    success, does not. Where a screen uses htmx it still works without: forms
+    carry `method`/`action` as well as `hx-post`; an endpoint answers an htmx
+    request with the fragment it swaps in, and a plain post with the whole page
+    (`request.IsHtmx()`); success after a post redirects — `HX-Redirect` for htmx,
+    a 302 otherwise. A rejection re-renders the page with what was typed, 200.
   - **A rejection shows in place,** under the form, as `role="alert"`, with the
     reason `Decide` gives.
   - **Screens are tested over HTTP** as a browser would use them: load the page,
@@ -1604,14 +1615,22 @@ a documentation tool, not application code.
   - Optional means advisory by default: it reports, and the caller decides
     whether to gate on it.
 - **OPEN** Screens for the slices that lost their endpoint with the JSON API (§3):
-  **New group** (Create group), **Add member**, **Invite member**, **Add expense**
-  (Record expense), **Settle up** (View settlement plan and Record settlement). Until
-  then the app cannot create a group or record anything; the group page's Add
-  expense and Settle up buttons point at screens that do not exist. Each comes back
-  with a design pass, and with the behaviour its old endpoint had that the specs do
-  not cover — in the git history: id generation in the endpoint, stream-collision
-  409 (Create group), the invite's `Invite` document and email after commit (Invite
-  member), and every write's concurrency 409.
+  **Add member**, **Invite member**, **Add expense** (Record expense), **Settle up**
+  (View settlement plan and Record settlement). Until then a group cannot gain
+  members or record anything; the group page's Add expense and Settle up buttons
+  point at screens that do not exist, and nothing links to adding a member yet.
+  Each comes back with a design pass, and with the behaviour its old endpoint had
+  that the specs do not cover — in the git history: the invite's `Invite` document
+  and email after commit (Invite member), and every write's concurrency 409.
+  **New group** (Create group) is built: `/groups/new`, from Home.
+- **OPEN** Default currency from the browser's locale. The New group form
+  preselects DKK for everyone. Better: guess from the request — the
+  `Accept-Language` header's first region (`da-DK` → DKK, `en-GB` → GBP), mapped
+  through .NET's `RegionInfo.ISOCurrencySymbol`, falling back to DKK when there is
+  no region (`en`), the region's currency is not one the app accepts, or the header
+  is absent. To decide: whether a language without a region guesses a country
+  (`da` → DK), and whether the last currency the user chose for a group should win
+  over the locale. Server-side only; no script needed.
 - **OPEN** Slice: **Decline invite.** An invitee can say no, rather than leave the
   invite on their home page until its deadline. State Change, from the home page,
   beside Join. Sketch, to refine as a slice:

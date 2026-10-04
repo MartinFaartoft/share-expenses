@@ -99,12 +99,24 @@ public class ViewHomepageIntegrationTests(AppFixture app)
     }
 
     [Fact]
-    public async Task A_brand_new_user_is_told_where_groups_will_appear()
+    public async Task A_brand_new_user_is_told_where_groups_will_appear_and_offered_a_new_one()
     {
         var html = await HomeOf(await app.AccountFor(Unique("dave")));
 
-        Assert.Contains("You're not in any groups yet.", html);
+        Assert.Contains("You're not in any groups yet. Start one, or wait for an invite.", html);
+        Assert.Contains("""<a class="button" href="/groups/new">New group</a>""", html);
         Assert.DoesNotContain("Invited", html);
+    }
+
+    [Fact]
+    public async Task With_groups_a_new_one_is_still_offered()
+    {
+        var bob = await app.AccountFor(Unique("bob"));
+        await new Seed(app).Group(bob, "Barcelona", "EUR", "Bob");
+
+        await app.ProjectionsCaughtUp();
+
+        Assert.Contains("""<a class="button" href="/groups/new">New group</a>""", await HomeOf(bob));
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────────

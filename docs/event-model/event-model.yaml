@@ -80,11 +80,12 @@ slices:
         currency: string
         memberName: string
       wireframe:
-        - "name       [........]"
-        - "currency   [ GBP  v ]"
-        - "your name  [........]"
+        - "< Home        New group"
+        - "Group name        [........]"
+        - "Currency          [ DKK   v ]"
+        - "Your name in it   [........]"
         - ""
-        - "  [ Create group ]"
+        - "        [ Create group ]"
     command:
       name: CreateGroup
       fields:
@@ -95,7 +96,9 @@ slices:
           type: UserId
           source: system
           feeds: [MemberAdded.by, MemberClaimed.userId]
-        groupId: { type: GroupId, source: system }         # new id
+        # new id, chosen when the form is shown and carried in it, so a resubmitted
+        # form names the group it already created instead of making a second one
+        groupId: { type: GroupId, source: system }
         memberId: { type: MemberId, source: system }       # new id; feeds both events by name
     events:
       # three events from one command: a group whose creator is not a member is
@@ -175,6 +178,7 @@ slices:
         - "Your groups"
         - "  Lisbon trip"
         - "  Porto"
+        - "[New group]"
     readModel:
       # two parts, each kept the way its data needs (spec §11):
       # groups - a stored, asynchronous projection (UserGroups), keyed by user and

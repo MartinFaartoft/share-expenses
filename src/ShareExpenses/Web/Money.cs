@@ -24,6 +24,10 @@ public static class Money
         return Symbols.TryGetValue(currency, out var symbol) ? symbol + number : currency + " " + number;
     }
 
+    /// <summary>A currency as a picker names it: the code, then the symbol amounts are shown with, if any (GBP £, DKK).</summary>
+    public static string Label(string currency) =>
+        Symbols.TryGetValue(currency, out var symbol) ? $"{currency} {symbol}" : currency;
+
     /// <summary>
     /// One symbol per currency, from the regions .NET knows, kept only when it contains a
     /// currency sign (£ € $ ¥ ₹ …) and otherwise only Latin letters (R$, US$): a symbol

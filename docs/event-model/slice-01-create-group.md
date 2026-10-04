@@ -4,11 +4,11 @@ Type: **State Change**. Screen → command → events.
 
 | | |
 |---|---|
-| Screen | New group |
+| Screen | New group — the form to start a group, reached from Home |
 | Command | `CreateGroup(groupName, currency, memberName, createdBy)` |
 | Events | `GroupCreated`, `MemberAdded`, `MemberClaimed` |
 | Code | `src/ShareExpenses/Slices/CreateGroup/` |
-| Endpoint | none yet — its screen is not built, so nothing reaches it (spec §3). The slice's logic and specs stand |
+| Endpoints | `GET /groups/new` — the form; `POST /groups` — its submit; sign-in required |
 
 ## Specifications
 
@@ -69,3 +69,49 @@ Inputs are trimmed; the currency code is upper-cased before it is checked, so
 Scenarios 6 and 7 were added with AddMember, which introduced name limits. Lengths
 are measured after trimming, in visible characters (an emoji counts as one), and
 the limits are inclusive.
+
+## The screen
+
+- **Reached from Home:** a **New group** button under "Your groups", and in the
+  empty state ("You're not in any groups yet. Start one, or wait for an invite.").
+  A link in View homepage's screen: an address, not a dependency on this slice.
+- **Three fields,** as in the model: the group's name, its currency, and your name
+  in it. Labels say what each is for: "Your name in this group" (shown to the
+  others, e.g. "Dad" in one group, "Tom" in another).
+  - **Currency is a `<select>`** of every code the app accepts (`Shared/Currency`),
+    alphabetical, **DKK preselected**, each shown as code and symbol where one
+    reads cleanly (`GBP £`, `EUR €`, `DKK`; as `Web/Money` shows amounts).
+    Choosing the default from the browser's locale instead is an open task
+    (spec §14). A select cannot be mistyped, so
+    scenario 3 is only reachable by a forged post.
+  - Length limits are on the inputs too (`maxlength` 100 and 50), as a hint; the
+    decider stays the judge — `maxlength` counts UTF-16 units, the rule visible
+    characters.
+- **Create group** posts the form — a plain form, no htmx: a one-step form gains
+  nothing from swapping in place. Created: **into the new group's page** (302),
+  which says "Nothing yet. Add the first expense." Rejected: the page again, **with
+  what was typed** and the reason under the form (`role="alert"`), 200. Rejections
+  should be rare: the select cannot be wrong, and `required`/`maxlength` stop blank
+  and over-long names in the browser.
+- **A Back link** to Home.
+
+## Notes
+
+- **Submitting twice creates one group.** The group's id is chosen when the form
+  is *shown* and carried in a hidden field; the submit starts the stream under
+  that id. A resubmitted form — a double tap, a retry after a dropped
+  connection, the browser's back-and-resubmit — names a group that now exists,
+  and goes **into that group** rather than creating a second one. That is
+  scenario 4 doing useful work: "group already exists" for that id means the
+  first submit succeeded. Two submits racing in the same instant: one saves, the
+  other's save fails on the stream collision and is answered 409 (the open
+  "409 retry UX in forms" task, spec §14).
+  - The id comes from the client, so it is not trusted: a malformed one is
+    replaced by a fresh id (the form still works, without the double-submit
+    guard). A well-formed id of somebody else's group goes to that group's page,
+    which is the same 404 any non-member gets — nothing disclosed that guessing
+    the address would not.
+  - The member id stays the server's, chosen on submit.
+- **Antiforgery** on the submit (`[ValidateAntiforgery]`, spec §3).
+- **No prefill of "your name":** users have no display name (scenario 5's note).
+

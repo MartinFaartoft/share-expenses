@@ -12,8 +12,10 @@ Type: **State Read**. Events → read model → screen.
 
 Where a signed-in user starts. Invites waiting for them come first — who invited
 them, to which group, as whom, each with "Join" (AcceptInvite) — then the groups
-they are in, by name, each opening its group page. With neither, the screen says
-so and suggests creating a group.
+they are in, by name, each opening its group page, and a **New group** button
+(Create group's form, `/groups/new`). With neither, the screen says so and
+suggests creating a group: "You're not in any groups yet. Start one, or wait for
+an invite."
 
 Joining one invite leaves the others: joining is per group. A single group is
 still shown in the list, never jumped into — a home that sometimes skips itself

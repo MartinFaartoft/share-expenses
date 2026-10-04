@@ -24,7 +24,7 @@
         <h2 id="groups">Your groups</h2>
         @if (Model.Groups.Count == 0)
         {
-            <p class="hint">You're not in any groups yet. When someone invites you, it appears here.</p>
+            <p class="hint">You're not in any groups yet. Start one, or wait for an invite.</p>
         }
         else
         {
@@ -35,6 +35,7 @@
                 }
             </ul>
         }
+        <p class="actions"><a class="button" href="/groups/new">New group</a></p>
     </section>
 </Page>
 
