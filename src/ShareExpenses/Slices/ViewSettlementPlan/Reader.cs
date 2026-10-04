@@ -13,7 +13,7 @@ internal sealed record SettlementPlanReadModel(string Currency, MemberId You, IR
 /// <summary>One line of the plan, with both names, so the screen needs nothing else.</summary>
 internal sealed record PlannedTransfer(MemberId FromMemberId, string FromName, MemberId ToMemberId, string ToName, long AmountMinor);
 
-/// <summary>Specs: <c>docs/event-model/slice-09-view-settlement-plan.md</c>.</summary>
+/// <summary>Specs: <c>docs/event-model/slice-10-view-settlement-plan.md</c>.</summary>
 internal static class Reader
 {
     /// <param name="state">The group's state, or null if its stream does not exist.</param>

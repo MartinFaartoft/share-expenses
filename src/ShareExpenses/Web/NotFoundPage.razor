@@ -1,0 +1,9 @@
+@* One "not found" for screens: nothing about why — missing and not yours look the same. *@
+<Page Title="Not found">
+    <p>That @What doesn't exist, or isn't one of yours.</p>
+    <p><a href="/">Back home</a></p>
+</Page>
+
+@code {
+    [Parameter] public string What { get; set; } = "page";
+}

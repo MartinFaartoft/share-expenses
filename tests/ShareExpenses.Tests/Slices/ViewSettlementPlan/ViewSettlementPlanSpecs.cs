@@ -14,7 +14,7 @@ using SettlementRecorded = ShareExpenses.Slices.RecordSettlement.SettlementRecor
 namespace ShareExpenses.Tests.Slices.ViewSettlementPlan;
 
 /// <summary>
-/// docs/event-model/slice-09-view-settlement-plan.md, the slice scenarios, line for
+/// docs/event-model/slice-10-view-settlement-plan.md, the slice scenarios, line for
 /// line (the procedure scenarios are in <see cref="ShareExpenses.Tests.Shared.SettlementPlanTests"/>).
 /// </summary>
 public class ViewSettlementPlanSpecs

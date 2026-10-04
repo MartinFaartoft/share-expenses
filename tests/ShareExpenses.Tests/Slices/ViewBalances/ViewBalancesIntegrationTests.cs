@@ -1,52 +1,41 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
-using Marten;
-using Microsoft.Extensions.DependencyInjection;
-using ShareExpenses.Infrastructure.Marten;
 using ShareExpenses.Shared;
 using ShareExpenses.Tests.Infrastructure;
 
 namespace ShareExpenses.Tests.Slices.ViewBalances;
 
-/// <summary>The group page through HTTP, from the ledger Marten projects inline.</summary>
+/// <summary>Everyone's balances through HTTP: the JSON read model and the screen.</summary>
 [Collection(AppCollection.Name)]
 public class ViewBalancesIntegrationTests(AppFixture app)
 {
     private readonly UserId _alice = UserId.New();
-    private readonly UserId _mallory = UserId.New();
-
-    private IDocumentStore Store => app.Services.GetRequiredService<IDocumentStore>();
 
     [Fact]
-    public async Task A_new_group_shows_its_creator_at_zero()
+    public async Task A_new_group_shows_everyone_at_zero()
     {
         var (groupId, alice, _, _) = await Lisbon();
 
-        var ledger = await View(groupId);
+        var balances = await View(groupId);
 
-        Assert.Equal((groupId, "Lisbon trip", "GBP", alice), (ledger.GroupId, ledger.GroupName, ledger.Currency, ledger.You));
-        Assert.Equal([("Alice", "joined", 0L), ("Bob", "placeholder", 0L), ("Carol", "placeholder", 0L)], Members(ledger));
-        Assert.Empty(ledger.History);
+        Assert.Equal((groupId, "Lisbon trip", "GBP", alice), (balances.GroupId, balances.GroupName, balances.Currency, balances.You));
+        Assert.Equal([("Alice", "joined", 0L), ("Bob", "placeholder", 0L), ("Carol", "placeholder", 0L)], Members(balances));
     }
 
     [Fact]
-    public async Task Read_your_writes_the_balance_moves_the_moment_the_expense_is_saved()
+    public async Task Read_your_writes_balances_move_the_moment_the_expense_is_saved()
     {
         var (groupId, alice, bob, carol) = await Lisbon();
 
         await Record(groupId, alice, 9000, [alice, bob, carol]);
-        var ledger = await View(groupId);
 
-        Assert.Equal([("Alice", "joined", 6000L), ("Bob", "placeholder", -3000L), ("Carol", "placeholder", -3000L)], Members(ledger));
-        var expense = Assert.Single(ledger.History);
-        Assert.Equal("expense", expense.GetProperty("kind").GetString());
-        Assert.Equal("Dinner", expense.GetProperty("description").GetString());
-        Assert.Equal("equal", expense.GetProperty("split").GetProperty("mode").GetString());
+        Assert.Equal(
+            [("Alice", "joined", 6000L), ("Bob", "placeholder", -3000L), ("Carol", "placeholder", -3000L)],
+            Members(await View(groupId)));
     }
 
     [Fact]
-    public async Task A_settlement_moves_balances_and_joins_the_history_marked_by_kind()
+    public async Task A_settlement_moves_balances()
     {
         var (groupId, alice, bob, carol) = await Lisbon();
         await Record(groupId, alice, 9000, [alice, bob, carol]);
@@ -54,14 +43,10 @@ public class ViewBalancesIntegrationTests(AppFixture app)
         var paid = await app.ClientFor(_alice).PostAsJsonAsync($"/api/groups/{groupId}/settlements",
             new { fromMemberId = bob, toMemberId = alice, amountMinor = 3000, paidOn = "2026-10-02" });
         Assert.Equal(HttpStatusCode.Created, paid.StatusCode);
-        var ledger = await View(groupId);
 
-        Assert.Equal([("Alice", "joined", 3000L), ("Bob", "placeholder", 0L), ("Carol", "placeholder", -3000L)], Members(ledger));
-        Assert.Equal(["settlement", "expense"], ledger.History.Select(h => h.GetProperty("kind").GetString()));
-        var settlement = ledger.History[0];
-        Assert.Equal((bob.ToString(), alice.ToString(), 3000L),
-            (settlement.GetProperty("fromMemberId").GetString(), settlement.GetProperty("toMemberId").GetString(),
-                settlement.GetProperty("amountMinor").GetInt64()));
+        Assert.Equal(
+            [("Alice", "joined", 3000L), ("Bob", "placeholder", 0L), ("Carol", "placeholder", -3000L)],
+            Members(await View(groupId)));
     }
 
     [Fact]
@@ -85,37 +70,49 @@ public class ViewBalancesIntegrationTests(AppFixture app)
     }
 
     [Fact]
-    public async Task The_ledger_is_stored_as_its_own_document()
+    public async Task The_page_shows_everyones_standing_with_a_way_back_and_to_settle_up()
     {
-        var (groupId, _, _, _) = await Lisbon();
+        var (groupId, alice, bob, _) = await Lisbon();
+        await Record(groupId, alice, 9000, [alice, bob]);
 
-        await using var session = Store.QuerySession();
-        var rows = await session.QueryAsync<int>(
-            $"select count(*) from {MartenSetup.Schema}.mt_doc_group_ledger where id = ?", groupId.Value);
-        Assert.Equal(1, Assert.Single(rows));
+        var response = await app.ClientFor(_alice).GetAsync($"/groups/{groupId}/balances");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+
+        Assert.Contains($"""<a href="/groups/{groupId}">← Lisbon trip</a>""", html);
+        Assert.Contains("<span>Alice (you)</span>", html);
+        Assert.Contains("is owed £45.00", html);
+        Assert.Contains("<span>Bob — placeholder</span>", html);
+        Assert.Contains("owes £45.00", html);
+        Assert.Contains("<span>Carol — placeholder</span>", html);
+        Assert.Contains("settled up", html);
+        Assert.Contains($"""<a class="button" href="/groups/{groupId}/settle-up">Settle up</a>""", html);
     }
 
     [Fact]
     public async Task A_non_member_gets_exactly_what_a_missing_or_malformed_group_gets()
     {
         var (groupId, _, _, _) = await Lisbon();
-        var client = app.ClientFor(_mallory);
+        var client = app.ClientFor(UserId.New());
 
-        HttpResponseMessage[] responses =
-        [
-            await client.GetAsync($"/api/groups/{groupId}"),
-            await client.GetAsync($"/api/groups/{GroupId.New()}"),
-            await client.GetAsync("/api/groups/not-a-guid"),
-        ];
+        foreach (var prefix in new[] { "/api/groups", "/groups" })
+        {
+            HttpResponseMessage[] responses =
+            [
+                await client.GetAsync($"{prefix}/{groupId}/balances"),
+                await client.GetAsync($"{prefix}/{GroupId.New()}/balances"),
+                await client.GetAsync($"{prefix}/not-a-guid/balances"),
+            ];
 
-        Assert.All(responses, r => Assert.Equal(HttpStatusCode.NotFound, r.StatusCode));
-        Assert.Single((await Task.WhenAll(responses.Select(r => r.Content.ReadAsStringAsync()))).Distinct());
+            Assert.All(responses, r => Assert.Equal(HttpStatusCode.NotFound, r.StatusCode));
+            Assert.Single((await Task.WhenAll(responses.Select(r => r.Content.ReadAsStringAsync()))).Distinct());
+        }
     }
 
     [Fact]
     public async Task Requires_a_signed_in_user()
     {
-        var response = await app.CreateClient().GetAsync($"/api/groups/{GroupId.New()}");
+        var response = await app.CreateClient().GetAsync($"/api/groups/{GroupId.New()}/balances");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -145,22 +142,22 @@ public class ViewBalancesIntegrationTests(AppFixture app)
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 
-    private async Task<LedgerBody> View(GroupId groupId)
+    private async Task<BalancesBody> View(GroupId groupId)
     {
-        var response = await app.ClientFor(_alice).GetAsync($"/api/groups/{groupId}");
+        var response = await app.ClientFor(_alice).GetAsync($"/api/groups/{groupId}/balances");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<LedgerBody>())!;
+        return (await response.Content.ReadFromJsonAsync<BalancesBody>())!;
     }
 
-    private static (string, string, long)[] Members(LedgerBody ledger) =>
-        [.. ledger.Members.Select(m => (m.Name, m.Status, m.BalanceMinor))];
+    private static (string, string, long)[] Members(BalancesBody balances) =>
+        [.. balances.Members.Select(m => (m.Name, m.Status, m.BalanceMinor))];
 
     private sealed record CreatedBody(GroupId GroupId, MemberId MemberId);
 
     private sealed record AddedBody(MemberId MemberId);
 
-    private sealed record LedgerBody(
-        GroupId GroupId, string GroupName, string Currency, MemberId You, IReadOnlyList<MemberBody> Members, IReadOnlyList<JsonElement> History);
+    private sealed record BalancesBody(
+        GroupId GroupId, string GroupName, string Currency, MemberId You, IReadOnlyList<MemberBody> Members);
 
     private sealed record MemberBody(MemberId MemberId, string Name, string Status, long BalanceMinor);
 }

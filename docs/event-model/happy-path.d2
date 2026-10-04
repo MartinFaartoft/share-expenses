@@ -58,11 +58,13 @@ n4: "5 - Accept invite                       " { class: slicename }
 dvN5: "" { class: divN }
 n5: "6 - Record an expense                   " { class: slicename }
 dvN6: "" { class: divN }
-n6: "7 - View balances                       " { class: slicename }
+n6: "7 - View group                          " { class: slicename }
 dvN7: "" { class: divN }
-n7: "8 - Record settlement                   " { class: slicename }
+n7: "8 - View balances                       " { class: slicename }
 dvN8: "" { class: divN }
-n8: "9 - View settlement plan                " { class: slicename }
+n8: "9 - Record settlement                   " { class: slicename }
+dvN9: "" { class: divN }
+n9: "10 - View settlement plan               " { class: slicename }
 
 # ===== row 2: screens =====
 l2: "SCREENS" { class: lanelabel }
@@ -80,11 +82,13 @@ s4: "Home                              \n                                  \nAli
 dv2_5: "" { class: div }
 s5: "Add expense                       \n                                  \nDinner          [ 120.00 ]        \npaid by         [ Alice v ]       \nsplit  (equal) exact shares       \n[x] Alice [x] Bob [ ] Carol       \non              [ 2 Oct ]         \n             [ Add ]              " { class: screen }
 dv2_6: "" { class: div }
-s6: "Balances                          \n                                  \nLisbon trip          GBP          \nAlice (you)       +60.00          \nBob               -30.00          \nCarol (invited)   -30.00          \n                                  \n1 Oct  Dinner  90.00  Alice       \n2 Oct  Bob -> Alice  30.00        " { class: screen }
+s6: "Group                             \n                                  \n< Home       Lisbon trip          \nYou owe £70.00 [Settle up]        \nDinner £90.00                     \n  You paid                        \n             Taxi £140.00         \n                Bob paid          \n[Add expense]  [Balances]         " { class: screen }
 dv2_7: "" { class: div }
-s7: "Settle up                         \n                                  \nBob pays Alice  30.00 [Paid]      \n                                  \nor record any payment:            \n[ Bob v ] -> [ Alice v ]          \n[ 30.00 ]  on [ 2 Oct ]           \n             [ Record ]           " { class: screen }
+s7: "Balances                          \n                                  \n< Lisbon trip   Balances          \nAlice (you)  is owed £60.00       \nBob                owes £30.00    \nCarol (invited)  owes £30.00      \n                                  \n              [Settle up]         " { class: screen }
 dv2_8: "" { class: div }
 s8: "Settle up                         \n                                  \nBob pays Alice  30.00 [Paid]      \n                                  \nor record any payment:            \n[ Bob v ] -> [ Alice v ]          \n[ 30.00 ]  on [ 2 Oct ]           \n             [ Record ]           " { class: screen }
+dv2_9: "" { class: div }
+s9: "Settle up                         \n                                  \nBob pays Alice  30.00 [Paid]      \n                                  \nor record any payment:            \n[ Bob v ] -> [ Alice v ]          \n[ 30.00 ]  on [ 2 Oct ]           \n             [ Record ]           " { class: screen }
 
 # ===== row 3: read models =====
 l3: "READ MODELS" { class: lanelabel }
@@ -102,11 +106,13 @@ gp3_4: "" { class: gap }
 dv3_5: "" { class: div }
 gp3_5: "" { class: gap }
 dv3_6: "" { class: div }
-rm6: "GroupLedgerReadModel              \n                                  \n- userId: UserId (sys)            \n- now: DateTimeOffset (sys)       \n- groupId: GroupId                \n- groupName: string               \n- currency: string                \n- you: MemberId                   \n- members: LedgerMember[]         \n- history: LedgerEntry[]          " { class: view }
+rm6: "GroupActivityReadModel            \n                                  \n- userId: UserId (sys)            \n- groupId: GroupId                \n- groupName: string               \n- currency: string                \n- you: MemberId                   \n- balance: long                   \n- history: ActivityEntry[]        " { class: view }
 dv3_7: "" { class: div }
-gp3_7: "" { class: gap }
+rm7: "GroupBalancesReadModel            \n                                  \n- userId: UserId (sys)            \n- now: DateTimeOffset (sys)       \n- groupId: GroupId                \n- groupName: string               \n- currency: string                \n- you: MemberId                   \n- members: MemberBalance[]        " { class: view }
 dv3_8: "" { class: div }
-rm8: "SettlementPlanReadModel           \n                                  \n- userId: UserId (sys)            \n- currency: string                \n- you: MemberId                   \n- transfers: Transfer[]           " { class: view }
+gp3_8: "" { class: gap }
+dv3_9: "" { class: div }
+rm9: "SettlementPlanReadModel           \n                                  \n- userId: UserId (sys)            \n- currency: string                \n- you: MemberId                   \n- transfers: Transfer[]           " { class: view }
 
 # ===== row 4: commands =====
 l4: "COMMANDS" { class: lanelabel }
@@ -126,9 +132,11 @@ c5: "RecordExpense                     \n                                  \n- e
 dv4_6: "" { class: div }
 gp4_6: "" { class: gap }
 dv4_7: "" { class: div }
-c7: "RecordSettlement                  \n                                  \n- settlementId: SettlementId (sys)\n- fromMemberId: MemberId          \n- toMemberId: MemberId            \n- amountMinor: long               \n- paidOn: DateOnly                \n- now: DateTimeOffset (sys)       \n- by: UserId (sys)                " { class: command }
+gp4_7: "" { class: gap }
 dv4_8: "" { class: div }
-gp4_8: "" { class: gap }
+c8: "RecordSettlement                  \n                                  \n- settlementId: SettlementId (sys)\n- fromMemberId: MemberId          \n- toMemberId: MemberId            \n- amountMinor: long               \n- paidOn: DateOnly                \n- now: DateTimeOffset (sys)       \n- by: UserId (sys)                " { class: command }
+dv4_9: "" { class: div }
+gp4_9: "" { class: gap }
 
 # ===== row 5: event stream =====
 l5: "EVENT STREAM" { class: lanelabel }
@@ -148,9 +156,11 @@ e5_0: "ExpenseRecorded                   \n                                  \n-
 dv5_6: "" { class: div }
 gp5_6: "" { class: gap }
 dv5_7: "" { class: div }
-e7_0: "SettlementRecorded                \n                                  \n- settlementId: SettlementId      \n- fromMemberId: MemberId          \n- toMemberId: MemberId            \n- amountMinor: long               \n- paidOn: DateOnly                \n- by: UserId                      " { class: event }
+gp5_7: "" { class: gap }
 dv5_8: "" { class: div }
-gp5_8: "" { class: gap }
+e8_0: "SettlementRecorded                \n                                  \n- settlementId: SettlementId      \n- fromMemberId: MemberId          \n- toMemberId: MemberId            \n- amountMinor: long               \n- paidOn: DateOnly                \n- by: UserId                      " { class: event }
+dv5_9: "" { class: div }
+gp5_9: "" { class: gap }
 
 # --- State Change slices: screen -> command -> event(s)
 s0 -> c0
@@ -165,8 +175,8 @@ s4 -> c4
 c4 -> e4_0
 s5 -> c5
 c5 -> e5_0
-s7 -> c7
-c7 -> e7_0
+s8 -> c8
+c8 -> e8_0
 
 # --- State Read slices: events -> read model -> screen
 e0_0 -> rm3
@@ -176,14 +186,20 @@ e0_2 -> rm3
 rm3 -> s3
 e0_0 -> rm6
 e1_0 -> rm6
-e2_0 -> rm6
 e4_0 -> rm6
 e5_0 -> rm6
-e7_0 -> rm6: "loops back" { style.stroke-dash: 4 }
+e8_0 -> rm6: "loops back" { style.stroke-dash: 4 }
 rm6 -> s6
-e0_0 -> rm8
-e1_0 -> rm8
-e4_0 -> rm8
-e5_0 -> rm8
-e7_0 -> rm8
-rm8 -> s8
+e0_0 -> rm7
+e1_0 -> rm7
+e2_0 -> rm7
+e4_0 -> rm7
+e5_0 -> rm7
+e8_0 -> rm7: "loops back" { style.stroke-dash: 4 }
+rm7 -> s7
+e0_0 -> rm9
+e1_0 -> rm9
+e4_0 -> rm9
+e5_0 -> rm9
+e8_0 -> rm9
+rm9 -> s9

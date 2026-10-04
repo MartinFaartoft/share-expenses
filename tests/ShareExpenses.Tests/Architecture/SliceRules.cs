@@ -50,7 +50,7 @@ internal static class SliceRules
     public static IReadOnlyDictionary<TypeDefinition, PublicRole> PublicRoles(ModuleDefinition module, SliceLayout layout)
     {
         var inSlices = module.GetTypes().Where(t => IsEffectivelyPublic(t) && SliceOf(t, layout) is not null).ToList();
-        var contracts = Contracts(inSlices.Where(IsWolverineEndpoint), inSlices.Where(IsComponent), layout);
+        var contracts = Contracts(inSlices.Where(IsWolverineEndpoint), inSlices.Where(IsComponent), inSlices, layout);
 
         return inSlices.ToDictionary(t => t, t =>
             IsEntryPoint(t, SliceOf(t, layout)!) ? PublicRole.EntryPoint
@@ -205,11 +205,14 @@ internal static class SliceRules
             && WolverineRouteAttributes.Contains(a.AttributeType.Name["Wolverine".Length..^"Attribute".Length])));
 
     /// <summary>
-    /// Types of the endpoints' own slices that appear in their public methods' signatures,
-    /// and — because C# requires it — in the public members of those types, transitively.
+    /// Types of the endpoints' and components' own slices that appear in their public
+    /// signatures, and — because C# requires it — in the public members of those types,
+    /// transitively; with the subtypes of each, which a value of the type may be (a
+    /// polymorphic history entry, an expense or a settlement).
     /// </summary>
     private static HashSet<TypeDefinition> Contracts(
-        IEnumerable<TypeDefinition> endpoints, IEnumerable<TypeDefinition> components, SliceLayout layout)
+        IEnumerable<TypeDefinition> endpoints, IEnumerable<TypeDefinition> components,
+        IReadOnlyList<TypeDefinition> inSlices, SliceLayout layout)
     {
         var found = new HashSet<TypeDefinition>();
         var pending = new Stack<(TypeReference type, string slice)>();
@@ -238,6 +241,8 @@ internal static class SliceRules
                     pending.Push((f.FieldType, next.slice));
                 foreach (var p in type.Methods.Where(m => m.IsConstructor && m.IsPublic).SelectMany(m => m.Parameters))
                     pending.Push((p.ParameterType, next.slice));
+                foreach (var subtype in inSlices.Where(t => t.BaseType?.FullName == type.FullName))
+                    pending.Push((subtype, next.slice));
             }
         }
         return found;

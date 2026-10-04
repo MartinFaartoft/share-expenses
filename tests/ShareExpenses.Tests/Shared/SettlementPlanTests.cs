@@ -3,7 +3,7 @@ using ShareExpenses.Shared;
 namespace ShareExpenses.Tests.Shared;
 
 /// <summary>
-/// The settle-up procedure (spec §10): slice-09-view-settlement-plan.md's procedure
+/// The settle-up procedure (spec §10): slice-10-view-settlement-plan.md's procedure
 /// scenarios, line for line, then the properties every plan must have over many
 /// random balance sets.
 /// </summary>

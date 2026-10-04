@@ -834,7 +834,8 @@ the truthful statement anyway.
 
 | Read model | Lifecycle | Serves |
 |---|---|---|
-| `GroupLedgerReadModel` | **inline** — the stored `GroupLedger` | members, per-member balances, and the money history (expenses and settlements) |
+| `GroupActivityReadModel` | **inline** — the stored `GroupActivity` | the group page: the money history (expenses and settlements), your standing |
+| `GroupBalancesReadModel` | **live** — folded per request | everyone's balance |
 | `ActivityFeed` | **inline** | who did what, when |
 | `HomepageReadModel` | groups **async** — the stored `UserGroups`, one document per group; invites **live** | the home screen: a user's groups, and invites waiting |
 | `SettlementPlanReadModel` | **live** — computed per request (§10) | the settle-up plan: who pays whom |
@@ -854,18 +855,19 @@ showing them means folding a handful of group streams of a few hundred events ea
 needs the other's lifecycle, and the screen needs both, so one slice (View
 homepage) owns both.
 
-`GroupLedger` is what is stored: ViewBalances' state, a Marten snapshot projected
-inline as the `group_ledger` document. The read model is shaped from it per
-request, because part of it depends on the reader — "you", and whether an invite
-is still open, which changes with the clock and so cannot be stored. A stored
+`GroupActivity` is what is stored: View group's state, a Marten snapshot projected
+inline as the `group_activity` document. The read model is shaped from it per
+request, because part of it depends on the reader — "you", your standing. A stored
 projection holds facts; anything that depends on the time or the reader is
-computed on reading.
+computed on reading. (Everyone's balances, View balances, are folded live per
+request: a few hundred events, a member list, nothing worth storing.)
 
-Rationale for inline on the ledger: the core phone interaction is "add the
-expense, then immediately look at the balances". Inline projections commit in the
+Rationale for inline on the group page: the core phone interaction is "add the
+expense, then immediately look at the group". Inline projections commit in the
 same transaction as the events, making read-your-writes guaranteed rather than
-hopeful. Async would open a window where you enter £120 and the balance has not
-moved — the most alarming bug this app could plausibly ship.
+hopeful. Async would open a window where you enter £120 and your standing has not
+moved — the most alarming bug this app could plausibly ship. (A live fold, as View
+balances', reads the events themselves, so it is read-your-writes too.)
 
 `UserGroups` is async deliberately, so the project exercises both lifecycles and
 the async daemon. Staleness is harmless there: after creating or joining a group
@@ -1153,7 +1155,7 @@ in place of `Decider.cs`, and no events.
   code: Event Modeling and Marten use it as a synonym for read model, so a type
   named `View` that is *not* the read model invites confusion (tried briefly, and
   reverted for that reason). `Projection` is reserved for the process — a
-  projection class, such as `GroupLedger`'s inline projection in ViewBalances.
+  projection class, such as `GroupActivity`'s inline projection in View group.
 - **Every slice's `State` carries a unique `[DocumentAlias("<slice>_state")]`.**
   Marten names a type by its bare class name, so two slices' `State` types
   collide on `ledger.state` — found while building InviteMember, where whichever slice was used
@@ -1427,7 +1429,7 @@ but skips completeness, and is labelled "(draft)" on the diagram. Refining a sli
 ends with removing the flag. On cards, a field's source is tagged unless it comes
 from the client: `(sys)`, `(str)`, `(lku)`. Screen fields are never tagged.
 
-Deferred: field-level checks inside composite types such as `LedgerMember[]`, and
+Deferred: field-level checks inside composite types such as `MemberBalance[]`, and
 tracing a State Change screen's held values back to a read model (above).
 
 **Slices are typed with the four canonical Event Modeling types**, spelled
@@ -1445,7 +1447,7 @@ type, and any arrow contradicting it would be a modelling error rather than a
 drawing choice. The only inter-slice arrow is a read model's `reads` list of event
 *type names*: the generator resolves each to the nearest occurrence at or before
 the consuming slice, and dashes it when the only occurrence is later. No ids, no
-endpoints. The same mechanism will serve automation slices (`reads: GroupLedger`)
+endpoints. The same mechanism will serve automation slices (`reads: GroupActivity`)
 without new syntax.
 
 The generator validates before it renders and exits non-zero on any error, so it
@@ -1473,7 +1475,7 @@ cannot drift from the code.
 The first run earned the exercise. `MemberInvited` was consumed by nothing, which
 means no screen could distinguish a member who has been invited from one who has
 merely been added — exactly the "invited / joined" state §4 depends on. Fixed by
-adding it to `GroupLedger`. That is the check predicted to be most valuable, and
+adding it to `GroupActivity`. That is the check predicted to be most valuable, and
 it was.
 
 Tooling note: the generator needs PyYAML, which macOS's system Python refuses to
@@ -1500,7 +1502,15 @@ a documentation tool, not application code.
     same reason the JSON API gives.
   - **Screens are tested over HTTP** as a browser would use them: load the page,
     keep its cookies, post the form with the token it carries, with and without the
-    `HX-Request` header; assertions on the HTML.
+    `HX-Request` header; assertions on the HTML, decoded as the user reads it.
+  - **Amounts on screen** go through `Web/Money`: minor units to the currency's
+    decimals, with its symbol where it reads cleanly in a left-to-right line (£, €,
+    $, R$), the ISO code otherwise (CHF, KWD). The only place minor units become
+    decimals.
+  - **One "not found" page** (`Web/NotFoundPage`) for anything missing or not
+    yours, as the JSON API's single 404.
+  - **A screen whose read model is polymorphic** (the group history) needs its
+    subtypes public too; the architecture rule follows subtypes of contract types.
   Still to do:
   - **How a 409 asks to retry** in a form — with the first slice screen.
   - **Server gaps every screen hits:** a group list to land on after signing in
@@ -1645,8 +1655,8 @@ a documentation tool, not application code.
   member's name, status and balance, the history, the plan's transfers — so the
   generator's read-screen check (§13) proves the read model serves the screen, not
   just that it has no stray fields. To decide along the way:
-  - **Composite fields:** a screen shows parts of `LedgerMember[]` or
-    `PendingInvite[]`. Either list the composite (`members: LedgerMember[]`), or
+  - **Composite fields:** a screen shows parts of `MemberBalance[]` or
+    `PendingInvite[]`. Either list the composite (`members: MemberBalance[]`), or
     reach inside it — which needs the deferred field-level checks inside composite
     types (below) and a notation for them.
   - **Shared screens:** Settle up is declared by Record settlement (inputs) and
@@ -1698,7 +1708,7 @@ a documentation tool, not application code.
   inbox/outbox); adopting it means switching durability mode, and the email becomes
   a message handled after the commit. A superseded invite needs no special care:
   the worker can check its `Invite` still exists before sending.
-- **DEFERRED** Completeness inside composite read model types (`LedgerMember[]`),
+- **DEFERRED** Completeness inside composite read model types (`MemberBalance[]`),
   and tracing the values a State Change screen holds back to a read model (§13).
 - **DEFERRED** Email change, several addresses per account, and account merging.
   An account *is* its address (§4), and invites are claimed by address — so an

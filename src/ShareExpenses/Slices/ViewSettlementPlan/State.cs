@@ -20,7 +20,7 @@ internal sealed record Slot(MemberId MemberId, string Name, UserId? ClaimedBy, l
 /// in — as payer or in the split. Expenses only: a settlement is not shared spending.
 ///
 /// FOLD CHECKLIST — when these slices are built, fold their events here and add the
-/// deferred specs in slice-09-view-settlement-plan.md:
+/// deferred specs in slice-10-view-settlement-plan.md:
 ///   ExpenseRemoved, SettlementRemoved  → undo the balance effect (and the score)
 ///   the expense corrections            → undo, then redo
 ///   MemberRenamed                      → rename

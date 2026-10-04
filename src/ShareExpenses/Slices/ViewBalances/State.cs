@@ -8,72 +8,36 @@ using ShareExpenses.Slices.RecordSettlement;
 
 namespace ShareExpenses.Slices.ViewBalances;
 
-/// <summary>A member slot as the ledger keeps it.</summary>
+/// <summary>A member slot as the fold keeps it.</summary>
 /// <param name="ClaimedBy">The user holding the slot, if any.</param>
 /// <param name="InvitedUntil">The current invite's recorded deadline, if any; whether it is still open is decided on reading.</param>
 /// <param name="BalanceMinor">Paid minus shared, in minor units (spec §9): positive is owed, negative owes.</param>
 internal sealed record Slot(MemberId MemberId, string Name, UserId? ClaimedBy, DateTimeOffset? InvitedUntil, long BalanceMinor);
 
-/// <summary>An expense as the ledger keeps it: the split as entered, and the amounts it produced.</summary>
-/// <param name="Recorded">Its position among the group's expenses and settlements, in the order recorded.</param>
-internal sealed record Expense(
-    int Recorded,
-    ExpenseId ExpenseId,
-    string Description,
-    long AmountMinor,
-    MemberId PayerMemberId,
-    ExpenseSplit Split,
-    IReadOnlyList<Split> Splits,
-    DateOnly PaidOn);
-
-/// <summary>A settlement as the ledger keeps it.</summary>
-/// <param name="Recorded">Its position among the group's expenses and settlements, in the order recorded.</param>
-internal sealed record Settlement(
-    int Recorded,
-    SettlementId SettlementId,
-    MemberId FromMemberId,
-    MemberId ToMemberId,
-    long AmountMinor,
-    DateOnly PaidOn);
-
 /// <summary>
-/// The group ledger: ViewBalances' state, and the first <em>stored</em> one — a Marten
-/// snapshot projected <em>inline</em>, in the same transaction that appends the
-/// events, as the <c>group_ledger</c> document (spec §11). So a balance moves the moment
-/// an expense or settlement is saved.
+/// What the balances are computed from, folded <em>live</em> from the group stream per
+/// request — never stored (spec §11). Its own balances, not View group's: slices share
+/// only events. A test checks the two agree.
 ///
-/// It holds facts only. What depends on the reader ("you") or on the clock (whether an
-/// invite is still open) is decided by <see cref="Reader"/>, never stored: a stored
-/// document cannot change as time passes.
-///
-/// <see cref="Slots"/> keep member-added order. <see cref="Expenses"/> and
-/// <see cref="Settlements"/> each record their position in the group's history, so the
-/// reader can order the two as one.
+/// <see cref="Slots"/> keep member-added order.
 ///
 /// FOLD CHECKLIST — when these slices are built, fold their events here and add the
-/// deferred specs in slice-07-view-balances.md:
+/// deferred specs in slice-08-view-balances.md:
 ///   ExpenseRemoved, SettlementRemoved      → undo the entry's effect
 ///   the expense corrections                → undo, then redo an expense's effect
 ///   MemberRenamed / GroupRenamed           → rename
 ///   MemberClaimReleased                    → clear ClaimedBy
 ///   MemberRemoved, GroupArchived           → decide how they show
 ///
-/// A change here changes stored documents: they must be rebuilt from the events
-/// (<c>dotnet run -- projections rebuild</c>), which is always possible — the events are
-/// the truth, the document a cache of them.
+/// The alias is required: every slice has a State (spec §12).
 /// </summary>
-[DocumentAlias("group_ledger")]
-internal sealed record State(
-    string GroupName,
-    string Currency,
-    ImmutableList<Slot> Slots,
-    ImmutableList<Expense> Expenses,
-    ImmutableList<Settlement> Settlements)
+[DocumentAlias("view_balances_state")]
+internal sealed record State(string GroupName, string Currency, ImmutableList<Slot> Slots)
 {
-    /// <summary>The group's stream id: Marten keys the stored snapshot by it.</summary>
+    /// <summary>The group's stream id.</summary>
     public Guid Id { get; init; }
 
-    public static State Create(GroupCreated e) => new(e.Name, e.Currency, [], [], []);
+    public static State Create(GroupCreated e) => new(e.Name, e.Currency, []);
 
     public State Apply(MemberAdded e) =>
         this with { Slots = Slots.Add(new Slot(e.MemberId, e.DisplayName, null, null, 0)) };
@@ -86,41 +50,34 @@ internal sealed record State(
     {
         // Spec §9: the payer is credited the amount; each sharer is debited their split.
         var debits = e.Splits.ToDictionary(s => s.MemberId, s => s.AmountMinor);
-        var slots = Slots.Select(slot => slot with
-        {
-            BalanceMinor = slot.BalanceMinor
-                           + (slot.MemberId == e.PayerMemberId ? e.AmountMinor : 0)
-                           - debits.GetValueOrDefault(slot.MemberId),
-        });
-
         return this with
         {
-            Slots = [.. slots],
-            Expenses = Expenses.Add(new Expense(
-                Entries, e.ExpenseId, e.Description, e.AmountMinor, e.PayerMemberId, e.Split, e.Splits, e.PaidOn)),
+            Slots =
+            [
+                .. Slots.Select(slot => slot with
+                {
+                    BalanceMinor = slot.BalanceMinor
+                                   + (slot.MemberId == e.PayerMemberId ? e.AmountMinor : 0)
+                                   - debits.GetValueOrDefault(slot.MemberId),
+                }),
+            ],
         };
     }
 
-    public State Apply(SettlementRecorded e)
-    {
+    public State Apply(SettlementRecorded e) =>
         // As an expense paid by `from` and shared by `to` alone (spec §7, §9).
-        var slots = Slots.Select(slot => slot with
+        this with
         {
-            BalanceMinor = slot.BalanceMinor
-                           + (slot.MemberId == e.FromMemberId ? e.AmountMinor : 0)
-                           - (slot.MemberId == e.ToMemberId ? e.AmountMinor : 0),
-        });
-
-        return this with
-        {
-            Slots = [.. slots],
-            Settlements = Settlements.Add(new Settlement(
-                Entries, e.SettlementId, e.FromMemberId, e.ToMemberId, e.AmountMinor, e.PaidOn)),
+            Slots =
+            [
+                .. Slots.Select(slot => slot with
+                {
+                    BalanceMinor = slot.BalanceMinor
+                                   + (slot.MemberId == e.FromMemberId ? e.AmountMinor : 0)
+                                   - (slot.MemberId == e.ToMemberId ? e.AmountMinor : 0),
+                }),
+            ],
         };
-    }
-
-    /// <summary>How many expenses and settlements have been recorded: the next one's position.</summary>
-    private int Entries => Expenses.Count + Settlements.Count;
 
     private State WithSlot(MemberId member, Func<Slot, Slot> change) =>
         this with { Slots = [.. Slots.Select(slot => slot.MemberId == member ? change(slot) : slot)] };

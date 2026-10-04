@@ -15,7 +15,7 @@ internal sealed record Command(
     DateTimeOffset Now,
     UserId By);
 
-/// <summary>Specs: <c>docs/event-model/slice-08-record-settlement.md</c>.</summary>
+/// <summary>Specs: <c>docs/event-model/slice-09-record-settlement.md</c>.</summary>
 internal static class Decider
 {
     /// <summary>The single answer for "no such group" and "not a member".</summary>

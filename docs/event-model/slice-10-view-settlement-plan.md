@@ -1,4 +1,4 @@
-# Slice 9 — View settlement plan
+# Slice 10 — View settlement plan
 
 Type: **State Read**. Events → read model → screen.
 

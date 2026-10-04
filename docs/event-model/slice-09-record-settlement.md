@@ -1,4 +1,4 @@
-# Slice 8 — `RecordSettlement`
+# Slice 9 — `RecordSettlement`
 
 Type: **State Change**. Screen → command → events.
 
@@ -115,11 +115,10 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
   The plan may have shifted since it was shown; that costs nothing — the payment
   is still valid, and the balances absorb it (spec §11).
 
-## Changes to View balances
+## Read by
 
-The ledger folds `SettlementRecorded` — moving `from`'s balance up and `to`'s down
-by the amount — and its expenses list becomes a **history** of both kinds. See
-`slice-07-view-balances.md`; the stored ledgers are rebuilt from the events.
+View group (a settlement joins the group's history, and moves your standing), View
+balances (it moves `from`'s balance up and `to`'s down), and View settlement plan.
 
 ## Deferred to the slices that introduce the events
 

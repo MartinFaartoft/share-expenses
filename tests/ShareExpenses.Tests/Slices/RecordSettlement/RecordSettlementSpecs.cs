@@ -11,7 +11,7 @@ using MemberClaimed = ShareExpenses.Slices.CreateGroup.MemberClaimed;
 namespace ShareExpenses.Tests.Slices.RecordSettlement;
 
 /// <summary>
-/// docs/event-model/slice-08-record-settlement.md, line for line. Selected scenarios
+/// docs/event-model/slice-09-record-settlement.md, line for line. Selected scenarios
 /// run against a real store, through HTTP, in <see cref="RecordSettlementIntegrationTests"/>.
 /// </summary>
 public class RecordSettlementSpecs

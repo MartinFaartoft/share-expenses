@@ -12,3 +12,6 @@ obj/
 .vs/
 .idea/
 TestResults/
+
+# scratch space for local experiments, spikes and logs
+tmp/

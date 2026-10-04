@@ -29,15 +29,15 @@
 #        select version, type, jsonb_pretty(data)
 #        from ledger.mt_events where stream_id = '<groupId>' order by version;
 #
-#        -- a group's stored ledger (balances), pretty-printed
-#        select jsonb_pretty(data) from ledger.mt_doc_group_ledger where id = '<groupId>';
+#        -- a group's stored activity (history), pretty-printed
+#        select jsonb_pretty(data) from ledger.mt_doc_group_activity where id = '<groupId>';
 #
 #        -- users, and their pending sign-in codes
 #        select "Id", "Email" from identity."AspNetUsers";
 #        select * from identity."SignInCodes";
 #
 # ── Resetting ────────────────────────────────────────────────────────────────
-#   `just rebuild-projections`   rebuild the group ledger from the events
+#   `just rebuild-projections`   rebuild the stored projections from the events
 #   `just reset-ledger`          drop all domain data (asks first)
 
 @host = https://localhost:7194
@@ -208,13 +208,17 @@ Content-Type: application/json
   "paidOn": "2026-10-02"
 }
 
-### 16. The group page: balances and history. Expect 200 with members (name,
-# status, balanceMinor — positive is owed) and history, newest first: expenses and
-# settlements, each marked by kind. Steps 13 and 15 moved the balances already: the
-# ledger is projected inline, in the same transaction.
-# Stored as ledger.mt_doc_group_ledger; after changing how it folds, rebuild it from
+### 16. The group page (View group): your standing and the history. Expect 200 with
+# balanceMinor (yours; positive is owed) and history, newest first: expenses and
+# settlements, each marked by kind and named. Steps 13 and 15 moved it already: it
+# is projected inline, in the same transaction.
+# Stored as ledger.mt_doc_group_activity; after changing how it folds, rebuild it from
 # the events: `just rebuild-projections`
 GET {{host}}/api/groups/{{groupId}}
+
+### 16b. Everyone's balances (View balances). Expect 200 with members (name, status,
+# balanceMinor — positive is owed). Folded live from the events on each request.
+GET {{host}}/api/groups/{{groupId}}/balances
 
 ### 17. The settle-up plan: who pays whom to clear every balance (spec §10). Expect 200
 # with transfers [{ fromMemberId, fromName, toMemberId, toName, amountMinor }]. Computed

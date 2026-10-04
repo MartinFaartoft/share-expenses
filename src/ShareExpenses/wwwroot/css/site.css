@@ -96,3 +96,72 @@ ul.links a {
   border: 1px solid #e1e4ea;
   border-radius: var(--radius);
 }
+
+/* ── The group page ─────────────────────────────────────────────────────────── */
+
+nav.back { margin-bottom: 0.5rem; }
+nav.back a { color: var(--accent); text-decoration: none; }
+
+a.button {
+  display: inline-block;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border-radius: var(--radius);
+  text-decoration: none;
+}
+
+section.summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid #e1e4ea;
+  border-radius: var(--radius);
+}
+section.summary p { margin: 0; font-size: 1.125rem; }
+
+/* Chat style: newest at the bottom, already scrolled into view (column-reverse). */
+ol.history {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.5rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: #eef0f4;
+  border-radius: var(--radius);
+}
+
+ol.history li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 0.75rem;
+  max-width: 80%;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  background: #fff;
+}
+ol.history li.mine { align-self: flex-start; border-bottom-left-radius: 0.15rem; }
+ol.history li.theirs { align-self: flex-end; background: #dce8fc; border-bottom-right-radius: 0.15rem; }
+ol.history li.settlement { font-style: italic; }
+ol.history .what { font-weight: 600; }
+ol.history .meta { grid-column: 1 / -1; color: var(--muted); font-size: 0.8125rem; }
+
+.amount { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+p.actions { display: flex; align-items: center; gap: 1rem; }
+
+ul.members { list-style: none; padding: 0; margin: 1rem 0; }
+ul.members li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.375rem 0;
+  border-bottom: 1px solid #e1e4ea;
+}

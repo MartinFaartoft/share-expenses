@@ -258,25 +258,68 @@ slices:
           paidOn: DateOnly
           by: UserId
 
+  - slice: View group
+    type: State Read
+    screen:
+      name: Group
+      fields:
+        groupId: GroupId
+        groupName: string
+        currency: string
+        you: MemberId                                      # what you paid sits on the left
+        balance: long                                      # your standing, beside Settle up
+        history: "ActivityEntry[]"
+      wireframe:
+        - "< Home       Lisbon trip"
+        - "You owe £70.00 [Settle up]"
+        - "Dinner £90.00"
+        - "  You paid"
+        - "             Taxi £140.00"
+        - "                Bob paid"
+        - "[Add expense]  [Balances]"
+    readModel:
+      # stored, inline: projected in the transaction that appends the events, so an
+      # expense appears, and your standing moves, the moment it is saved (spec §11)
+      name: GroupActivityReadModel
+      fields:
+        userId: { type: UserId, source: system }           # the signed-in user: members only
+        groupId: { type: GroupId, source: [GroupCreated] }
+        groupName: { type: string, source: [GroupCreated] }
+        currency: { type: string, source: [GroupCreated] }
+        you: { type: MemberId, source: [MemberClaimed] }   # the caller's own slot
+        # the caller's balance (spec §9)
+        balance: { type: long, source: [ExpenseRecorded, SettlementRecorded] }
+        # the money: expenses and settlements in one list, each marked by kind and
+        # named, newest first; an expense with its split as entered and its amounts
+        history: { type: "ActivityEntry[]", source: [MemberAdded, ExpenseRecorded, SettlementRecorded] }
+      reads:
+        - GroupCreated
+        - MemberAdded
+        - MemberClaimed
+        - ExpenseRecorded
+        - SettlementRecorded   # emitted in Record settlement: drawn dashed
+
   - slice: View balances
     type: State Read
     screen:
       name: Balances
       fields:
         groupId: GroupId
+        groupName: string
+        currency: string
+        you: MemberId
+        members: "MemberBalance[]"
       wireframe:
-        - "Lisbon trip          GBP"
-        - "Alice (you)       +60.00"
-        - "Bob               -30.00"
-        - "Carol (invited)   -30.00"
+        - "< Lisbon trip   Balances"
+        - "Alice (you)  is owed £60.00"
+        - "Bob                owes £30.00"
+        - "Carol (invited)  owes £30.00"
         - ""
-        - "1 Oct  Dinner  90.00  Alice"
-        - "2 Oct  Bob -> Alice  30.00"
+        - "              [Settle up]"
     readModel:
-      # stored, inline: projected in the transaction that appends the events, so a
-      # balance moves the moment an expense or settlement is saved (spec §11).
+      # live: the group stream folded per request, nothing stored (spec §11).
       # Balances follow spec §9 and always sum to zero.
-      name: GroupLedgerReadModel
+      name: GroupBalancesReadModel
       fields:
         userId: { type: UserId, source: system }           # the signed-in user: members only
         now: { type: DateTimeOffset, source: system }      # an invite is open until its deadline
@@ -285,10 +328,7 @@ slices:
         currency: { type: string, source: [GroupCreated] }
         you: { type: MemberId, source: [MemberClaimed] }   # the caller's own slot
         # each slot with its name, status (joined, invited, placeholder) and balance
-        members: { type: "LedgerMember[]", source: [MemberAdded, MemberInvited, MemberClaimed, ExpenseRecorded, SettlementRecorded] }
-        # the money: expenses and settlements in one list, each marked by kind,
-        # newest first; an expense with its split as entered and the amounts it produced
-        history: { type: "LedgerEntry[]", source: [ExpenseRecorded, SettlementRecorded] }
+        members: { type: "MemberBalance[]", source: [MemberAdded, MemberInvited, MemberClaimed, ExpenseRecorded, SettlementRecorded] }
       reads:
         - GroupCreated
         - MemberAdded

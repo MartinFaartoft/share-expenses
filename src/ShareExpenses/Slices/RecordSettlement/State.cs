@@ -11,7 +11,7 @@ namespace ShareExpenses.Slices.RecordSettlement;
 /// Balances are not folded: no rule depends on them — any payment is valid (spec §7).
 ///
 /// FOLD CHECKLIST — when these slices are built, fold their events here and add the
-/// deferred specs in slice-08-record-settlement.md:
+/// deferred specs in slice-09-record-settlement.md:
 ///   MemberClaimReleased → remove from Members        (a released claim ends membership)
 ///   MemberRemoved       → drop the slot              (cannot pay or be paid)
 ///   GroupArchived / GroupUnarchived → track Archived (no changes to an archived group)

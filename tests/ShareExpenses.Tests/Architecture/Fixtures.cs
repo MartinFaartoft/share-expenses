@@ -47,10 +47,16 @@ namespace ShareExpenses.Tests.Architecture.Fixtures.Good.Slices.Beta
     // parameter's type, public because component parameters must be.
     public class BetaScreen : Microsoft.AspNetCore.Components.ComponentBase
     {
-        public BetaView View { get; set; } = new(0);
+        public BetaView View { get; set; } = new(0, []);
     }
 
-    public sealed record BetaView(int Total);
+    // Its entries are polymorphic: the parameter names only the base, the subtypes are
+    // what a value may be — public for the same reason, and not events.
+    public sealed record BetaView(int Total, IReadOnlyList<BetaEntry> Entries);
+
+    public abstract record BetaEntry;
+
+    public sealed record BetaOne : BetaEntry;
 
     // A slice on Wolverine with no events: an endpoint, its contract types, and no entry point.
     public static class Endpoint
