@@ -1,5 +1,5 @@
 using System.Net;
-using System.Net.Http.Json;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using ShareExpenses.Infrastructure.Identity;
 using ShareExpenses.Shared;
@@ -7,24 +7,26 @@ using ShareExpenses.Tests.Infrastructure;
 
 namespace ShareExpenses.Tests.Identity;
 
-/// <summary>Sign-in by a six-digit code sent by email — the only way in (spec §4).</summary>
+/// <summary>
+/// Sign-in by a six-digit code sent by email — the only way in (spec §4) — through
+/// the sign-in screen's plain form posts. How the screen looks and swaps is
+/// <see cref="SignInScreenTests"/>; this is what the flow allows.
+/// </summary>
 [Collection(AppCollection.Name)]
-public class SignInIntegrationTests(AppFixture app)
+public class SignInFlowTests(AppFixture app)
 {
     private readonly string _email = $"someone-{Guid.NewGuid():N}@example.com";
 
     [Fact]
     public async Task A_code_signs_in_creating_the_account_on_first_use()
     {
-        Assert.Equal(HttpStatusCode.Accepted, (await RequestCode(_email)).StatusCode);
+        await RequestCode(_email);
         Assert.Null(await AccountFor(_email)); // nothing written for the address until its code is used
 
         var response = await SignIn(_email, CodeFor(_email));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains(response.Headers.GetValues("Set-Cookie"), c => c.StartsWith(".AspNetCore.Identity.Application="));
-        var signedIn = await response.Content.ReadFromJsonAsync<SignedInBody>();
-        Assert.Equal(await AccountFor(_email), signedIn!.UserId);
+        AssertSignedIn(response);
+        Assert.NotNull(await AccountFor(_email));
     }
 
     [Fact]
@@ -33,9 +35,9 @@ public class SignInIntegrationTests(AppFixture app)
         var existing = await app.AccountFor(_email);
         await RequestCode(_email.ToUpperInvariant());
 
-        var response = await SignIn(_email, CodeFor(_email.ToUpperInvariant()));
+        AssertSignedIn(await SignIn(_email, CodeFor(_email.ToUpperInvariant())));
 
-        Assert.Equal(existing, (await response.Content.ReadFromJsonAsync<SignedInBody>())!.UserId);
+        Assert.Equal(existing, await AccountFor(_email));
     }
 
     [Fact]
@@ -51,7 +53,7 @@ public class SignInIntegrationTests(AppFixture app)
     {
         await RequestCode(_email);
         var code = CodeFor(_email);
-        Assert.Equal(HttpStatusCode.OK, (await SignIn(_email, code)).StatusCode);
+        AssertSignedIn(await SignIn(_email, code));
 
         await AssertFailed(await SignIn(_email, code));
     }
@@ -94,7 +96,7 @@ public class SignInIntegrationTests(AppFixture app)
         for (var i = 0; i < 4; i++)
             await AssertFailed(await SignIn(_email, wrong));
 
-        Assert.Equal(HttpStatusCode.OK, (await SignIn(_email, code)).StatusCode);
+        AssertSignedIn(await SignIn(_email, code));
     }
 
     [Fact]
@@ -107,7 +109,7 @@ public class SignInIntegrationTests(AppFixture app)
 
         if (first != second) // one in a million they coincide
             await AssertFailed(await SignIn(_email, first));
-        Assert.Equal(HttpStatusCode.OK, (await SignIn(_email, second)).StatusCode);
+        AssertSignedIn(await SignIn(_email, second));
     }
 
     [Fact]
@@ -115,13 +117,11 @@ public class SignInIntegrationTests(AppFixture app)
     {
         for (var i = 0; i < 5; i++)
             await RequestCode(_email);
-        var sent = app.Emails.Codes.Count(c => c.Email == _email);
-
         var sixth = await RequestCode(_email);
 
-        Assert.Equal(HttpStatusCode.Accepted, sixth.StatusCode);
-        Assert.Equal(5, sent);
         Assert.Equal(5, app.Emails.Codes.Count(c => c.Email == _email));
+        // The same next step as when a code was sent: nothing tells the two apart.
+        Assert.Contains("""autocomplete="one-time-code""", sixth);
     }
 
     [Fact]
@@ -154,25 +154,36 @@ public class SignInIntegrationTests(AppFixture app)
 
         foreach (var response in failed)
             await AssertFailed(response);
-        Assert.Single((await Task.WhenAll(failed.Select(r => r.Content.ReadAsStringAsync()))).Distinct());
     }
 
     [Fact]
-    public async Task Requesting_a_code_for_an_implausible_address_is_400()
+    public async Task Requesting_a_code_for_an_implausible_address_stays_on_the_first_step_and_sends_nothing()
     {
-        var response = await RequestCode("not-an-email");
+        var html = await RequestCode("not-an-email");
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("email is not a valid address", await response.Content.ReadAsStringAsync());
+        Assert.Contains(ShareExpenses.Infrastructure.Identity.SignIn.InvalidAddress, html);
+        Assert.DoesNotContain(app.Emails.Codes, c => c.Email == "not-an-email");
     }
 
-    // ── helpers ───────────────────────────────────────────────────────────────────
+    // ── helpers: each step from a fresh browser, as a plain form post ─────────────
 
-    private Task<HttpResponseMessage> RequestCode(string email) =>
-        app.CreateClient().PostAsJsonAsync("/api/sign-in/code", new { email });
+    private HttpClient Browser() => app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-    private Task<HttpResponseMessage> SignIn(string email, string? code) =>
-        app.CreateClient().PostAsJsonAsync("/api/sign-in", new { email, code });
+    /// <returns>The page answered: the code step, or the first step with a reason.</returns>
+    private async Task<string> RequestCode(string email)
+    {
+        var browser = Browser();
+        var response = await Forms.Post(browser, "/sign-in/code", await Forms.TokenFrom(browser, "/sign-in"), ("email", email));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+    }
+
+    private async Task<HttpResponseMessage> SignIn(string email, string? code)
+    {
+        var browser = Browser();
+        (string, string)[] fields = code is null ? [("email", email)] : [("email", email), ("code", code)];
+        return await Forms.Post(browser, "/sign-in", await Forms.TokenFrom(browser, "/sign-in"), fields);
+    }
 
     private string CodeFor(string email) =>
         app.Emails.LatestCodeFor(email) ?? throw new InvalidOperationException($"No code was sent to {email}");
@@ -183,11 +194,16 @@ public class SignInIntegrationTests(AppFixture app)
         return await scope.ServiceProvider.GetRequiredService<IEmailDirectory>().AccountFor(email);
     }
 
-    private static async Task AssertFailed(HttpResponseMessage response)
+    private static void AssertSignedIn(HttpResponseMessage response)
     {
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains(ShareExpenses.Infrastructure.Identity.SignIn.Failed, await response.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains(response.Headers.GetValues("Set-Cookie"), c => c.StartsWith(".AspNetCore.Identity.Application="));
     }
 
-    private sealed record SignedInBody(UserId UserId);
+    private static async Task AssertFailed(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains(ShareExpenses.Infrastructure.Identity.SignIn.Failed,
+            WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync()));
+    }
 }

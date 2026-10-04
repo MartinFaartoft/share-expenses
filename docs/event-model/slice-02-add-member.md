@@ -8,7 +8,7 @@ Type: **State Change**. Screen → command → events.
 | Command | `AddMember(displayName, by)` |
 | Events | `MemberAdded` (owned by CreateGroup) |
 | Code | `src/ShareExpenses/Slices/AddMember/` |
-| Endpoint | `POST /api/groups/{group}/members` |
+| Endpoint | none yet — its screen is not built, so nothing reaches it (spec §3). The slice's logic and specs stand |
 
 Adds a **placeholder** member by name alone (spec §4): someone expenses can be
 recorded against immediately, who may be invited and claim the slot later. Adding

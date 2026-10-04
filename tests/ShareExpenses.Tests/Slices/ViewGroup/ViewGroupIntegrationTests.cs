@@ -1,6 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
-using System.Text.Json;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using ShareExpenses.Infrastructure.Marten;
@@ -9,134 +7,138 @@ using ShareExpenses.Tests.Infrastructure;
 
 namespace ShareExpenses.Tests.Slices.ViewGroup;
 
-/// <summary>The group page through HTTP, from the activity Marten projects inline.</summary>
+/// <summary>
+/// The group page (spec §3; slice-07-view-group.md), from the activity Marten projects
+/// inline as the group's events are saved: where you stand, the history chat style —
+/// newest at the bottom, what you paid on the left — and the actions.
+/// </summary>
 [Collection(AppCollection.Name)]
 public class ViewGroupIntegrationTests(AppFixture app)
 {
     private readonly UserId _alice = UserId.New();
-    private readonly UserId _mallory = UserId.New();
-
-    private IDocumentStore Store => app.Services.GetRequiredService<IDocumentStore>();
 
     [Fact]
-    public async Task A_new_group_has_no_history_and_you_are_settled_up()
+    public async Task Shows_the_group_with_a_way_home_and_a_way_to_add_an_expense()
     {
-        var (groupId, alice, _, _) = await Lisbon();
+        var (group, _) = await Lisbon();
 
-        var group = await View(groupId);
+        var html = await PageOf(group.Id);
 
-        Assert.Equal((groupId, "Lisbon trip", "GBP", alice, 0L), (group.GroupId, group.GroupName, group.Currency, group.You, group.BalanceMinor));
-        Assert.Empty(group.History);
+        Assert.Contains("<title>Lisbon trip · Shared expenses</title>", html);
+        Assert.Contains("""<a href="/">← Home</a>""", html);
+        Assert.Contains($"""<a class="button" href="/groups/{group.Id}/expenses/new">Add expense</a>""", html);
+        Assert.Contains("You're settled up", html);
+        Assert.Contains("Nothing yet.", html);
     }
 
     [Fact]
-    public async Task Read_your_writes_the_expense_appears_and_your_standing_moves_the_moment_it_is_saved()
+    public async Task Read_your_writes_when_you_are_owed_it_says_so_and_settle_up_is_still_there()
     {
-        var (groupId, alice, bob, carol) = await Lisbon();
+        var (group, bob) = await Lisbon();
+        await group.Expense("Dinner", 9000, group.You, [group.You, bob]);
 
-        await Record(groupId, alice, 9000, [alice, bob, carol]);
-        var group = await View(groupId);
+        var html = await PageOf(group.Id);
 
-        Assert.Equal(6000, group.BalanceMinor);
-        var expense = Assert.Single(group.History);
-        Assert.Equal("expense", expense.GetProperty("kind").GetString());
-        Assert.Equal("Dinner", expense.GetProperty("description").GetString());
-        Assert.Equal("Alice", expense.GetProperty("payerName").GetString());
-        Assert.Equal("equal", expense.GetProperty("split").GetProperty("mode").GetString());
+        Assert.Contains("You are owed <strong>£45.00</strong>", html);
+        Assert.Contains($"""<a class="button" href="/groups/{group.Id}/settle-up">Settle up</a>""", html);
     }
 
     [Fact]
-    public async Task A_settlement_moves_your_standing_and_joins_the_history_marked_by_kind()
+    public async Task When_you_owe_it_says_so_beside_settle_up()
     {
-        var (groupId, alice, bob, carol) = await Lisbon();
-        await Record(groupId, alice, 9000, [alice, bob, carol]);
+        var (group, bob) = await Lisbon();
+        await group.Expense("Taxi", 14000, bob, [group.You, bob]);
 
-        var paid = await app.ClientFor(_alice).PostAsJsonAsync($"/api/groups/{groupId}/settlements",
-            new { fromMemberId = bob, toMemberId = alice, amountMinor = 3000, paidOn = "2026-10-02" });
-        Assert.Equal(HttpStatusCode.Created, paid.StatusCode);
-        var group = await View(groupId);
+        var html = await PageOf(group.Id);
 
-        Assert.Equal(3000, group.BalanceMinor);
-        Assert.Equal(["settlement", "expense"], group.History.Select(h => h.GetProperty("kind").GetString()));
-        var settlement = group.History[0];
-        Assert.Equal((bob.ToString(), "Bob", alice.ToString(), "Alice", 3000L),
-            (settlement.GetProperty("fromMemberId").GetString(), settlement.GetProperty("fromName").GetString(),
-                settlement.GetProperty("toMemberId").GetString(), settlement.GetProperty("toName").GetString(),
-                settlement.GetProperty("amountMinor").GetInt64()));
+        Assert.Contains("You owe <strong>£70.00</strong>", html);
+        Assert.Contains($"""<a class="button" href="/groups/{group.Id}/settle-up">Settle up</a>""", html);
+    }
+
+    [Fact]
+    public async Task History_is_chat_style_what_you_paid_on_the_left_others_on_the_right()
+    {
+        var (group, bob) = await Lisbon();
+        await group.Expense("Dinner", 9000, group.You, [group.You, bob], new DateOnly(2026, 10, 1));
+        await group.Expense("Taxi", 3000, bob, [group.You, bob], new DateOnly(2026, 10, 2));
+        await group.Settlement(bob, group.You, 1500, new DateOnly(2026, 10, 3));
+
+        var html = await PageOf(group.Id);
+
+        Assert.Contains("""<li class="mine expense"><span class="what">Dinner</span>""", html);
+        Assert.Contains("""<li class="theirs expense"><span class="what">Taxi</span>""", html);
+        Assert.Contains("You paid · 1 Oct 2026", html);
+        Assert.Contains("Bob paid · 2 Oct 2026", html);
+        Assert.Contains("""<li class="theirs settlement"><span class="what">Bob paid you</span>""", html);
+
+        // Newest first in the markup; the stylesheet's column-reverse puts it at the bottom.
+        Assert.True(html.IndexOf("Bob paid you", StringComparison.Ordinal) < html.IndexOf("Taxi", StringComparison.Ordinal));
+        Assert.True(html.IndexOf("Taxi", StringComparison.Ordinal) < html.IndexOf("Dinner", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Links_to_the_balances()
+    {
+        var (group, _) = await Lisbon();
+
+        Assert.Contains($"""<a href="/groups/{group.Id}/balances">Balances</a>""", await PageOf(group.Id));
     }
 
     [Fact]
     public async Task The_activity_is_stored_as_its_own_document()
     {
-        var (groupId, _, _, _) = await Lisbon();
+        var (group, _) = await Lisbon();
 
-        await using var session = Store.QuerySession();
+        await using var session = app.Services.GetRequiredService<IDocumentStore>().QuerySession();
         var rows = await session.QueryAsync<int>(
-            $"select count(*) from {MartenSetup.Schema}.mt_doc_group_activity where id = ?", groupId.Value);
+            $"select count(*) from {MartenSetup.Schema}.mt_doc_group_activity where id = ?", group.Id.Value);
         Assert.Equal(1, Assert.Single(rows));
     }
 
     [Fact]
-    public async Task A_non_member_gets_exactly_what_a_missing_or_malformed_group_gets()
+    public async Task A_non_member_gets_the_same_404_page_as_for_a_missing_or_malformed_group()
     {
-        var (groupId, _, _, _) = await Lisbon();
-        var client = app.ClientFor(_mallory);
+        var (group, _) = await Lisbon();
+        var mallory = app.ClientFor(UserId.New());
 
         HttpResponseMessage[] responses =
         [
-            await client.GetAsync($"/api/groups/{groupId}"),
-            await client.GetAsync($"/api/groups/{GroupId.New()}"),
-            await client.GetAsync("/api/groups/not-a-guid"),
+            await mallory.GetAsync($"/groups/{group.Id}"),
+            await mallory.GetAsync($"/groups/{GroupId.New()}"),
+            await mallory.GetAsync("/groups/not-a-guid"),
         ];
 
         Assert.All(responses, r => Assert.Equal(HttpStatusCode.NotFound, r.StatusCode));
-        Assert.Single((await Task.WhenAll(responses.Select(r => r.Content.ReadAsStringAsync()))).Distinct());
+        var bodies = await Task.WhenAll(responses.Select(r => r.Content.ReadAsStringAsync()));
+        Assert.Single(bodies.Distinct());
+        Assert.Contains("That group doesn't exist, or isn't one of yours.", WebUtility.HtmlDecode(bodies[0]));
     }
 
     [Fact]
-    public async Task Requires_a_signed_in_user()
+    public async Task Signed_out_it_redirects_to_sign_in_and_back()
     {
-        var response = await app.CreateClient().GetAsync($"/api/groups/{GroupId.New()}");
+        var groupId = GroupId.New();
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var response = await app.CreateClient(new() { AllowAutoRedirect = false }).GetAsync($"/groups/{groupId}");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal($"/sign-in?returnUrl=%2Fgroups%2F{groupId}", response.Headers.Location?.OriginalString);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────────
 
-    /// <summary>Alice creates "Lisbon trip" and adds Bob and Carol as placeholders.</summary>
-    private async Task<(GroupId Group, MemberId Alice, MemberId Bob, MemberId Carol)> Lisbon()
+    /// <summary>Alice's "Lisbon trip" in GBP, with Bob as a placeholder.</summary>
+    private async Task<(SeededGroup Group, MemberId Bob)> Lisbon()
     {
-        var client = app.ClientFor(_alice);
-        var created = await (await client.PostAsJsonAsync("/api/groups",
-            new { groupName = "Lisbon trip", currency = "GBP", memberName = "Alice" })).Content.ReadFromJsonAsync<CreatedBody>();
-        async Task<MemberId> Add(string name) =>
-            (await (await client.PostAsJsonAsync($"/api/groups/{created!.GroupId}/members", new { displayName = name }))
-                .Content.ReadFromJsonAsync<AddedBody>())!.MemberId;
-        return (created!.GroupId, created.MemberId, await Add("Bob"), await Add("Carol"));
+        var group = await new Seed(app).Group(_alice);
+        return (group, await group.Member("Bob"));
     }
 
-    private async Task Record(GroupId groupId, MemberId payer, long amount, MemberId[] sharers)
+    private async Task<string> PageOf(GroupId groupId)
     {
-        var response = await app.ClientFor(_alice).PostAsJsonAsync($"/api/groups/{groupId}/expenses", new
-        {
-            description = "Dinner", amountMinor = amount, payerMemberId = payer,
-            split = new { mode = "equal", participants = sharers },
-            paidOn = "2026-10-01",
-        });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-    }
-
-    private async Task<GroupBody> View(GroupId groupId)
-    {
-        var response = await app.ClientFor(_alice).GetAsync($"/api/groups/{groupId}");
+        var response = await app.ClientFor(_alice).GetAsync($"/groups/{groupId}");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<GroupBody>())!;
+        // As the user reads it: Razor encodes £, ' and the like in the markup.
+        return WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
     }
-
-    private sealed record CreatedBody(GroupId GroupId, MemberId MemberId);
-
-    private sealed record AddedBody(MemberId MemberId);
-
-    private sealed record GroupBody(
-        GroupId GroupId, string GroupName, string Currency, MemberId You, long BalanceMinor, IReadOnlyList<JsonElement> History);
 }

@@ -5,8 +5,7 @@ using ShareExpenses.Web;
 namespace ShareExpenses.Infrastructure.Identity.Screens;
 
 /// <summary>
-/// The sign-in screen's endpoints (spec §3, §4): the same <see cref="SignInFlow"/> as
-/// the JSON API, as HTML. Works as plain form posts; with htmx, each step swaps in
+/// The sign-in screen's endpoints (spec §3, §4), over <see cref="SignInFlow"/>. Works as plain form posts; with htmx, each step swaps in
 /// place and success redirects. Form posts carry an antiforgery token. A
 /// <c>returnUrl</c> — where the user was going — rides along, and is followed on
 /// success only if it is a path on this site.

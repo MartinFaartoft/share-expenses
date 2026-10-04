@@ -8,7 +8,7 @@ Type: **State Change**. Screen → command → events.
 | Command | `RecordExpense(expenseId, description, amountMinor, payerMemberId, split, paidOn, now, by)`; `splits` computed by deciding |
 | Events | `ExpenseRecorded` |
 | Code | `src/ShareExpenses/Slices/RecordExpense/` |
-| Endpoint | `POST /api/groups/{group}/expenses` — 201 with `expenseId` |
+| Endpoint | none yet — its screen is not built, so nothing reaches it (spec §3). The slice's logic and specs stand |
 
 Records one expense: who paid, how much, who it is split between and how (spec §7).
 The event carries both the split as entered — one of three shapes, one per mode —

@@ -17,15 +17,15 @@ namespace ShareExpenses.Slices.AddMember;
 ///   MemberRenamed       → swap the key in NameKeys   (old name free, new name taken)
 ///   GroupArchived / GroupUnarchived → track Archived (no changes to an archived group)
 ///
-/// Public: Wolverine fetches it for the endpoint, so it is in the endpoint's
-/// signature (spec §12).
+/// Internal until the slice has a screen: Wolverine will fetch it for the endpoint,
+/// putting it in the endpoint's signature, so public (spec §12).
 ///
 /// The alias is required: Marten names a type by its bare class name, and every
 /// slice has a <c>State</c> — without it, two slices collide on <c>ledger.state</c>
 /// and whichever is used second fails at runtime.
 /// </summary>
 [DocumentAlias("add_member_state")]
-public sealed record State(ImmutableHashSet<UserId> Members, ImmutableHashSet<string> NameKeys)
+internal sealed record State(ImmutableHashSet<UserId> Members, ImmutableHashSet<string> NameKeys)
 {
     /// <summary>The stream id, set by Marten; Wolverine needs it to type the aggregate's identity.</summary>
     public GroupId Id { get; init; }

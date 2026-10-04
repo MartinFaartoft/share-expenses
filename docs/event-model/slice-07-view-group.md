@@ -8,7 +8,7 @@ Type: **State Read**. Events → read model → screen.
 | Read model | `GroupActivityReadModel`, from the **stored, inline** `GroupActivity` projection |
 | Query | `ViewGroup(userId)` — the signed-in user; the group from the route selects the stream |
 | Code | `src/ShareExpenses/Slices/ViewGroup/` |
-| Endpoints | `GET /groups/{group}` — the screen; `GET /api/groups/{group}` — the read model as JSON; sign-in required |
+| Endpoint | `GET /groups/{group}` — the screen; sign-in required |
 
 The group as its members use it: the money that has moved — expenses and
 settlements — as a chat-style list, your own standing in one line, and the actions:

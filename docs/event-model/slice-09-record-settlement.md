@@ -8,7 +8,7 @@ Type: **State Change**. Screen → command → events.
 | Command | `RecordSettlement(settlementId, fromMemberId, toMemberId, amountMinor, paidOn, now, by)` |
 | Events | `SettlementRecorded` |
 | Code | `src/ShareExpenses/Slices/RecordSettlement/` |
-| Endpoint | `POST /api/groups/{group}/settlements` — 201 with `settlementId` |
+| Endpoint | none yet — its screen is not built, so nothing reaches it (spec §3). The slice's logic and specs stand |
 
 Records that one member paid another, outside the app (spec §1: the app produces
 instructions; people use their own bank). A settlement is a transaction in the

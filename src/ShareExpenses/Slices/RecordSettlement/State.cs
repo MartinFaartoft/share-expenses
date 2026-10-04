@@ -16,11 +16,12 @@ namespace ShareExpenses.Slices.RecordSettlement;
 ///   MemberRemoved       → drop the slot              (cannot pay or be paid)
 ///   GroupArchived / GroupUnarchived → track Archived (no changes to an archived group)
 ///
-/// Public: Wolverine fetches it for the endpoint, so it is in the endpoint's
-/// signature (spec §12). The alias is required: every slice has a State.
+/// Internal until the slice has a screen: Wolverine will fetch it for the endpoint,
+/// putting it in the endpoint's signature, so public (spec §12). The alias is
+/// required: every slice has a State.
 /// </summary>
 [DocumentAlias("record_settlement_state")]
-public sealed record State(ImmutableHashSet<UserId> Members, ImmutableHashSet<MemberId> Slots)
+internal sealed record State(ImmutableHashSet<UserId> Members, ImmutableHashSet<MemberId> Slots)
 {
     /// <summary>The stream id, set by Marten; Wolverine needs it to type the aggregate's identity.</summary>
     public GroupId Id { get; init; }

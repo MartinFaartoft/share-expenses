@@ -9,24 +9,14 @@ using Wolverine.Http;
 namespace ShareExpenses.Slices.ViewBalances;
 
 /// <summary>
-/// <c>GET /groups/{group}/balances</c>, the screen; <c>GET /api/groups/{group}/balances</c>,
-/// the same read model as JSON.
+/// <c>GET /groups/{group}/balances</c>, the Balances screen.
 ///
 /// Folds the group stream live per request: nothing stored that could go stale (spec §11).
 /// </summary>
 public static class Endpoint
 {
-    public const string GroupNotFound = "group not found";
-
-    [WolverineGet("/api/groups/{group}/balances", Name = "ViewBalances")]
+    [WolverineGet("/groups/{group}/balances")]
     public static async Task<IResult> Get(
-        string group, ClaimsPrincipal user, IQuerySession session, TimeProvider clock, CancellationToken ct) =>
-        await Read(group, user, session, clock, ct) is { } balances
-            ? Results.Ok(balances)
-            : Results.Problem(GroupNotFound, statusCode: StatusCodes.Status404NotFound);
-
-    [WolverineGet("/groups/{group}/balances", Name = "BalancesPage")]
-    public static async Task<IResult> Page(
         string group, ClaimsPrincipal user, IQuerySession session, TimeProvider clock, CancellationToken ct) =>
         await Read(group, user, session, clock, ct) is { } balances
             ? new RazorComponentResult<BalancesPage>(new { Model = balances })

@@ -32,8 +32,8 @@ app.UseAuthorization();
 app.UseWebAntiforgery();
 app.UseRateLimiter();
 
-// Slice endpoints, discovered by Wolverine: JSON under /api, screens at their own
-// addresses — every route written in full. To list them:
+// Slice endpoints, discovered by Wolverine: the screens, every route written in
+// full. To list them:
 //   dotnet run --project src/ShareExpenses -- describe
 app.MapWolverineEndpoints();
 app.MapSignIn();

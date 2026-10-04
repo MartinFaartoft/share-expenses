@@ -36,15 +36,15 @@ public class SliceBoundaryTests
 
     private static IReadOnlyList<string> Check(
         string rule, System.Reflection.Assembly assembly, ModuleDefinition module, SliceLayout layout) => rule switch
-    {
-        "PublicSurface" => SliceRules.PublicSurface(module, layout),
-        "CrossSliceDependencies" => SliceRules.CrossSliceDependencies(module, layout),
-        "SharedIsPure" => SliceRules.SharedIsPure(module, layout),
-        "RegistrationsWired" => SliceRules.RegistrationsWired(module, layout),
-        "EventsRegistered" => UnregisteredEvents(assembly, module, layout),
-        "StateAliases" => SliceRules.StateAliases(module, layout),
-        _ => throw new ArgumentOutOfRangeException(nameof(rule)),
-    };
+        {
+            "PublicSurface" => SliceRules.PublicSurface(module, layout),
+            "CrossSliceDependencies" => SliceRules.CrossSliceDependencies(module, layout),
+            "SharedIsPure" => SliceRules.SharedIsPure(module, layout),
+            "RegistrationsWired" => SliceRules.RegistrationsWired(module, layout),
+            "EventsRegistered" => UnregisteredEvents(assembly, module, layout),
+            "StateAliases" => SliceRules.StateAliases(module, layout),
+            _ => throw new ArgumentOutOfRangeException(nameof(rule)),
+        };
 
     [Theory, MemberData(nameof(Rules))]
     public void Application_obeys(string rule) => Assert.Empty(Check(rule, AppAssembly, App, AppLayout));

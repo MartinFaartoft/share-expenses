@@ -1,15 +1,17 @@
-### Exercise the API by hand.
+### Running and inspecting the app by hand.
 #
+# There is no JSON API (spec §3): the app is used through its screens, in a browser.
 # Recipes are in the repo-root justfile (`just` lists them); run them from the repo root.
 #
 # ── Setup ────────────────────────────────────────────────────────────────────
 #   1. First time only: `just setup` (dotnet-ef, the generator's venv, the HTTPS dev cert).
 #   2. Start the app over HTTPS, starting the database first: `just run`
 #      (the auth cookie is Secure, so plain HTTP won't sign in).
-#   Or use the screens: https://localhost:7194/sign-in (the code is in the app's log).
-#   3. Run the requests below top to bottom. The VS Code REST Client and the
-#      JetBrains HTTP Client both keep the sign-in cookie between requests.
-#      Sign-in codes are not emailed in Development: they are in the app's log.
+#   3. Sign in at https://localhost:7194/sign-in. Sign-in codes are not emailed in
+#      Development: they are in the app's log ("Sign-in email for ...: code 123456").
+#   Screens: / (home: invites and groups), /groups/{groupId}, /groups/{groupId}/balances.
+#   Creating groups, adding members, inviting and recording expenses have no screen
+#   yet (spec §14); data already in the development database stays usable.
 #
 #   Dev certificate expires 2026-11-13. If HTTPS fails: `just renew-cert`
 #
@@ -41,189 +43,6 @@
 #   `just reset-ledger`          drop all domain data (asks first)
 
 @host = https://localhost:7194
-@email = alice@example.com
 
-### 1a. Request a sign-in code. Expect 202. In Development the code is not emailed:
-# LogEmailSender writes it to the app log ("Sign-in email for ...: code 123456").
-POST {{host}}/api/sign-in/code
-Content-Type: application/json
-
-{
-  "email": "{{email}}"
-}
-
-### 1b. Sign in with the code from the log. Expect 200 { userId }; sets the cookie.
-# A first sign-in creates the account. Wrong code: 400, five tries per code.
-POST {{host}}/api/sign-in
-Content-Type: application/json
-
-{
-  "email": "{{email}}",
-  "code": "paste-the-code-here"
-}
-
-### 2. Create a group. Expect 201 with groupId and memberId.
-# Then check ledger.mt_events: group_created, member_added, member_claimed.
-# @name createGroup
-POST {{host}}/api/groups
-Content-Type: application/json
-
-{
-  "groupName": "Lisbon trip",
-  "currency": "GBP",
-  "memberName": "Alice"
-}
-
-### 3. Rejected: unknown currency. Expect 400 with the reason, and no new events.
-POST {{host}}/api/groups
-Content-Type: application/json
-
-{
-  "groupName": "Lisbon trip",
-  "currency": "XYZ",
-  "memberName": "Alice"
-}
-
-### 4. Add a placeholder member to the group from step 2. Expect 201 with memberId.
-# Uses step 2's response. That reference syntax is the VS Code REST Client's; in
-# the JetBrains client, replace {{groupId}} with the id from step 2 by hand.
-@groupId = {{createGroup.response.body.$.groupId}}
-# @name addMember
-POST {{host}}/api/groups/{{groupId}}/members
-Content-Type: application/json
-
-{
-  "displayName": "Bob"
-}
-
-### 5. Rejected: duplicate name (case-insensitive). Expect 400.
-POST {{host}}/api/groups/{{groupId}}/members
-Content-Type: application/json
-
-{
-  "displayName": " bob "
-}
-
-### 6. Unknown group. Expect 404 — the same answer a non-member gets.
-POST {{host}}/api/groups/01a0f734-90c1-761a-87e3-07c09ef9be9f/members
-Content-Type: application/json
-
-{
-  "displayName": "Bob"
-}
-
-### 7. Invite Bob (from step 4). Expect 204. LogEmailSender writes the invite to the
-# app log — no secret in it, just "sign in as bob@example.com". The address is on
-# the Invite document (ledger.mt_doc_invite), never in the ledger: compare with
-# ledger.mt_events (type member_invited carries only the InviteId).
-@bobId = {{addMember.response.body.$.memberId}}
-POST {{host}}/api/groups/{{groupId}}/members/{{bobId}}/invite
-Content-Type: application/json
-
-{
-  "email": "bob@example.com"
-}
-
-### 8. Re-invite Bob at another address. Expect 204: the slot's Invite is replaced, and
-# the old address no longer finds it.
-POST {{host}}/api/groups/{{groupId}}/members/{{bobId}}/invite
-Content-Type: application/json
-
-{
-  "email": "bob@new.example.com"
-}
-
-### 9. Rejected: Alice's own slot has already joined. Expect 400.
-@aliceId = {{createGroup.response.body.$.memberId}}
-POST {{host}}/api/groups/{{groupId}}/members/{{aliceId}}/invite
-Content-Type: application/json
-
-{
-  "email": "alice@example.com"
-}
-
-### 10. Sign in as Bob, at the address step 8 invited (overwrites the cookie).
-# Request a code, then sign in with it from the log, as in steps 1a and 1b.
-POST {{host}}/api/sign-in/code
-Content-Type: application/json
-
-{
-  "email": "bob@new.example.com"
-}
-
-###
-POST {{host}}/api/sign-in
-Content-Type: application/json
-
-{
-  "email": "bob@new.example.com",
-  "code": "paste-the-code-here"
-}
-
-### 11. Bob's invites. Expect 200 { invites: [ { groupId, groupName, memberName, invitedBy } ] }.
-# Signed in as bob@example.com instead, the list is empty: step 8 moved the invite.
-GET {{host}}/api/invites
-
-### 12. Join. Expect 200 { groupId, memberId }; again → 409 "already in this group";
-# as anyone not invited at their address → 404.
-POST {{host}}/api/invites/{{groupId}}/accept
-
-### 13. Record an expense (as Alice — sign back in as her first, steps 1a and 1b).
-# Expect 201 with expenseId; ledger.mt_events gets expense_recorded with the splits.
-# Amounts are in minor units: 10001 is £100.01, so the stray penny goes to the payer.
-POST {{host}}/api/groups/{{groupId}}/expenses
-Content-Type: application/json
-
-{
-  "description": "Dinner",
-  "amountMinor": 10001,
-  "payerMemberId": "{{aliceId}}",
-  "split": { "mode": "equal", "participants": [ "{{aliceId}}", "{{bobId}}" ] },
-  "paidOn": "2026-10-01"
-}
-
-### 14. Rejected: exact amounts that do not add up. Expect 400.
-POST {{host}}/api/groups/{{groupId}}/expenses
-Content-Type: application/json
-
-{
-  "description": "Steak night",
-  "amountMinor": 5000,
-  "payerMemberId": "{{aliceId}}",
-  "split": {
-    "mode": "exact",
-    "amounts": [ { "memberId": "{{aliceId}}", "amountMinor": 2000 }, { "memberId": "{{bobId}}", "amountMinor": 2999 } ]
-  },
-  "paidOn": "2026-10-01"
-}
-
-### 15. Bob pays Alice back. Expect 201 with settlementId. Any member may record it.
-POST {{host}}/api/groups/{{groupId}}/settlements
-Content-Type: application/json
-
-{
-  "fromMemberId": "{{bobId}}",
-  "toMemberId": "{{aliceId}}",
-  "amountMinor": 5000,
-  "paidOn": "2026-10-02"
-}
-
-### 16. The group page (View group): your standing and the history. Expect 200 with
-# balanceMinor (yours; positive is owed) and history, newest first: expenses and
-# settlements, each marked by kind and named. Steps 13 and 15 moved it already: it
-# is projected inline, in the same transaction.
-# Stored as ledger.mt_doc_group_activity; after changing how it folds, rebuild it from
-# the events: `just rebuild-projections`
-GET {{host}}/api/groups/{{groupId}}
-
-### 16b. Everyone's balances (View balances). Expect 200 with members (name, status,
-# balanceMinor — positive is owed). Folded live from the events on each request.
-GET {{host}}/api/groups/{{groupId}}/balances
-
-### 17. The settle-up plan: who pays whom to clear every balance (spec §10). Expect 200
-# with transfers [{ fromMemberId, fromName, toMemberId, toName, amountMinor }]. Computed
-# on every request from the events, never stored. "Paid" on a line is step 15 with its values.
-GET {{host}}/api/groups/{{groupId}}/settlement-plan
-
-### 18. Health
+### Health: the app is up and reaches both databases. Expect 200.
 GET {{host}}/health

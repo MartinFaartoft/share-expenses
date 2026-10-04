@@ -58,8 +58,8 @@ public static class WebSetup
     }
 
     /// <summary>
-    /// A screen a signed-out user asks for redirects to sign in; the JSON API keeps
-    /// answering 401. Scheme-independent, so it holds whichever scheme authenticates.
+    /// A screen a signed-out user asks for redirects to sign in, and back. Scheme-independent,
+    /// so it holds whichever scheme authenticates.
     /// </summary>
     private sealed class SignInRedirect : IAuthorizationMiddlewareResultHandler
     {
@@ -68,7 +68,7 @@ public static class WebSetup
         public Task HandleAsync(
             RequestDelegate next, HttpContext http, AuthorizationPolicy policy, PolicyAuthorizationResult result)
         {
-            if (result.Challenged && !http.Request.Path.StartsWithSegments("/api"))
+            if (result.Challenged)
             {
                 // Back here after signing in; home, the default, needs no returnUrl.
                 var here = http.Request.Path + http.Request.QueryString;

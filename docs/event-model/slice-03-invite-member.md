@@ -9,7 +9,7 @@ Type: **State Change**. Screen → command → events.
 | Events | `MemberInvited` |
 | Also writes | `Invite` — plain document binding the slot to the address |
 | Code | `src/ShareExpenses/Slices/InviteMember/` |
-| Endpoint | `POST /api/groups/{group}/members/{memberId}/invite` — 204, no body |
+| Endpoint | none yet — its screen is not built, so nothing reaches it (spec §3). The slice's logic and specs stand |
 
 Invites an email address to one member slot (spec §4: the invite binds the slot).
 Whoever signs in with that address — proving they control it, with a code sent to

@@ -87,11 +87,18 @@ server mode needs a live connection that a phone in a restaurant drops, and
 WebAssembly a heavy first download. Accepted: each interaction is a round trip, and
 offline use is out (already a non-goal, §1).
 
-**The JSON endpoints stay as they are.** HTML endpoints sit beside them in the same
-slice, deciding through the same `Decide`; the JSON API keeps its tests and serves
-anything that is not a browser. **Routes are written in full:** JSON endpoints under
-`/api/…`, screens at their own addresses (`/`, `/invites/{group}/join`). A global
-Wolverine route prefix would have put the screens under `/api` too, so there is none.
+**The screens are the only way in: there is no JSON API, for now.** It was deleted
+once screens existed: nothing called it but its own tests, and every screen
+doubled each slice's endpoints and tests. A slice whose screen is not built yet has
+no endpoint at all — its `Decide` or `Read` and its specs stand, unreachable until
+the screen arrives (Create group, Add member, Invite member, Record expense, Record
+settlement, View settlement plan; §14). A native app may want an API later; it
+would be designed then, for that client, and the endpoints removed here are in the
+git history. **Tests set up through events:** an integration test appends the
+events it needs straight to the store (`tests/…/Infrastructure/Seed.cs`) and drives
+only its own slice's screen, so no test depends on another slice's screen.
+**Routes are written in full,** each screen at its own address (`/`,
+`/groups/{group}`, `/invites/{group}/join`); there is no global route prefix.
 - **A component's parameters must be public,** and so must their types — a screen's
   read model, when it takes one whole. The architecture rule counts them as contract
   types, as it does an endpoint's signature.
@@ -99,7 +106,7 @@ Wolverine route prefix would have put the screens under `/api` too, so there is 
 **Verified by spike (Wolverine 6.44, .NET 10), not assumed:**
 - A Wolverine endpoint returns a `RazorComponentResult`, page or fragment, and a
   form endpoint can use `[WriteAggregate]` and return `(IResult, Events)` exactly as
-  the JSON ones do.
+  a JSON one does.
 - **Antiforgery must be opted into per form endpoint, with `[ValidateAntiforgery]`.**
   Wolverine documents that a `[FromForm]` parameter adds it automatically; in 6.44
   it did not, and a post with no token was accepted. Forms render
@@ -111,7 +118,6 @@ Wolverine route prefix would have put the screens under `/api` too, so there is 
 - **Components are always public.** The generated class cannot be made
   `internal`, so the slice architecture rule must allow them, as it allows
   Wolverine endpoints (§12).
-- JSON endpoints are unaffected: no antiforgery, no change.
 
 ### Hosting consequences
 
@@ -179,11 +185,13 @@ mail client opens; a code needs neither.
 
 ### Mechanism
 
-- **Request:** `POST /api/sign-in/code { email }`. Generates six uniformly random
+Both steps are forms on the sign-in screen (`/sign-in`).
+
+- **Request:** `POST /sign-in/code` with `email`. Generates six uniformly random
   digits, stores a `SignInCode` — `{ email, SHA-256(code), expiresAt, attemptsLeft }`,
   one per address, replacing any earlier one — and emails the code. The response is
   the same whether or not the address has an account (below).
-- **Verify:** `POST /api/sign-in { email, code }`. The code must match, be unexpired
+- **Verify:** `POST /sign-in` with `email` and `code`. The code must match, be unexpired
   and have attempts left. A match deletes the `SignInCode`, finds the user by
   address — creating them if there is none — and signs them in. A miss spends an
   attempt; the last one deletes the code. Every failure is the same answer: the
@@ -197,9 +205,8 @@ mail client opens; a code needs neither.
 **Decision: every endpoint requires a signed-in user unless it is explicitly
 anonymous.** An authorization `FallbackPolicy` requires an authenticated user for
 every endpoint without authorization metadata; the public ones say so with
-`[AllowAnonymous]` / `.AllowAnonymous()`. Unauthenticated calls to the JSON API
-(`/api/…`) get 401; a screen asked for while signed out redirects to
-`/sign-in?returnUrl=…`, and signing in returns there — or home. Only a local path is
+`[AllowAnonymous]` / `.AllowAnonymous()`. A screen asked for while signed out
+redirects to `/sign-in?returnUrl=…`, and signing in returns there — or home. Only a local path is
 accepted as `returnUrl`: anything else would let a crafted link send a just-signed-in
 user to another site (an open redirect). The explicit `[Authorize]` on slice endpoints stays — redundant now, but
 it states the intent.
@@ -208,15 +215,14 @@ Rationale: endpoints used to opt in with `[Authorize]`, so a new slice that forg
 it was silently public — and a group's data leaked rather than 404'd. With the
 fallback, forgetting is safe rather than merely caught.
 
-**The allow-list is pinned by an architecture test.** Today: the sign-in JSON
-endpoints `POST /api/sign-in/code` and `POST /api/sign-in`, the sign-in screen's
+**The allow-list is pinned by an architecture test.** Today: the sign-in screen's
 `GET /sign-in`, `POST /sign-in/code` and `POST /sign-in`, and `GET /health`; candidates later, an
 invite landing page if one returns. `AuthorizationTests` walks the running app's
 `EndpointDataSource` — Wolverine's endpoints and minimal APIs alike — and requires
 the set carrying `IAllowAnonymous` to equal the allow-list exactly, so it fails on
 an unexpected public endpoint and on an allow-listed one that is gone (the list
 cannot rot). It also checks the fallback policy denies anonymous users, and that an
-unauthenticated request gets 401.
+unauthenticated request is sent to sign in.
 
 ### The code is ours, not Identity's
 
@@ -929,7 +935,8 @@ nothing else; the client resends, and the rules run against the new state.
 Server-side retry — re-fetch, re-decide, re-append, a few times — was considered
 and deferred: it would be correct rather than a blind overwrite, since the rules
 run again, and would turn most conflicts into one round trip. Kept visible while
-learning; the reminder lives in `Slices/AddMember/Endpoint.cs`.
+learning; the reminder lived in `Slices/AddMember/Endpoint.cs` and returns with its
+screen, where "the client retries" becomes a form asking to (§14).
 
 ### Event schema evolution
 
@@ -1104,10 +1111,10 @@ later slices follow it unless they have a reason not to.
 |---|---|---|
 | `Events.cs` | public | the events this slice owns, as `sealed record`s |
 | `<Name>Slice.cs` | public | only if the slice owns events or projections: `Register` |
-| `State.cs` | public | what the slice folds, with an `Id` for Wolverine |
+| `State.cs` | public once an endpoint fetches it, internal before | what the slice folds, with an `Id` for Wolverine |
 | `Decider.cs` | internal | `Command` and the pure `Decide` returning `Decision` |
-| `Endpoint.cs` | public class | the Wolverine endpoint: route, `Request` (public), `Response` (internal); decides and maps `Decision` to HTTP; `OnException` for the 409 |
-| `<Screen>.razor` | public (forced) | the slice's screen, rendered on the server (§3); HTML endpoints beside the JSON ones |
+| `Endpoint.cs` | public class | only once the slice has a screen: the Wolverine endpoints that render it and take its forms (§3); decides and maps `Decision` to a page, fragment or redirect; `OnException` for the 409 |
+| `<Screen>.razor` | public (forced) | the slice's screen, rendered on the server (§3) |
 
 A State Read slice has `Reader.cs` (internal `Query`, read model and pure `Read`)
 in place of `Decider.cs`, and no events.
@@ -1499,7 +1506,7 @@ a documentation tool, not application code.
     and a plain post with the whole page (`request.IsHtmx()`); success after a
     post redirects — `HX-Redirect` for htmx, a 302 otherwise.
   - **A rejection shows in place,** under the form, as `role="alert"`, with the
-    same reason the JSON API gives.
+    reason `Decide` gives.
   - **Screens are tested over HTTP** as a browser would use them: load the page,
     keep its cookies, post the form with the token it carries, with and without the
     `HX-Request` header; assertions on the HTML, decoded as the user reads it.
@@ -1508,7 +1515,7 @@ a documentation tool, not application code.
     $, R$), the ISO code otherwise (CHF, KWD). The only place minor units become
     decimals.
   - **One "not found" page** (`Web/NotFoundPage`) for anything missing or not
-    yours, as the JSON API's single 404.
+    yours: one 404, whatever the reason.
   - **A screen whose read model is polymorphic** (the group history) needs its
     subtypes public too; the architecture rule follows subtypes of contract types.
   Still to do:
@@ -1520,9 +1527,8 @@ a documentation tool, not application code.
   an address, then the code, in the same page; after signing in they land on their
   invites. (An earlier link-based design had to keep an invite token across sign-in
   in `localStorage`; codes and address-matched invites removed that.)
-  - **Friendly URLs — decide with the first screens.** The JSON API's routes
-    (`/api/…`) carry Guids no user sees, but the HTML screens' routes, served by the
-    same app, are the addresses users see and share: `/groups/{guid}` until decided.
+  - **Friendly URLs — decide with the first screens.** The screens' routes are the
+    addresses users see and share: `/groups/{guid}` until decided.
     Invite emails carry no ids. **Preferred, if short shareable addresses are wanted: a separate
     short public id** — e.g. `/groups/k3Xb9a` — carried on `GroupCreated` and
     resolved by a lookup document (short id → Guid, unique index), optionally with
@@ -1597,13 +1603,15 @@ a documentation tool, not application code.
     made while building AddMember.
   - Optional means advisory by default: it reports, and the caller decides
     whether to gate on it.
-- **OPEN** `GET /api/groups` — the signed-in user's groups, as JSON, for anything
-  that is not the browser. The home screen (View homepage) shows the same list as
-  HTML, from the same `UserGroups` projection, so this is one more endpoint on that
-  slice, not a new read model. `GET /api/invites` stays as it is beside it. To
-  decide: the shape (`{ groups: [{ groupId, name }] }`, by name, as the home screen),
-  and whether it answers while the asynchronous projection lags (it does, slightly
-  stale — §11).
+- **OPEN** Screens for the slices that lost their endpoint with the JSON API (§3):
+  **New group** (Create group), **Add member**, **Invite member**, **Add expense**
+  (Record expense), **Settle up** (View settlement plan and Record settlement). Until
+  then the app cannot create a group or record anything; the group page's Add
+  expense and Settle up buttons point at screens that do not exist. Each comes back
+  with a design pass, and with the behaviour its old endpoint had that the specs do
+  not cover — in the git history: id generation in the endpoint, stream-collision
+  409 (Create group), the invite's `Invite` document and email after commit (Invite
+  member), and every write's concurrency 409.
 - **OPEN** Slice: **Decline invite.** An invitee can say no, rather than leave the
   invite on their home page until its deadline. State Change, from the home page,
   beside Join. Sketch, to refine as a slice:

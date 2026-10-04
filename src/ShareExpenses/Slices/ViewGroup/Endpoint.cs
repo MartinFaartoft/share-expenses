@@ -9,25 +9,15 @@ using Wolverine.Http;
 namespace ShareExpenses.Slices.ViewGroup;
 
 /// <summary>
-/// The group page: <c>GET /groups/{group}</c>, the screen; <c>GET /api/groups/{group}</c>,
-/// the same read model as JSON.
+/// The group page: <c>GET /groups/{group}</c>, the Group screen.
 ///
 /// Loads the stored <c>group_activity</c> document, projected inline with the events
 /// (spec §11), and shapes it for the caller. Nothing is folded here.
 /// </summary>
 public static class Endpoint
 {
-    public const string GroupNotFound = "group not found";
-
-    [WolverineGet("/api/groups/{group}", Name = "ViewGroup")]
+    [WolverineGet("/groups/{group}")]
     public static async Task<IResult> Get(
-        string group, ClaimsPrincipal user, IQuerySession session, CancellationToken ct) =>
-        await Read(group, user, session, ct) is { } activity
-            ? Results.Ok(activity)
-            : Results.Problem(GroupNotFound, statusCode: StatusCodes.Status404NotFound);
-
-    [WolverineGet("/groups/{group}", Name = "GroupPage")]
-    public static async Task<IResult> Page(
         string group, ClaimsPrincipal user, IQuerySession session, CancellationToken ct) =>
         await Read(group, user, session, ct) is { } activity
             ? new RazorComponentResult<GroupPage>(new { Model = activity })

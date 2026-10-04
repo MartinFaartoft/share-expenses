@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ShareExpenses.Infrastructure.Identity;
 
-/// <summary>Sign-in by emailed code on ASP.NET Core Identity, EF Core confined to it (spec §4).</summary>
 public static class IdentitySetup
 {
     public static IServiceCollection AddPasswordlessIdentity(
@@ -36,13 +35,10 @@ public static class IdentitySetup
             o.Cookie.HttpOnly = true;
             o.Cookie.SecurePolicy = CookieSecurePolicy.Always;
             o.Cookie.SameSite = SameSiteMode.Lax;
-            // An API answers with status codes, not redirects to a login page.
             o.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = 401; return Task.CompletedTask; };
             o.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = 403; return Task.CompletedTask; };
         });
-        // Secure by default: an endpoint with no authorization metadata requires a
-        // signed-in user. Public endpoints say so with [AllowAnonymous] / .AllowAnonymous()
-        // (spec §4; the allow-list architecture test pins which ones).
+
         services.AddAuthorization(o =>
             o.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 

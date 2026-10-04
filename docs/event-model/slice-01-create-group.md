@@ -8,7 +8,7 @@ Type: **State Change**. Screen → command → events.
 | Command | `CreateGroup(groupName, currency, memberName, createdBy)` |
 | Events | `GroupCreated`, `MemberAdded`, `MemberClaimed` |
 | Code | `src/ShareExpenses/Slices/CreateGroup/` |
-| Endpoint | `POST /api/groups` |
+| Endpoint | none yet — its screen is not built, so nothing reaches it (spec §3). The slice's logic and specs stand |
 
 ## Specifications
 

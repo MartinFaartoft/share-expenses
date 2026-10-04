@@ -8,7 +8,7 @@ Type: **State Read**. Events → read model → screen.
 | Read model | `SettlementPlanReadModel` — **computed per request** from a live fold of the group stream; never stored, never an event (spec §10, §11) |
 | Query | `ViewSettlementPlan(userId)` — the signed-in user; the group from the route selects the stream |
 | Code | `src/ShareExpenses/Slices/ViewSettlementPlan/` |
-| Endpoint | `GET /api/groups/{group}/settlement-plan` — sign-in required |
+| Endpoint | none yet — its screen is not built, so nothing reaches it (spec §3). The slice's logic and specs stand |
 
 Who should pay whom to clear every balance, in as few transfers as the procedure
 finds, preferring people who have actually shared expenses (spec §10). A plan that

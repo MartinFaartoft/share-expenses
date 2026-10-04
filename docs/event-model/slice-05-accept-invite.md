@@ -9,7 +9,7 @@ Type: **State Change**. Screen → command → events.
 | Events | `MemberClaimed` (owned by CreateGroup) |
 | Also writes | deletes the slot's `Invite` — the address is not kept once claimed |
 | Code | `src/ShareExpenses/Slices/AcceptInvite/` |
-| Endpoint | `POST /api/invites/{group}/accept`, no body — sign-in required |
+| Endpoint | `POST /invites/{group}/join` — Join on the Home screen; no fields but the antiforgery token; sign-in required |
 
 The invite binds the slot, and the invited address is the key (spec §4): a user
 signed in with that address — proven by a code sent to it — may claim the slot.
@@ -110,16 +110,17 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
   intention of the group.
 - **Order of checks:** group exists, then membership, then the invites. Every
   dead invite — unknown group, another address, superseded, used, expired,
-  malformed group id — is the same 404 `invite not found`.
-- **Already a member** is 409 with `groupId` and `memberId` in the body, so the
-  client can go straight to the group. Safe to say: the caller is a member.
+  malformed group id — is the same `invite not found`: Join sends the user back
+  home, whose invites are live, so it shows the truth.
+- **Already a member** goes straight into the group. Safe: the caller is a member.
 - **Expiry** is the recorded deadline: claimable while `now < expiresAt`.
 - **`Invite` is deleted** in the same transaction as the claim: the address served
   to bind the slot until claimed, and nothing needs it after. The document lives in
   `Infrastructure/`, as plain supporting state shared by InviteMember, View homepage
   and AcceptInvite.
-- **Concurrency:** two claims on one slot — one save wins, the other gets 409, and
-  its retry finds the invite used: 404.
+- **Concurrency:** two claims on one slot — one save wins, the other gets 409 (a
+  bare problem response for now: spec §14, 409 retry UX), and its retry finds the
+  user already in, and goes into the group.
 - `MemberClaimed(memberId, userId)` needs no `by`: the claiming user *is* the actor.
 
 ## Deferred to the slices that introduce the events

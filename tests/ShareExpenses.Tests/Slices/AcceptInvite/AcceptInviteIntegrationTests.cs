@@ -1,6 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
-using System.Text.Json;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using ShareExpenses.Infrastructure.Invites;
@@ -11,9 +9,9 @@ using MemberClaimed = ShareExpenses.Slices.CreateGroup.MemberClaimed;
 namespace ShareExpenses.Tests.Slices.AcceptInvite;
 
 /// <summary>
-/// The invite flow end to end: Alice creates, adds and invites through the real
-/// endpoints; the invitee, holding an account at the invited address, claims through
-/// this slice's, against the real store.
+/// Join, from the Home screen, against the real store: Alice's group and Bob's invite
+/// are seeded as events and an <see cref="Invite"/> document; the invitee, holding an
+/// account at the invited address, posts the Join form.
 /// </summary>
 [Collection(AppCollection.Name)]
 public class AcceptInviteIntegrationTests(AppFixture app)
@@ -25,17 +23,18 @@ public class AcceptInviteIntegrationTests(AppFixture app)
     // ── Specs against the real store ──────────────────────────────────────────────
 
     [Fact]
-    public async Task S1_claims_the_slot_invited_at_the_users_address_and_drops_its_invite()
+    public async Task S1_claims_the_slot_invited_at_the_users_address_drops_its_invite_and_goes_into_the_group()
     {
         var (bob, bobEmail) = await Account("bob");
         var (groupId, slot) = await InvitedBob(bobEmail);
+        var browser = app.BrowserFor(bob);
 
-        var response = await Claim(bob, groupId);
+        // The form as Home renders it, with its token.
+        var response = await Join(browser, groupId, await Forms.TokenFrom(browser, "/"));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(new ClaimedBody(groupId, slot), await response.Content.ReadFromJsonAsync<ClaimedBody>());
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal($"/groups/{groupId}", response.Headers.Location?.OriginalString);
         Assert.Equal(new MemberClaimed(slot, bob), (await StreamOf(groupId)).Last());
-
         await using var session = Store.QuerySession();
         Assert.Empty(await session.Query<Invite>().Where(i => i.GroupId == groupId).ToListAsync());
     }
@@ -46,37 +45,35 @@ public class AcceptInviteIntegrationTests(AppFixture app)
         var (bob, bobEmail) = await Account("Bob");
         var (groupId, slot) = await InvitedBob(bobEmail.ToUpperInvariant());
 
-        Assert.Equal(HttpStatusCode.OK, (await Claim(bob, groupId)).StatusCode);
+        await Join(bob, groupId);
+
         Assert.Equal(new MemberClaimed(slot, bob), (await StreamOf(groupId)).Last());
     }
 
     [Fact]
-    public async Task S2_another_address_claims_nothing()
+    public async Task S2_another_address_claims_nothing_and_goes_back_home()
     {
         var (_, bobEmail) = await Account("bob");
         var (groupId, _) = await InvitedBob(bobEmail);
         var (carol, _) = await Account("carol");
 
-        var response = await Claim(carol, groupId);
+        var response = await Join(carol, groupId);
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Contains("invite not found", await response.Content.ReadAsStringAsync());
+        Assert.Equal("/", response.Headers.Location?.OriginalString);
+        Assert.DoesNotContain(await StreamOf(groupId), e => e is MemberClaimed c && c.UserId == carol);
     }
 
     [Fact]
-    public async Task S8_joining_again_after_joining_is_409_with_the_way_in()
+    public async Task S8_joining_again_goes_into_the_group_and_claims_nothing_more()
     {
         var (bob, bobEmail) = await Account("bob");
-        var (groupId, slot) = await InvitedBob(bobEmail);
-        await Claim(bob, groupId);
+        var (groupId, _) = await InvitedBob(bobEmail);
+        await Join(bob, groupId);
 
-        var response = await Claim(bob, groupId);
+        var again = await Join(bob, groupId);
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("you're already in this group as Bob", body.GetProperty("detail").GetString());
-        Assert.Equal(slot.ToString(), body.GetProperty("memberId").GetString());
-        Assert.Equal(groupId.ToString(), body.GetProperty("groupId").GetString());
+        Assert.Equal($"/groups/{groupId}", again.Headers.Location?.OriginalString);
+        Assert.Single((await StreamOf(groupId)).OfType<MemberClaimed>(), c => c.UserId == bob);
     }
 
     [Fact]
@@ -87,7 +84,7 @@ public class AcceptInviteIntegrationTests(AppFixture app)
         try
         {
             app.Clock.Offset = TimeSpan.FromDays(30) + TimeSpan.FromMinutes(1);
-            Assert.Equal(HttpStatusCode.NotFound, (await Claim(bob, groupId)).StatusCode);
+            Assert.Equal("/", (await Join(bob, groupId)).Headers.Location?.OriginalString);
         }
         finally
         {
@@ -98,115 +95,59 @@ public class AcceptInviteIntegrationTests(AppFixture app)
     // ── Concurrency: one slot, two claims ─────────────────────────────────────────
 
     [Fact]
-    public async Task Two_claims_on_one_slot_the_loser_gets_409_and_its_retry_404()
+    public async Task Two_claims_on_one_slot_the_loser_gets_409_and_its_retry_goes_into_the_group()
     {
         var (bob, bobEmail) = await Account("bob");
         var (groupId, slot) = await InvitedBob(bobEmail);
         // A second account at the same address cannot exist, so the competitor is the
         // same user on another phone: the retry then finds them already a member.
+        var otherPhone = app.BrowserFor(bob);
+        var otherToken = await Forms.TokenFrom(otherPhone, "/sign-in");
         app.BeforeNextSave.Arm(async () =>
-            Assert.Equal(HttpStatusCode.OK, (await Claim(bob, groupId)).StatusCode));
+            Assert.Equal(HttpStatusCode.Redirect, (await Join(otherPhone, groupId, otherToken)).StatusCode));
 
-        Assert.Equal(HttpStatusCode.Conflict, (await Claim(bob, groupId)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Join(bob, groupId)).StatusCode);
 
-        var retry = await Claim(bob, groupId);
-        Assert.Equal(HttpStatusCode.Conflict, retry.StatusCode);
-        Assert.Contains("you're already in this group as Bob", await retry.Content.ReadAsStringAsync());
+        Assert.Equal($"/groups/{groupId}", (await Join(bob, groupId)).Headers.Location?.OriginalString);
         Assert.Equal(new MemberClaimed(slot, bob), (await StreamOf(groupId)).Last());
     }
 
     // ── HTTP ──────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Every_dead_invite_gets_the_same_404()
+    public async Task Every_dead_invite_goes_back_home()
     {
         var (_, bobEmail) = await Account("bob");
         var (groupId, _) = await InvitedBob(bobEmail);
         var (carol, _) = await Account("carol");
         var (bob2, bob2Email) = await Account("bob2");
         await InvitedBob(bob2Email);
+        var browser = app.BrowserFor(bob2);
+        var token = await Forms.TokenFrom(browser, "/");
 
         HttpResponseMessage[] dead =
         [
-            await Claim(carol, groupId),                                                       // another address
-            await Claim(bob2, GroupId.New()),                                                  // unknown group
-            await app.ClientFor(bob2).PostAsync("/api/invites/not-a-guid/accept", null),        // malformed group
-            await Claim(bob2, groupId),                                                        // invited elsewhere
+            await Join(carol, groupId),                                                   // another address
+            await Join(browser, GroupId.New(), token),                                    // unknown group
+            await Forms.Post(browser, "/invites/not-a-guid/join", token),                 // malformed group
+            await Join(browser, groupId, token),                                          // invited elsewhere
         ];
 
-        Assert.All(dead, r => Assert.Equal(HttpStatusCode.NotFound, r.StatusCode));
-        Assert.Single((await Task.WhenAll(dead.Select(r => r.Content.ReadAsStringAsync()))).Distinct());
+        Assert.All(dead, r => Assert.Equal("/", r.Headers.Location?.OriginalString));
     }
 
     [Fact]
-    public async Task Claiming_requires_a_signed_in_user()
+    public async Task Signed_out_it_redirects_to_sign_in()
     {
-        var response = await app.CreateClient().PostAsync($"/api/invites/{GroupId.New()}/accept", null);
-
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task After_claiming_the_new_member_may_act_in_the_group()
-    {
-        var (bob, bobEmail) = await Account("bob");
-        var (groupId, _) = await InvitedBob(bobEmail);
-        Assert.Equal(HttpStatusCode.NotFound,
-            (await app.ClientFor(bob).PostAsJsonAsync($"/api/groups/{groupId}/members", new { displayName = "Carol" })).StatusCode);
-
-        await Claim(bob, groupId);
-
-        Assert.Equal(HttpStatusCode.Created,
-            (await app.ClientFor(bob).PostAsJsonAsync($"/api/groups/{groupId}/members", new { displayName = "Carol" })).StatusCode);
-    }
-
-    // ── Join, from the Home screen ────────────────────────────────────────────────
-
-    [Fact]
-    public async Task Join_claims_the_slot_and_goes_into_the_group()
-    {
-        var (bob, bobEmail) = await Account("bob");
-        var (groupId, slot) = await InvitedBob(bobEmail);
-        var browser = app.BrowserFor(bob);
-
-        var response = await Join(browser, groupId, await TokenFromHome(browser));
+        var response = await app.CreateClient(new() { AllowAutoRedirect = false })
+            .PostAsync($"/invites/{GroupId.New()}/join", null);
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        Assert.Equal($"/groups/{groupId}", response.Headers.Location?.OriginalString);
-        Assert.Equal(new MemberClaimed(slot, bob), (await StreamOf(groupId)).Last());
+        Assert.StartsWith("/sign-in", response.Headers.Location?.OriginalString);
     }
 
     [Fact]
-    public async Task Join_again_goes_into_the_group_too()
-    {
-        var (bob, bobEmail) = await Account("bob");
-        var (groupId, _) = await InvitedBob(bobEmail);
-        var browser = app.BrowserFor(bob);
-        var token = await TokenFromHome(browser);
-        await Join(browser, groupId, token);
-
-        var again = await Join(browser, groupId, token);
-
-        Assert.Equal($"/groups/{groupId}", again.Headers.Location?.OriginalString);
-        Assert.Single((await StreamOf(groupId)).OfType<MemberClaimed>(), c => c.UserId == bob);
-    }
-
-    [Fact]
-    public async Task Join_on_an_invite_that_is_gone_goes_back_home()
-    {
-        var (carol, _) = await Account("carol");
-        var (_, bobEmail) = await Account("bob");
-        var (groupId, _) = await InvitedBob(bobEmail);
-        var browser = app.BrowserFor(carol);
-
-        // Carol has no invite, so no Join form; any page's token is hers, so take sign-in's.
-        var response = await Join(browser, groupId, await TokenFrom(browser, "/sign-in"));
-
-        Assert.Equal("/", response.Headers.Location?.OriginalString);
-    }
-
-    [Fact]
-    public async Task Join_without_a_valid_antiforgery_token_is_400_and_claims_nothing()
+    public async Task Without_a_valid_antiforgery_token_it_is_400_and_claims_nothing()
     {
         var (bob, bobEmail) = await Account("bob");
         var (groupId, _) = await InvitedBob(bobEmail);
@@ -219,17 +160,16 @@ public class AcceptInviteIntegrationTests(AppFixture app)
         Assert.DoesNotContain(await StreamOf(groupId), e => e is MemberClaimed c && c.UserId == bob);
     }
 
-    private static Task<HttpResponseMessage> Join(HttpClient browser, GroupId groupId, string token) =>
-        browser.PostAsync($"/invites/{groupId}/join",
-            new FormUrlEncodedContent([KeyValuePair.Create("__RequestVerificationToken", token)]));
-
-    private static Task<string> TokenFromHome(HttpClient browser) => TokenFrom(browser, "/");
-
-    private static async Task<string> TokenFrom(HttpClient browser, string path)
+    [Fact]
+    public async Task After_joining_the_new_member_may_see_the_group()
     {
-        var html = await (await browser.GetAsync(path)).Content.ReadAsStringAsync();
-        var match = System.Text.RegularExpressions.Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"");
-        return match.Success ? WebUtility.HtmlDecode(match.Groups[1].Value) : throw new InvalidOperationException($"No token on {path}");
+        var (bob, bobEmail) = await Account("bob");
+        var (groupId, _) = await InvitedBob(bobEmail);
+        Assert.Equal(HttpStatusCode.NotFound, (await app.ClientFor(bob).GetAsync($"/groups/{groupId}")).StatusCode);
+
+        await Join(bob, groupId);
+
+        Assert.Equal(HttpStatusCode.OK, (await app.ClientFor(bob).GetAsync($"/groups/{groupId}")).StatusCode);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────────
@@ -240,32 +180,28 @@ public class AcceptInviteIntegrationTests(AppFixture app)
         return (await app.AccountFor(email), email);
     }
 
-    /// <summary>Alice creates "Lisbon trip", adds Bob and invites him at <paramref name="email"/>.</summary>
+    /// <summary>Alice's "Lisbon trip", with Bob added and invited at <paramref name="email"/>.</summary>
     private async Task<(GroupId Group, MemberId Bob)> InvitedBob(string email)
     {
-        var client = app.ClientFor(_alice);
-        var created = await client.PostAsJsonAsync("/api/groups",
-            new { groupName = "Lisbon trip", currency = "GBP", memberName = "Alice" });
-        var groupId = (await created.Content.ReadFromJsonAsync<CreatedBody>())!.GroupId;
-        var added = await client.PostAsJsonAsync($"/api/groups/{groupId}/members", new { displayName = "Bob" });
-        var bob = (await added.Content.ReadFromJsonAsync<AddedBody>())!.MemberId;
-        var invited = await client.PostAsJsonAsync($"/api/groups/{groupId}/members/{bob}/invite", new { email });
-        Assert.Equal(HttpStatusCode.NoContent, invited.StatusCode);
-        return (groupId, bob);
+        var group = await new Seed(app).Group(_alice);
+        var bob = await group.Member("Bob");
+        await group.Invite(bob, email);
+        return (group.Id, bob);
     }
 
-    private Task<HttpResponseMessage> Claim(UserId user, GroupId groupId) =>
-        app.ClientFor(user).PostAsync($"/api/invites/{groupId}/accept", null);
+    /// <summary>Join as <paramref name="user"/>, from a fresh browser with its own token.</summary>
+    private async Task<HttpResponseMessage> Join(UserId user, GroupId groupId)
+    {
+        var browser = app.BrowserFor(user);
+        return await Join(browser, groupId, await Forms.TokenFrom(browser, "/sign-in"));
+    }
+
+    private static Task<HttpResponseMessage> Join(HttpClient browser, GroupId groupId, string token) =>
+        Forms.Post(browser, $"/invites/{groupId}/join", token);
 
     private async Task<IReadOnlyList<object>> StreamOf(GroupId groupId)
     {
         await using var session = Store.QuerySession();
         return (await session.Events.FetchStreamAsync(groupId.Value)).Select(e => e.Data).ToList();
     }
-
-    private sealed record CreatedBody(GroupId GroupId, MemberId MemberId);
-
-    private sealed record AddedBody(MemberId MemberId);
-
-    private sealed record ClaimedBody(GroupId GroupId, MemberId MemberId);
 }

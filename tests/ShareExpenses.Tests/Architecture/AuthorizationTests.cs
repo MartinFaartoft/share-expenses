@@ -23,8 +23,6 @@ public class AuthorizationTests(AppFixture app)
     [
         "GET /health",
         "GET /sign-in",
-        "POST /api/sign-in",
-        "POST /api/sign-in/code",
         "POST /sign-in",
         "POST /sign-in/code",
     ];
@@ -54,26 +52,28 @@ public class AuthorizationTests(AppFixture app)
     }
 
     [Fact]
-    public async Task An_unauthenticated_request_is_refused_with_401()
+    public async Task An_unauthenticated_request_is_sent_to_sign_in()
     {
-        var response = await app.CreateClient().GetAsync("/api/invites");
+        // Screens answer it by redirecting to sign in, and back.
+        var response = await app.CreateClient(new() { AllowAutoRedirect = false }).GetAsync("/groups/x/balances");
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/sign-in?returnUrl=%2Fgroups%2Fx%2Fbalances", response.Headers.Location?.OriginalString);
     }
 
     private IEnumerable<RouteEndpoint> Endpoints()
     {
         // Resolving services builds and starts the host, so MapWolverineEndpoints has run.
         var endpoints = app.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>().ToList();
-        // Wolverine's endpoints are among them (CreateGroup is one), or this test would pass vacuously.
-        Assert.Contains("POST /api/groups", endpoints.SelectMany(Names));
+        // Wolverine's endpoints are among them (Join is one), or this test would pass vacuously.
+        Assert.Contains("POST /invites/{group}/join", endpoints.SelectMany(Names));
         return endpoints;
     }
 
     private static IEnumerable<string> Names(RouteEndpoint endpoint)
     {
         // Slashes normalised: MapPost("") on a group leaves a trailing one
-        // (/api/sign-in/), which routing ignores; a leading one is not guaranteed.
+        // (/sign-in/), which routing ignores; a leading one is not guaranteed.
         var route = "/" + endpoint.RoutePattern.RawText?.Trim('/');
         var methods = endpoint.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods ?? ["*"];
         return methods.Select(m => $"{m} {route}");

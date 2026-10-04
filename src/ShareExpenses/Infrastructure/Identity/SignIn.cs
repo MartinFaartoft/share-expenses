@@ -23,17 +23,17 @@ public sealed class SignInOptions
 
     public TimeSpan AddressWindow { get; set; } = TimeSpan.FromHours(1);
 
-    /// <summary>Requests to either endpoint per client IP per <see cref="IpWindow"/>.</summary>
+    /// <summary>Requests to the sign-in screen per client IP per <see cref="IpWindow"/>.</summary>
     public int RequestsPerIp { get; set; } = 20;
 
     public TimeSpan IpWindow { get; set; } = TimeSpan.FromMinutes(10);
 }
 
 /// <summary>
-/// Sign-in by a six-digit code sent by email — the only way in (spec §4):
-/// <c>POST /api/sign-in/code</c> sends one, <c>POST /api/sign-in</c> trades it for the
-/// session cookie, creating the account on first use. Identity, not domain: plain
-/// minimal API, outside the slices and Wolverine.
+/// Sign-in by a six-digit code sent by email — the only way in (spec §4), through the
+/// sign-in screen (<see cref="SignInPage"/>): one step sends a code, the next trades it
+/// for the session cookie, creating the account on first use. Identity, not domain:
+/// plain minimal API, outside the slices and Wolverine.
 /// </summary>
 public static class SignIn
 {
@@ -44,19 +44,13 @@ public static class SignIn
 
     public const string InvalidAddress = "email is not a valid address";
 
-    internal sealed record CodeRequest(string? Email);
-
-    internal sealed record SignInRequest(string? Email, string? Code);
-
-    internal sealed record SignedIn(UserId UserId);
-
     public static IServiceCollection AddSignIn(this IServiceCollection services, IConfiguration configuration)
     {
         var options = configuration.GetSection(SignInOptions.Section).Get<SignInOptions>() ?? new SignInOptions();
         services.AddSingleton(options);
         services.AddScoped<SignInFlow>();
 
-        // Per client IP, across both endpoints. Behind the reverse proxy this needs the
+        // Per client IP, across the screen's endpoints. Behind the reverse proxy this needs the
         // forwarded client address (UseForwardedHeaders) to mean anything.
         services.AddRateLimiter(limiter =>
         {
@@ -70,30 +64,8 @@ public static class SignIn
 
     public static void MapSignIn(this WebApplication app)
     {
-        var signIn = app.MapGroup("/api/sign-in").RequireRateLimiting(RateLimitPolicy).AllowAnonymous();
-        signIn.MapPost("/code", RequestCode).WithName("RequestSignInCode");
-        signIn.MapPost("", VerifyCode).WithName("SignIn");
-
-        // The screen: the same flow, as HTML (spec §3), under the same rate limit.
         SignInPage.Map(app.MapGroup("/sign-in").RequireRateLimiting(RateLimitPolicy).AllowAnonymous());
     }
-
-    /// <summary>
-    /// Always 202, whether or not the address has an account — and whether or not a
-    /// code was actually sent: over the address's limit, nothing is. Only an address
-    /// that is not plausibly one gets a 400, which reveals nothing about accounts.
-    /// </summary>
-    private static async Task<IResult> RequestCode(CodeRequest request, SignInFlow flow, CancellationToken ct) =>
-        await flow.RequestCode(request.Email, ct)
-            ? Results.Accepted()
-            : Results.Problem(InvalidAddress, statusCode: StatusCodes.Status400BadRequest);
-
-    private static async Task<IResult> VerifyCode(SignInRequest request, SignInFlow flow, CancellationToken ct) =>
-        await flow.Verify(request.Email, request.Code, ct) is { } user
-            ? Results.Ok(new SignedIn(user))
-            : Fail();
-
-    private static IResult Fail() => Results.Problem(Failed, statusCode: StatusCodes.Status400BadRequest);
 
     /// <summary>SHA-256 of the code, as 64 lowercase hex characters.</summary>
     internal static string Hash(string code) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
@@ -105,8 +77,7 @@ public static class SignIn
 }
 
 /// <summary>
-/// The sign-in flow itself (spec §4), behind both the JSON endpoints and the sign-in
-/// screen, so the two can never differ.
+/// The sign-in flow itself (spec §4), behind the sign-in screen.
 /// </summary>
 internal sealed class SignInFlow(
     IdentityDb db, UserManager<User> users, SignInManager<User> signIn, IEmailSender mail,

@@ -8,11 +8,8 @@ using Wolverine.Http;
 
 namespace ShareExpenses.Slices.ViewHomepage;
 
-internal sealed record InvitesResponse(IReadOnlyList<PendingInvite> Invites);
-
 /// <summary>
-/// The home page: <c>GET /</c>, the Home screen; <c>GET /api/invites</c>, its invites as
-/// JSON, unchanged. Both read the same <see cref="HomepageReadModel"/>.
+/// The home page: <c>GET /</c>, the Home screen, over the <see cref="HomepageReadModel"/>.
 ///
 /// Invites are folded live per request (spec §11): the user's <c>Invite</c> documents
 /// name the groups, each group's stream decides. Groups come from the stored,
@@ -20,15 +17,10 @@ internal sealed record InvitesResponse(IReadOnlyList<PendingInvite> Invites);
 /// </summary>
 public static class Endpoint
 {
-    [WolverineGet("/", Name = "Home")]
-    public static async Task<IResult> Home(
+    [WolverineGet("/")]
+    public static async Task<IResult> Get(
         ClaimsPrincipal user, IQuerySession session, IEmailDirectory directory, TimeProvider clock, CancellationToken ct) =>
         new RazorComponentResult<HomePage>(new { Model = await Read(user, session, directory, clock, ct) });
-
-    [WolverineGet("/api/invites", Name = "ViewInvites")]
-    public static async Task<IResult> Invites(
-        ClaimsPrincipal user, IQuerySession session, IEmailDirectory directory, TimeProvider clock, CancellationToken ct) =>
-        Results.Ok(new InvitesResponse((await Read(user, session, directory, clock, ct)).Invites));
 
     private static async Task<HomepageReadModel> Read(
         ClaimsPrincipal user, IQuerySession session, IEmailDirectory directory, TimeProvider clock, CancellationToken ct)
