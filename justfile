@@ -30,9 +30,21 @@ model-check:
 db:
     docker compose up -d --wait
 
-# Run the app over HTTPS (the auth cookie is Secure), starting the database first
+# Run the app over HTTPS (the auth cookie is Secure), starting the database first;
+# opens the sign-in screen once the app is healthy
 run: db
-    dotnet run --project {{project}} --launch-profile https
+    #!/usr/bin/env bash
+    set -euo pipefail
+    url=https://localhost:7194
+    # /health answers 200 only when the app is up and reaches both databases.
+    (
+        for _ in $(seq 1 120); do
+            if curl -skf "$url/health" > /dev/null 2>&1; then open "$url/sign-in"; exit 0; fi
+            sleep 1
+        done
+        echo "the app did not become healthy within 2 minutes; not opening the browser" >&2
+    ) &
+    exec dotnet run --project {{project}} --launch-profile https
 
 # ── Database ────────────────────────────────────────────────────────────────────
 
