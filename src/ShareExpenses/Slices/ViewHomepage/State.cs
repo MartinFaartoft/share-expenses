@@ -4,7 +4,7 @@ using ShareExpenses.Shared;
 using ShareExpenses.Slices.CreateGroup;
 using ShareExpenses.Slices.InviteMember;
 
-namespace ShareExpenses.Slices.ViewInvites;
+namespace ShareExpenses.Slices.ViewHomepage;
 
 /// <summary>A slot's current invite, while the slot is unclaimed; expiry aside.</summary>
 /// <param name="InvitedBy">The slot the inviting user held when inviting.</param>
@@ -23,7 +23,7 @@ internal sealed record OpenInvite(InviteId InviteId, DateTimeOffset ExpiresAt, M
 /// checks it against the recorded deadline.
 ///
 /// FOLD CHECKLIST — when these slices are built, fold their events here and add the
-/// deferred specs in slice-04-view-invites.md:
+/// deferred specs in slice-04-view-homepage.md:
 ///   MemberRemoved       → close the slot's invite
 ///   MemberRenamed       → rename the slot           (names shown as they are now)
 ///   GroupRenamed        → rename the group
@@ -32,7 +32,7 @@ internal sealed record OpenInvite(InviteId InviteId, DateTimeOffset ExpiresAt, M
 ///
 /// The alias is required: every slice has a State (spec §12).
 /// </summary>
-[DocumentAlias("view_invites_state")]
+[DocumentAlias("view_homepage_state")]
 internal sealed record State(
     string GroupName,
     ImmutableDictionary<MemberId, string> SlotNames,

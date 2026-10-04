@@ -56,6 +56,25 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
         return ShareExpenses.Shared.UserId.From(user.Id);
     }
 
+    /// <summary>
+    /// Waits until Marten's async daemon has projected every event appended so far
+    /// (spec §11): read after this, an asynchronous projection is up to date.
+    /// </summary>
+    public Task ProjectionsCaughtUp() =>
+        Marten.Events.TestingExtensions.WaitForNonStaleProjectionDataAsync(
+            Services.GetRequiredService<Marten.IDocumentStore>(), TimeSpan.FromSeconds(15));
+
+    /// <summary>
+    /// A browser signed in as <paramref name="userId"/>: keeps cookies (the antiforgery
+    /// one included) and does not follow redirects, so tests see where they point.
+    /// </summary>
+    public HttpClient BrowserFor(ShareExpenses.Shared.UserId userId)
+    {
+        var browser = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        browser.DefaultRequestHeaders.Add(UserHeader, userId.ToString());
+        return browser;
+    }
+
     public HttpClient ClientFor(ShareExpenses.Shared.UserId userId)
     {
         var client = CreateClient();

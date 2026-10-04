@@ -13,7 +13,7 @@ namespace ShareExpenses.Infrastructure.Invites;
 /// One per slot. InviteMember writes it in the same session as <c>MemberInvited</c>,
 /// replacing any earlier one for the slot; AcceptInvite deletes it in the same session
 /// as <c>MemberClaimed</c>. Lives in Infrastructure, not in a slice, because three
-/// slices use it: InviteMember, ViewInvites and AcceptInvite.
+/// slices use it: InviteMember, ViewHomepage and AcceptInvite.
 ///
 /// A lookup, so possibly stale: it answers "which invites were sent to this
 /// address", and the group's stream decides whether each is still its slot's

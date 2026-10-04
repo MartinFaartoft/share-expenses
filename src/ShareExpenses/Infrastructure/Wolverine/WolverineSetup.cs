@@ -32,8 +32,10 @@ public static class WolverineSetup
 
     /// <summary>
     /// Wolverine finds its endpoints by scanning the assembly — there is no explicit
-    /// registration to call. <c>dotnet run -- describe</c> lists what it found.
+    /// registration to call. <c>dotnet run -- describe</c> lists what it found. Routes
+    /// are written in full: JSON endpoints under <c>/api</c>, screens at their own
+    /// addresses (spec §3), so no route prefix is applied.
     /// </summary>
     public static void MapWolverineEndpoints(this WebApplication app) =>
-        app.MapWolverineEndpoints(opts => opts.RoutePrefix("api"));
+        global::Wolverine.Http.WolverineHttpEndpointRouteBuilderExtensions.MapWolverineEndpoints(app);
 }

@@ -3,15 +3,15 @@ using System.Net.Http.Json;
 using ShareExpenses.Shared;
 using ShareExpenses.Tests.Infrastructure;
 
-namespace ShareExpenses.Tests.Slices.ViewInvites;
+namespace ShareExpenses.Tests.Slices.ViewHomepage;
 
 /// <summary>
-/// The Your invites screen end to end: invites issued through InviteMember's
-/// endpoint, matched to the signed-in user's account address, each group folded by
-/// Marten from the real store.
+/// The home page end to end: invites issued through InviteMember's endpoint, matched
+/// to the signed-in user's account address, each group folded live by Marten; groups
+/// from the asynchronous UserGroups projection, read once the daemon has caught up.
 /// </summary>
 [Collection(AppCollection.Name)]
-public class ViewInvitesIntegrationTests(AppFixture app)
+public class ViewHomepageIntegrationTests(AppFixture app)
 {
     private readonly UserId _alice = UserId.New();
 
@@ -78,6 +78,49 @@ public class ViewInvitesIntegrationTests(AppFixture app)
         Assert.Empty(await InvitesOf(bob));
     }
 
+    // ── The Home screen ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Home_lists_the_groups_the_user_created_and_joined_by_name()
+    {
+        var bobEmail = Unique("bob");
+        var bob = await app.AccountFor(bobEmail);
+        var (lisbon, _) = await InvitedBob(bobEmail);
+        Assert.Equal(HttpStatusCode.OK, (await app.ClientFor(bob).PostAsync($"/api/invites/{lisbon}/accept", null)).StatusCode);
+        var barcelona = await CreateGroup(bob, "Barcelona");
+
+        await app.ProjectionsCaughtUp();
+        var html = await HomeOf(bob);
+
+        Assert.Contains($"""<a href="/groups/{barcelona}">Barcelona</a>""", html);
+        Assert.Contains($"""<a href="/groups/{lisbon}">Lisbon trip</a>""", html);
+        Assert.True(html.IndexOf("Barcelona", StringComparison.Ordinal) < html.IndexOf("Lisbon trip", StringComparison.Ordinal));
+        Assert.DoesNotContain("Invited", html);
+    }
+
+    [Fact]
+    public async Task Home_offers_each_invite_with_a_join_form_carrying_a_token()
+    {
+        var bobEmail = Unique("bob");
+        var bob = await app.AccountFor(bobEmail);
+        var (groupId, _) = await InvitedBob(bobEmail);
+
+        var html = await HomeOf(bob);
+
+        Assert.Contains("<strong>Alice</strong> invited you to <strong>Lisbon trip</strong> as Bob.", html);
+        Assert.Contains($"""<form method="post" action="/invites/{groupId}/join">""", html);
+        Assert.Contains("__RequestVerificationToken", html);
+    }
+
+    [Fact]
+    public async Task A_brand_new_user_is_told_where_groups_will_appear()
+    {
+        var html = await HomeOf(await app.AccountFor(Unique("dave")));
+
+        Assert.Contains("You're not in any groups yet.", html);
+        Assert.DoesNotContain("Invited", html);
+    }
+
     [Fact]
     public async Task Requires_a_signed_in_user()
     {
@@ -115,6 +158,20 @@ public class ViewInvitesIntegrationTests(AppFixture app)
         var response = await app.ClientFor(user).GetAsync("/api/invites");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<InvitesBody>())!.Invites;
+    }
+
+    private async Task<GroupId> CreateGroup(UserId creator, string name)
+    {
+        var created = await app.ClientFor(creator).PostAsJsonAsync("/api/groups",
+            new { groupName = name, currency = "EUR", memberName = "Bob" });
+        return (await created.Content.ReadFromJsonAsync<CreatedBody>())!.GroupId;
+    }
+
+    private async Task<string> HomeOf(UserId user)
+    {
+        var response = await app.ClientFor(user).GetAsync("/");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await response.Content.ReadAsStringAsync();
     }
 
     private sealed record CreatedBody(GroupId GroupId, MemberId MemberId);

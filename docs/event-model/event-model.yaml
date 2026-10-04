@@ -161,26 +161,37 @@ slices:
           expiresAt: DateTimeOffset
           by: UserId
 
-  - slice: View invites
+  - slice: View homepage
     type: State Read
     screen:
-      name: Your invites
+      name: Home
+      fields:
+        invites: "PendingInvite[]"
+        groups: "GroupSummary[]"
       wireframe:
         - "Alice invited you to"
-        - "Lisbon trip as Bob"
-        - "            [ Join ]"
+        - "Lisbon trip as Bob  [Join]"
+        - ""
+        - "Your groups"
+        - "  Lisbon trip"
+        - "  Porto"
     readModel:
-      # live: each invited group's stream is folded per request. An invite shows
-      # only while it is its slot's current one, unclaimed and unexpired, in a
-      # group the user is not already in.
-      name: PendingInvitesReadModel
+      # two parts, each kept the way its data needs (spec §11):
+      # groups - a stored, asynchronous projection (UserGroups), keyed by user and
+      #   folded across every group's events: the list cannot be computed per request
+      # invites - live: each invited group's stream is folded per request. An invite
+      #   shows only while it is its slot's current one, unclaimed and unexpired, in
+      #   a group the user is not already in.
+      name: HomepageReadModel
       fields:
         userId: { type: UserId, source: system }           # the signed-in user
         # Invite documents addressed to the user's (verified) account email
         invitedAs: { type: "InviteId[]", source: lookup }
         now: { type: DateTimeOffset, source: system }      # live while now < expiresAt
-        # each with its group id, which "Join" sends
+        # each with its group id, which "Join" sends; soonest deadline first
         invites: { type: "PendingInvite[]", source: [GroupCreated, MemberAdded, MemberInvited, MemberClaimed] }
+        # the groups the user holds a slot in, by name
+        groups: { type: "GroupSummary[]", source: [GroupCreated, MemberClaimed] }
       reads:
         - GroupCreated
         - MemberAdded
@@ -189,7 +200,7 @@ slices:
 
   - slice: Accept invite
     type: State Change
-    screen: Your invites
+    screen: Home
     command:
       name: AcceptInvite
       fields:

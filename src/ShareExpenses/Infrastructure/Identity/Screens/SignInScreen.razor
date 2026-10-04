@@ -3,11 +3,11 @@
     <div id="sign-in">
         @if (AskForCode)
         {
-            <CodeStep Email="@Email" Error="@Error" />
+            <CodeStep Email="@Email" Error="@Error" ReturnUrl="@ReturnUrl" />
         }
         else
         {
-            <EmailStep Email="@Email" Error="@Error" />
+            <EmailStep Email="@Email" Error="@Error" ReturnUrl="@ReturnUrl" />
         }
     </div>
 </Page>
@@ -16,4 +16,5 @@
     [Parameter] public string Email { get; set; } = "";
     [Parameter] public string? Error { get; set; }
     [Parameter] public bool AskForCode { get; set; }
+    [Parameter] public string? ReturnUrl { get; set; }
 }

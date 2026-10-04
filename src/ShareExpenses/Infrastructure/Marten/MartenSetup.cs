@@ -1,4 +1,5 @@
 using JasperFx;
+using JasperFx.Events.Daemon;
 using Marten;
 using ShareExpenses.Infrastructure.Invites;
 using ShareExpenses.Infrastructure.Wolverine;
@@ -44,6 +45,8 @@ public static class MartenSetup
                 AllSlices.Register(opts);
             })
             .UseLightweightSessions()
+            // Runs the asynchronous projections (spec §11) in this process: one server, so Solo.
+            .AddAsyncDaemon(DaemonMode.Solo)
             // Lets Wolverine's aggregate handler workflow open sessions and commit them
             // (spec §12). Wolverine's own tables live in their own schema.
             .IntegrateWithWolverine(w => w.MessageStorageSchemaName = WolverineSetup.Schema);

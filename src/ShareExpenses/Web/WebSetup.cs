@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
-using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace ShareExpenses.Web;
 
@@ -12,6 +11,20 @@ namespace ShareExpenses.Web;
 /// </summary>
 public static class WebSetup
 {
+    /// <summary>
+    /// <paramref name="url"/> if it is a path on this site, otherwise home. Guards every
+    /// redirect to an address that came from a request (<c>returnUrl</c>): anything else
+    /// would let a crafted link send a just-signed-in user to another site.
+    /// </summary>
+    public static string LocalOrHome(string? url) =>
+        url is { Length: > 0 }
+        && url[0] == '/'
+        && !url.StartsWith("//", StringComparison.Ordinal)          // //evil.example: another host
+        && !url.StartsWith("/\\", StringComparison.Ordinal)        // /\evil.example: the same, to browsers
+        && !url.Any(char.IsControl)
+            ? url
+            : "/";
+
     /// <summary>True for a request htmx made: answer it with a fragment, not a whole page.</summary>
     public static bool IsHtmx(this HttpRequest request) => request.Headers.ContainsKey("HX-Request");
 
@@ -44,9 +57,6 @@ public static class WebSetup
         });
     }
 
-    public static void MapWeb(this WebApplication app) =>
-        app.MapGet("/", () => new RazorComponentResult<HomePage>()).WithName("Home");
-
     /// <summary>
     /// A screen a signed-out user asks for redirects to sign in; the JSON API keeps
     /// answering 401. Scheme-independent, so it holds whichever scheme authenticates.
@@ -60,7 +70,9 @@ public static class WebSetup
         {
             if (result.Challenged && !http.Request.Path.StartsWithSegments("/api"))
             {
-                http.Response.Redirect("/sign-in");
+                // Back here after signing in; home, the default, needs no returnUrl.
+                var here = http.Request.Path + http.Request.QueryString;
+                http.Response.Redirect(here == "/" ? "/sign-in" : $"/sign-in?returnUrl={Uri.EscapeDataString(here)}");
                 return Task.CompletedTask;
             }
             return _default.HandleAsync(next, http, policy, result);

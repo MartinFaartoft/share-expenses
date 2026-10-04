@@ -14,7 +14,7 @@ public sealed record OpenInvite(InviteId InviteId, DateTimeOffset ExpiresAt, int
 /// What AcceptInvite decides against, folded from the group stream by Marten
 /// (<c>FetchForWriting</c>). No stream means no state: the group does not exist.
 ///
-/// Close to ViewInvites' state, deliberately not shared (spec §11, §12): slices fold
+/// Close to ViewHomepage's invite state, deliberately not shared (spec §11, §12): slices fold
 /// what they need and change independently.
 ///
 /// FOLD CHECKLIST — when these slices are built, fold their events here and add the

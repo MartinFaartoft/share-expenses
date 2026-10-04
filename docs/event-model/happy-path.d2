@@ -52,7 +52,7 @@ n1: "2 - Add a member                        " { class: slicename }
 dvN2: "" { class: divN }
 n2: "3 - Invite a member                     " { class: slicename }
 dvN3: "" { class: divN }
-n3: "4 - View invites                        " { class: slicename }
+n3: "4 - View homepage                       " { class: slicename }
 dvN4: "" { class: divN }
 n4: "5 - Accept invite                       " { class: slicename }
 dvN5: "" { class: divN }
@@ -74,9 +74,9 @@ s1: "Group setup                       \n                                  \n- g
 dv2_2: "" { class: div }
 s2: "Invite member                     \n                                  \n- groupId: GroupId                \n- memberId: MemberId              \n- email: string                   \n                                  " { class: screen }
 dv2_3: "" { class: div }
-s3: "Your invites                      \n                                  \nAlice invited you to              \nLisbon trip as Bob                \n            [ Join ]              \n                                  " { class: screen }
+s3: "Home                              \n                                  \nAlice invited you to              \nLisbon trip as Bob  [Join]        \n                                  \nYour groups                       \n  Lisbon trip                     \n  Porto                           " { class: screen }
 dv2_4: "" { class: div }
-s4: "Your invites                      \n                                  \nAlice invited you to              \nLisbon trip as Bob                \n            [ Join ]              \n                                  " { class: screen }
+s4: "Home                              \n                                  \nAlice invited you to              \nLisbon trip as Bob  [Join]        \n                                  \nYour groups                       \n  Lisbon trip                     \n  Porto                           " { class: screen }
 dv2_5: "" { class: div }
 s5: "Add expense                       \n                                  \nDinner          [ 120.00 ]        \npaid by         [ Alice v ]       \nsplit  (equal) exact shares       \n[x] Alice [x] Bob [ ] Carol       \non              [ 2 Oct ]         \n             [ Add ]              " { class: screen }
 dv2_6: "" { class: div }
@@ -96,7 +96,7 @@ gp3_1: "" { class: gap }
 dv3_2: "" { class: div }
 gp3_2: "" { class: gap }
 dv3_3: "" { class: div }
-rm3: "PendingInvitesReadModel           \n                                  \n- userId: UserId (sys)            \n- invitedAs: InviteId[] (lku)     \n- now: DateTimeOffset (sys)       \n- invites: PendingInvite[]        " { class: view }
+rm3: "HomepageReadModel                 \n                                  \n- userId: UserId (sys)            \n- invitedAs: InviteId[] (lku)     \n- now: DateTimeOffset (sys)       \n- invites: PendingInvite[]        \n- groups: GroupSummary[]          " { class: view }
 dv3_4: "" { class: div }
 gp3_4: "" { class: gap }
 dv3_5: "" { class: div }

@@ -51,7 +51,7 @@ public static class Endpoint
     // memberId is bound as a string: a malformed one still goes through deciding — as
     // an id no slot has — so membership is checked first and a non-member still only
     // ever sees "group not found".
-    [WolverinePost("/groups/{group}/members/{memberId}/invite", Name = "InviteMember")]
+    [WolverinePost("/api/groups/{group}/members/{memberId}/invite", Name = "InviteMember")]
     public static async Task<(IResult, Events)> Post(
         string group,
         string memberId,

@@ -160,6 +160,78 @@ public class AcceptInviteIntegrationTests(AppFixture app)
             (await app.ClientFor(bob).PostAsJsonAsync($"/api/groups/{groupId}/members", new { displayName = "Carol" })).StatusCode);
     }
 
+    // ── Join, from the Home screen ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Join_claims_the_slot_and_goes_into_the_group()
+    {
+        var (bob, bobEmail) = await Account("bob");
+        var (groupId, slot) = await InvitedBob(bobEmail);
+        var browser = app.BrowserFor(bob);
+
+        var response = await Join(browser, groupId, await TokenFromHome(browser));
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal($"/groups/{groupId}", response.Headers.Location?.OriginalString);
+        Assert.Equal(new MemberClaimed(slot, bob), (await StreamOf(groupId)).Last());
+    }
+
+    [Fact]
+    public async Task Join_again_goes_into_the_group_too()
+    {
+        var (bob, bobEmail) = await Account("bob");
+        var (groupId, _) = await InvitedBob(bobEmail);
+        var browser = app.BrowserFor(bob);
+        var token = await TokenFromHome(browser);
+        await Join(browser, groupId, token);
+
+        var again = await Join(browser, groupId, token);
+
+        Assert.Equal($"/groups/{groupId}", again.Headers.Location?.OriginalString);
+        Assert.Single((await StreamOf(groupId)).OfType<MemberClaimed>(), c => c.UserId == bob);
+    }
+
+    [Fact]
+    public async Task Join_on_an_invite_that_is_gone_goes_back_home()
+    {
+        var (carol, _) = await Account("carol");
+        var (_, bobEmail) = await Account("bob");
+        var (groupId, _) = await InvitedBob(bobEmail);
+        var browser = app.BrowserFor(carol);
+
+        // Carol has no invite, so no Join form; any page's token is hers, so take sign-in's.
+        var response = await Join(browser, groupId, await TokenFrom(browser, "/sign-in"));
+
+        Assert.Equal("/", response.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task Join_without_a_valid_antiforgery_token_is_400_and_claims_nothing()
+    {
+        var (bob, bobEmail) = await Account("bob");
+        var (groupId, _) = await InvitedBob(bobEmail);
+        var browser = app.BrowserFor(bob);
+        await browser.GetAsync("/");
+
+        var response = await Join(browser, groupId, "forged");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.DoesNotContain(await StreamOf(groupId), e => e is MemberClaimed c && c.UserId == bob);
+    }
+
+    private static Task<HttpResponseMessage> Join(HttpClient browser, GroupId groupId, string token) =>
+        browser.PostAsync($"/invites/{groupId}/join",
+            new FormUrlEncodedContent([KeyValuePair.Create("__RequestVerificationToken", token)]));
+
+    private static Task<string> TokenFromHome(HttpClient browser) => TokenFrom(browser, "/");
+
+    private static async Task<string> TokenFrom(HttpClient browser, string path)
+    {
+        var html = await (await browser.GetAsync(path)).Content.ReadAsStringAsync();
+        var match = System.Text.RegularExpressions.Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"");
+        return match.Success ? WebUtility.HtmlDecode(match.Groups[1].Value) : throw new InvalidOperationException($"No token on {path}");
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────────
 
     private async Task<(UserId User, string Email)> Account(string name)

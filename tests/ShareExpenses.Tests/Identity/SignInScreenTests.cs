@@ -116,7 +116,7 @@ public partial class SignInScreenTests(AppFixture app)
     }
 
     [Fact]
-    public async Task A_screen_asked_for_while_signed_out_redirects_to_sign_in()
+    public async Task Home_asked_for_while_signed_out_redirects_to_sign_in()
     {
         var response = await Browser().GetAsync("/");
 
@@ -125,12 +125,51 @@ public partial class SignInScreenTests(AppFixture app)
     }
 
     [Fact]
+    public async Task Any_other_screen_asked_for_while_signed_out_is_returned_to_after_signing_in()
+    {
+        var browser = Browser();
+
+        var redirect = await browser.GetAsync("/groups/some-group?tab=history");
+        Assert.Equal("/sign-in?returnUrl=%2Fgroups%2Fsome-group%3Ftab%3Dhistory", redirect.Headers.Location?.OriginalString);
+
+        var page = await (await browser.GetAsync(redirect.Headers.Location!.OriginalString)).Content.ReadAsStringAsync();
+        Assert.Contains("""name="returnUrl" value="/groups/some-group?tab=history""", WebUtility.HtmlDecode(page));
+
+        var step2 = await (await Post(browser, "/sign-in/code", htmx: true,
+            ("email", _email), ("returnUrl", "/groups/some-group?tab=history"), ("__RequestVerificationToken", TokenIn(page))))
+            .Content.ReadAsStringAsync();
+        Assert.Contains("""name="returnUrl" value="/groups/some-group?tab=history""", WebUtility.HtmlDecode(step2));
+
+        var signedIn = await Post(browser, "/sign-in", htmx: true, ("email", _email), ("code", CodeFor(_email)),
+            ("returnUrl", "/groups/some-group?tab=history"), ("__RequestVerificationToken", TokenIn(step2)));
+        Assert.Equal("/groups/some-group?tab=history", signedIn.Headers.GetValues("HX-Redirect").Single());
+    }
+
+    [Theory]
+    [InlineData("https://evil.example/")]
+    [InlineData("//evil.example/")]
+    [InlineData("/\\evil.example/")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("groups/x")]
+    public async Task A_return_url_off_this_site_is_ignored_and_goes_home(string returnUrl)
+    {
+        var browser = Browser();
+        var step2 = await (await Post(browser, "/sign-in/code", htmx: true,
+            ("email", _email), ("__RequestVerificationToken", await TokenFrom(browser, "/sign-in")))).Content.ReadAsStringAsync();
+
+        var signedIn = await Post(browser, "/sign-in", htmx: false, ("email", _email), ("code", CodeFor(_email)),
+            ("returnUrl", returnUrl), ("__RequestVerificationToken", TokenIn(step2)));
+
+        Assert.Equal("/", signedIn.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
     public async Task Signed_in_home_is_shown()
     {
         var response = await app.ClientFor(ShareExpenses.Shared.UserId.New()).GetAsync("/");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("You're signed in.", await response.Content.ReadAsStringAsync());
+        Assert.Contains("Your groups", await response.Content.ReadAsStringAsync());
     }
 
     [Theory]

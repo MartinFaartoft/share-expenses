@@ -36,7 +36,7 @@ public static class Endpoint
     public static GroupId GroupStream(string group) =>
         GroupId.TryParse(group, out var id) ? id : GroupId.New();
 
-    [WolverinePost("/groups/{group}/expenses", Name = "RecordExpense")]
+    [WolverinePost("/api/groups/{group}/expenses", Name = "RecordExpense")]
     public static (IResult, Events) Post(
         Request request,
         [WriteAggregate(FromMethod = nameof(GroupStream), Required = false)] State? state,

@@ -1,6 +1,7 @@
 @* Step 1: the address to send a code to. Posts as a form; htmx swaps in step 2. *@
 <form method="post" action="/sign-in/code" hx-post="/sign-in/code" hx-target="#sign-in">
     <AntiforgeryToken />
+    <ReturnUrlField Value="@ReturnUrl" />
     <p>We'll email you a six-digit code. No password needed.</p>
     <label>
         Email
@@ -16,4 +17,5 @@
 @code {
     [Parameter] public string Email { get; set; } = "";
     [Parameter] public string? Error { get; set; }
+    [Parameter] public string? ReturnUrl { get; set; }
 }

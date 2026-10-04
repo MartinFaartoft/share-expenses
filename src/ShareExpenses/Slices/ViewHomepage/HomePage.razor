@@ -1,0 +1,43 @@
+@* The Home screen (slice-04-view-homepage.md): invites waiting, then the user's groups. *@
+@using ShareExpenses.Slices.ViewHomepage
+<Page Title="Shared expenses">
+    @if (Model.Invites.Count > 0)
+    {
+        <section aria-labelledby="invites">
+            <h2 id="invites">Invited</h2>
+            <ul class="cards">
+                @foreach (var invite in Model.Invites)
+                {
+                    <li>
+                        <p><strong>@invite.InvitedBy</strong> invited you to <strong>@invite.GroupName</strong> as @invite.MemberName.</p>
+                        <form method="post" action="/invites/@invite.GroupId/join">
+                            <AntiforgeryToken />
+                            <button type="submit">Join</button>
+                        </form>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+
+    <section aria-labelledby="groups">
+        <h2 id="groups">Your groups</h2>
+        @if (Model.Groups.Count == 0)
+        {
+            <p class="hint">You're not in any groups yet. When someone invites you, it appears here.</p>
+        }
+        else
+        {
+            <ul class="links">
+                @foreach (var group in Model.Groups)
+                {
+                    <li><a href="/groups/@group.GroupId">@group.Name</a></li>
+                }
+            </ul>
+        }
+    </section>
+</Page>
+
+@code {
+    [Parameter, EditorRequired] public HomepageReadModel Model { get; set; } = default!;
+}

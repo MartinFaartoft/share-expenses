@@ -23,7 +23,7 @@ internal sealed record Response(GroupId GroupId, MemberId MemberId);
 /// </summary>
 public static class Endpoint
 {
-    [WolverinePost("/groups", Name = "CreateGroup")]
+    [WolverinePost("/api/groups", Name = "CreateGroup")]
     [Transactional]
     public static IResult Post(Request request, ClaimsPrincipal user, IDocumentSession session, HttpContext http)
     {

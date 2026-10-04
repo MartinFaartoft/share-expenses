@@ -4,7 +4,7 @@ Type: **State Change**. Screen → command → events.
 
 | | |
 |---|---|
-| Screen | Your invites — "Join" on one of them |
+| Screen | Home — "Join" on one of the invites waiting |
 | Command | `AcceptInvite(now, userId)` + looked up: `invitedAs`; the slot is found by deciding |
 | Events | `MemberClaimed` (owned by CreateGroup) |
 | Also writes | deletes the slot's `Invite` — the address is not kept once claimed |
@@ -116,7 +116,7 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 - **Expiry** is the recorded deadline: claimable while `now < expiresAt`.
 - **`Invite` is deleted** in the same transaction as the claim: the address served
   to bind the slot until claimed, and nothing needs it after. The document lives in
-  `Infrastructure/`, as plain supporting state shared by InviteMember, View invites
+  `Infrastructure/`, as plain supporting state shared by InviteMember, View homepage
   and AcceptInvite.
 - **Concurrency:** two claims on one slot — one save wins, the other gets 409, and
   its retry finds the invite used: 404.

@@ -142,7 +142,7 @@ And over many random balance sets, always:
 - **Honest bounds** (spec §10): greedy is a heuristic. At most `n − 1` transfers,
   every exact match taken; not a proven minimum.
 - **Live, not stored** (spec §11): folded from the one group stream per request,
-  like View invites. Slices share only events, so this slice folds its own balances
+  like View homepage's invites. Slices share only events, so this slice folds its own balances
   rather than read the stored ledger; a test checks the two agree.
 - **Each transfer carries both names** as well as both member ids, so the screen
   needs nothing else. `you` lets the screen put the caller's own lines first.

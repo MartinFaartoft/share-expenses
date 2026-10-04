@@ -21,7 +21,7 @@ internal enum PublicRole
     /// <summary>A Razor Component — the slice's screen (spec §3). Razor always generates it public.</summary>
     Component,
 
-    /// <summary>A type in an endpoint's signature (request, response, state…), public because Wolverine's generated code uses it.</summary>
+    /// <summary>A type in an endpoint's signature, or a component's parameters — public because Wolverine's generated code, or Razor's, uses it.</summary>
     Contract,
 
     /// <summary>None of the above: a violation.</summary>
@@ -50,7 +50,7 @@ internal static class SliceRules
     public static IReadOnlyDictionary<TypeDefinition, PublicRole> PublicRoles(ModuleDefinition module, SliceLayout layout)
     {
         var inSlices = module.GetTypes().Where(t => IsEffectivelyPublic(t) && SliceOf(t, layout) is not null).ToList();
-        var contracts = Contracts(inSlices.Where(IsWolverineEndpoint), layout);
+        var contracts = Contracts(inSlices.Where(IsWolverineEndpoint), inSlices.Where(IsComponent), layout);
 
         return inSlices.ToDictionary(t => t, t =>
             IsEntryPoint(t, SliceOf(t, layout)!) ? PublicRole.EntryPoint
@@ -208,7 +208,8 @@ internal static class SliceRules
     /// Types of the endpoints' own slices that appear in their public methods' signatures,
     /// and — because C# requires it — in the public members of those types, transitively.
     /// </summary>
-    private static HashSet<TypeDefinition> Contracts(IEnumerable<TypeDefinition> endpoints, SliceLayout layout)
+    private static HashSet<TypeDefinition> Contracts(
+        IEnumerable<TypeDefinition> endpoints, IEnumerable<TypeDefinition> components, SliceLayout layout)
     {
         var found = new HashSet<TypeDefinition>();
         var pending = new Stack<(TypeReference type, string slice)>();
@@ -218,6 +219,10 @@ internal static class SliceRules
                 pending.Push((method.ReturnType, SliceOf(endpoint, layout)!));
                 foreach (var p in method.Parameters) pending.Push((p.ParameterType, SliceOf(endpoint, layout)!));
             }
+        // A component's parameters must be public too: they are its public properties.
+        foreach (var component in components)
+            foreach (var property in component.Properties.Where(p => p.GetMethod is { IsPublic: true }))
+                pending.Push((property.PropertyType, SliceOf(component, layout)!));
 
         while (pending.TryPop(out var next))
         {

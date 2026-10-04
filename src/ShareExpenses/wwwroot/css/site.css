@@ -72,3 +72,27 @@ button.link {
 .error { color: var(--error); margin: 0; }
 
 .htmx-request button { opacity: 0.6; }
+
+h2 { font-size: 1.125rem; margin: 1.5rem 0 0.5rem; }
+
+ul.cards, ul.links { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+
+ul.cards li {
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid #e1e4ea;
+  border-radius: var(--radius);
+}
+
+ul.cards li p { margin-bottom: 0.75rem; }
+
+ul.links a {
+  display: block;
+  padding: 1rem;
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 600;
+  background: #fff;
+  border: 1px solid #e1e4ea;
+  border-radius: var(--radius);
+}

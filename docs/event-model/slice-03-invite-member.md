@@ -135,7 +135,7 @@ either way.
 - **Expiry** is decided here and recorded: `expiresAt = now + 30 days`, on the
   event (spec §11). It is a deadline, a domain fact — not the append time, which
   stays Marten metadata. Changing the lifetime later never moves the deadline of
-  invites already sent. It is *enforced* where the invite is used (View invites and
+  invites already sent. It is *enforced* where the invite is used (View homepage and
   AcceptInvite).
 - **The email is sent after the commit**, and only if it succeeded. If sending
   fails, the response is still 204 and the failure is logged: the invite stands,

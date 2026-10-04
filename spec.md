@@ -89,7 +89,12 @@ offline use is out (already a non-goal, §1).
 
 **The JSON endpoints stay as they are.** HTML endpoints sit beside them in the same
 slice, deciding through the same `Decide`; the JSON API keeps its tests and serves
-anything that is not a browser.
+anything that is not a browser. **Routes are written in full:** JSON endpoints under
+`/api/…`, screens at their own addresses (`/`, `/invites/{group}/join`). A global
+Wolverine route prefix would have put the screens under `/api` too, so there is none.
+- **A component's parameters must be public,** and so must their types — a screen's
+  read model, when it takes one whole. The architecture rule counts them as contract
+  types, as it does an endpoint's signature.
 
 **Verified by spike (Wolverine 6.44, .NET 10), not assumed:**
 - A Wolverine endpoint returns a `RazorComponentResult`, page or fragment, and a
@@ -193,7 +198,10 @@ mail client opens; a code needs neither.
 anonymous.** An authorization `FallbackPolicy` requires an authenticated user for
 every endpoint without authorization metadata; the public ones say so with
 `[AllowAnonymous]` / `.AllowAnonymous()`. Unauthenticated calls to the JSON API
-(`/api/…`) get 401; a screen asked for while signed out redirects to `/sign-in`. The explicit `[Authorize]` on slice endpoints stays — redundant now, but
+(`/api/…`) get 401; a screen asked for while signed out redirects to
+`/sign-in?returnUrl=…`, and signing in returns there — or home. Only a local path is
+accepted as `returnUrl`: anything else would let a crafted link send a just-signed-in
+user to another site (an open redirect). The explicit `[Authorize]` on slice endpoints stays — redundant now, but
 it states the intent.
 
 Rationale: endpoints used to opt in with `[Authorize]`, so a new slice that forgot
@@ -828,14 +836,23 @@ the truthful statement anyway.
 |---|---|---|
 | `GroupLedgerReadModel` | **inline** — the stored `GroupLedger` | members, per-member balances, and the money history (expenses and settlements) |
 | `ActivityFeed` | **inline** | who did what, when |
-| `UserGroups` | **async** (multi-stream) | a user's group list |
+| `HomepageReadModel` | groups **async** — the stored `UserGroups`, one document per group; invites **live** | the home screen: a user's groups, and invites waiting |
 | `SettlementPlanReadModel` | **live** — computed per request (§10) | the settle-up plan: who pays whom |
-| `PendingInvitesReadModel` | **live** (folded on each request, nothing stored) | a user's invites: group, slot, inviter |
 
-`PendingInvitesReadModel` is live deliberately — the third lifecycle. The user's
-`Invite` documents name their groups, so showing them means folding a handful of
-group streams of a few hundred events each: cheap enough to do per request, and
-nothing is stored that could go stale.
+**One read model, two lifecycles.** The home screen's two parts are each kept the
+way their data needs. Its groups cannot be computed per request — "every group I am
+in" spans every stream — so they come from `UserGroups`, stored and projected by
+Marten's async daemon (solo mode, in the app's process). **One document per group,
+not per user:** the group's name and the users holding a slot, queried for those
+containing the signed-in user (a GIN index). Planned as a per-user, multi-stream
+projection, it turned out `MemberClaimed` carries no group name: a per-user document
+would have to look the name up as each claim arrives. Per group, the name is
+folded in order, and "which groups am I in" is a query. Its invites are
+live, the third lifecycle: the user's `Invite` documents name their groups, so
+showing them means folding a handful of group streams of a few hundred events each
+— cheap enough per request, and nothing stored that could go stale. Neither part
+needs the other's lifecycle, and the screen needs both, so one slice (View
+homepage) owns both.
 
 `GroupLedger` is what is stored: ViewBalances' state, a Marten snapshot projected
 inline as the `group_ledger` document. The read model is shaped from it per
@@ -852,7 +869,8 @@ moved — the most alarming bug this app could plausibly ship.
 
 `UserGroups` is async deliberately, so the project exercises both lifecycles and
 the async daemon. Staleness is harmless there: after creating or joining a group
-you are redirected straight into it by id, never via the list.
+you are redirected straight into it by id, never via the list. It is never a reason
+to redirect to home after a write.
 
 Both are Marten configuration choices and cheap to flip. Flipping one to feel the
 difference is a legitimate use of an afternoon.
@@ -1095,7 +1113,7 @@ in place of `Decider.cs`, and no events.
 - **Wolverine does the fetch and the save.** `[WriteAggregate]` fetches the
   state with `FetchForWriting`; the endpoint returns `(IResult, Events)`, and
   Wolverine appends the events at the version it read and saves. A read slice over
-  one stream would use `[ReadAggregate]`, which folds live; View invites reads
+  one stream would use `[ReadAggregate]`, which folds live; View homepage reads
   several, chosen by a lookup, so it folds each itself with `AggregateStreamAsync`.
   CreateGroup has no stream to fetch: it starts one on the session, under
   `[Transactional]`.
@@ -1127,8 +1145,8 @@ in place of `Decider.cs`, and no events.
   decides against, or what a read slice reads from (Emmett likewise uses
   `evolve`/state for both). A state-read slice's `Reader` then turns its `State`
   into the **read model** named in `event-model.yaml`, which is exactly what the
-  screen receives, named `<Thing>ReadModel` (e.g. `PendingInvitesReadModel`). The
-  two differ whenever the answer depends on query inputs: View invites folds each
+  screen receives, named `<Thing>ReadModel` (e.g. `HomepageReadModel`). The
+  two differ whenever the answer depends on query inputs: View homepage folds each
   invited group's state — every open invite, its id and deadline; its read model is
   only the invites the user's address selects, at the current time. Event Modeling draws only the events and the read
   model — the state in between is an implementation detail. "View" is not used in
@@ -1373,7 +1391,7 @@ appears from nowhere.
   exceptions (`createdBy` → `MemberAdded.by`).
 - **Read model fields** carry `source:` — the events they are built from, or
   `system` / `lookup` for a value the server supplies to the read (the signed-in
-  user, the clock, View invites' `Invite` documents). Those are inputs to the read,
+  user, the clock, View homepage's `Invite` documents). Those are inputs to the read,
   not output, but listing them on the read model keeps every server-supplied value
   beside what it serves, as on a command.
 - **Event fields carry a type only.** Where an event's values come from is not a
@@ -1520,11 +1538,12 @@ a documentation tool, not application code.
     and early — e.g. "Your sign-in code is 123456", in the subject and the first
     line — with the mail relay (§4); then verify on a real iPhone and Mac. The log
     sender sends nothing to detect.
-  - **OPEN — several pending invites.** Work out the experience when a user has more
-    than one invite waiting (View invites lists them, soonest deadline first): where
-    signing in lands, whether a single invite is offered directly rather than as a
-    list of one, how a user already signed in learns of a new invite, and what
-    joining one does to the others (they stay; joining is per group).
+  - **Answered — several pending invites** (by View homepage). Signing in lands on
+    the home screen, which lists every invite waiting, soonest deadline first, each
+    with Join, above the user's groups; a single invite is shown the same way, and a
+    single group is never jumped into. Joining one leaves the others — joining is
+    per group — and goes straight to the group page. Still open: how a user already
+    signed in learns of a new invite (the notifications task, below).
 - **OPEN** Enforce consistency between `event-model.yaml` and the code, failing
   the build on any mismatch, so the model cannot drift from the code (§12, §13).
   For every non-draft slice:
@@ -1568,6 +1587,32 @@ a documentation tool, not application code.
     made while building AddMember.
   - Optional means advisory by default: it reports, and the caller decides
     whether to gate on it.
+- **OPEN** `GET /api/groups` — the signed-in user's groups, as JSON, for anything
+  that is not the browser. The home screen (View homepage) shows the same list as
+  HTML, from the same `UserGroups` projection, so this is one more endpoint on that
+  slice, not a new read model. `GET /api/invites` stays as it is beside it. To
+  decide: the shape (`{ groups: [{ groupId, name }] }`, by name, as the home screen),
+  and whether it answers while the asynchronous projection lags (it does, slightly
+  stale — §11).
+- **OPEN** Slice: **Decline invite.** An invitee can say no, rather than leave the
+  invite on their home page until its deadline. State Change, from the home page,
+  beside Join. Sketch, to refine as a slice:
+  - **Command** `DeclineInvite(now, userId)` + looked up `invitedAs`, for the group in
+    the route — found exactly as AcceptInvite finds the slot: the lookup proposes,
+    the stream confirms the slot's current, unexpired invite (§11).
+  - **Event** `InviteDeclined(memberId, inviteId, by)`: the invite is closed and the
+    slot is a placeholder again; its `Invite` document is deleted in the same
+    transaction, so the address is erased (§3). The slot may be invited again — the
+    same address included.
+  - **Folds to update:** AcceptInvite and View homepage (the invite is no longer
+    open), View balances (the slot's status), and later the activity feed and
+    notifications ("Bob declined your invite to Lisbon trip" — telling the inviter
+    is what makes declining worth more than ignoring).
+  - **To decide:** whether `by` — a user who is not a member — belongs on a group's
+    event (it is pseudonymous, and `MemberClaimed` already records a non-member
+    becoming one); whether declining needs a confirmation step on the screen; what
+    a member who declines an invite into their own group gets (the home page never
+    shows such invites).
 - **OPEN** Explore user notifications: telling a person about something that
   concerns them, without their having to look. Examples: "Bob accepted your invite
   to Lisbon trip"; "could not send the invite to Bob — check the address for
@@ -1581,8 +1626,8 @@ a documentation tool, not application code.
     sign-in mail path exists), push not in v1. Per-user preferences, and
     batching — a busy evening must not send ten emails.
   - **Model:** an Automation slice (spec §13: recognised, no layout yet) reacting to
-    events, and a per-user read model (`Notifications`, async, multi-stream —
-    like `UserGroups`). Read/unread is supporting state, not ledger: a plain
+    events, and a per-user read model (`Notifications`, async, multi-stream — the
+    first true one, since `UserGroups` became per group). Read/unread is supporting state, not ledger: a plain
     document (§3). Most notifications are a filtered activity feed (§11
     `ActivityFeed`) addressed to one person, so design the two together.
   - **Failed delivery** is different: "could not send" is not a domain event but an
@@ -1594,7 +1639,7 @@ a documentation tool, not application code.
     carry (§11): the notification is composed from the fold, which holds the state
     before the event — as the activity feed does.
 - **OPEN** Give State Read screens the fields they show. Today the read slices'
-  screens (Your invites, Balances) declare at most a `groupId`, and Settle up only
+  screens (Balances) declare at most a `groupId`, and Settle up only
   its command inputs; what each screen displays lives only in its wireframe. List,
   per screen, the read-model fields it needs — group name and currency, each
   member's name, status and balance, the history, the plan's transfers — so the

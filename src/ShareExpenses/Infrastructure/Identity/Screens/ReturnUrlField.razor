@@ -1,0 +1,9 @@
+@* Carries where the user was going through sign-in; only a local path is ever followed. *@
+@if (!string.IsNullOrEmpty(Value))
+{
+    <input type="hidden" name="returnUrl" value="@Value" />
+}
+
+@code {
+    [Parameter] public string? Value { get; set; }
+}

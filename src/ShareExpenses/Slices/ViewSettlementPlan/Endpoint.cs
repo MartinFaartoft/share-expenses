@@ -17,7 +17,7 @@ public static class Endpoint
 {
     public const string GroupNotFound = "group not found";
 
-    [WolverineGet("/groups/{group}/settlement-plan", Name = "ViewSettlementPlan")]
+    [WolverineGet("/api/groups/{group}/settlement-plan", Name = "ViewSettlementPlan")]
     public static async Task<IResult> Get(string group, ClaimsPrincipal user, IQuerySession session, CancellationToken ct)
     {
         // A malformed id is answered like a missing group: nothing is disclosed either way.

@@ -1,5 +1,5 @@
 using ShareExpenses.Shared;
-using ShareExpenses.Slices.ViewInvites;
+using ShareExpenses.Slices.ViewHomepage;
 using ShareExpenses.Tests.Specs;
 // Only the public events: tests can see every slice's internals, so namespace
 // imports would bring in other slices' Command, State and Endpoint too.
@@ -8,15 +8,15 @@ using MemberAdded = ShareExpenses.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = ShareExpenses.Slices.CreateGroup.MemberClaimed;
 using MemberInvited = ShareExpenses.Slices.InviteMember.MemberInvited;
 
-namespace ShareExpenses.Tests.Slices.ViewInvites;
+namespace ShareExpenses.Tests.Slices.ViewHomepage;
 
 /// <summary>
-/// docs/event-model/slice-04-view-invites.md, line for line. Several streams per
+/// docs/event-model/slice-04-view-homepage.md, line for line. Several streams per
 /// scenario, so not <see cref="ReadSpec{TQuery,TResult}"/>: <see cref="Read"/> folds
 /// each given group and reads. The same fold runs against a real store, through
-/// HTTP, in <see cref="ViewInvitesIntegrationTests"/>.
+/// HTTP, in <see cref="ViewHomepageIntegrationTests"/>.
 /// </summary>
-public class ViewInvitesSpecs
+public class ViewHomepageSpecs
 {
     private static readonly GroupId G1 = new(Guid.Parse("00000000-0000-0000-0000-0000000000a1"));
     private static readonly GroupId G2 = new(Guid.Parse("00000000-0000-0000-0000-0000000000a2"));
@@ -49,12 +49,25 @@ public class ViewInvitesSpecs
 
     private static readonly PendingInvite BobByAlice = new(G1, "Lisbon trip", "Bob", "Alice");
 
-    /// <summary>Folds each group's history (an empty one is no stream at all), then reads.</summary>
+    /// <summary>The invites part of <see cref="Home"/>, which the invite scenarios are about.</summary>
     private static IReadOnlyList<PendingInvite> Read(
+        Dictionary<GroupId, object[]> streams, UserId user, (GroupId, InviteId)[] invites, DateTimeOffset at) =>
+        Home(streams, user, invites, at).Invites;
+
+    /// <summary>
+    /// Folds each group's history both ways the slice does — live, for invites; as the
+    /// stored <see cref="Membership"/>, for groups (an empty history is no stream at all)
+    /// — and reads.
+    /// </summary>
+    private static HomepageReadModel Home(
         Dictionary<GroupId, object[]> streams, UserId user, (GroupId, InviteId)[] invites, DateTimeOffset at)
     {
-        var groups = streams.ToDictionary(s => s.Key, s => s.Value.Length == 0 ? null : Fold.Of<State>(s.Value));
-        return Reader.Read(new Query(user, invites, at), groups).Invites;
+        var live = streams.ToDictionary(s => s.Key, s => s.Value.Length == 0 ? null : Fold.Of<State>(s.Value));
+        var stored = streams
+            .Where(s => s.Value.Length > 0)
+            .Select(s => Fold.Of<Membership>(s.Value, ignoring: [typeof(MemberAdded), typeof(MemberInvited)])! with { Id = s.Key.Value })
+            .ToList();
+        return Reader.Read(new Query(user, invites, at), live, stored);
     }
 
     [Fact]
@@ -130,4 +143,63 @@ public class ViewInvitesSpecs
     [Fact]
     public void An_invite_id_from_another_slot_names_nothing_here() =>
         Assert.Empty(Read(new() { [G1] = Lisbon }, Bob, [(G1, I2)], at: Day(1)));
+
+    // ── groups ────────────────────────────────────────────────────────────────────
+
+    private static readonly GroupId G3 = new(Guid.Parse("00000000-0000-0000-0000-0000000000a3"));
+    private static readonly UserId Dave = new(Guid.Parse("00000000-0000-0000-0000-0000000000c4"));
+
+    private static object[] Group(GroupId id, string name, UserId creator, MemberId slot) =>
+        [new GroupCreated(id, name, "GBP", creator), new MemberAdded(slot, "Creator", creator), new MemberClaimed(slot, creator)];
+
+    [Fact]
+    public void G1_a_brand_new_user_has_no_groups_and_no_invites()
+    {
+        var home = Home(new() { [G1] = Lisbon }, Dave, [], at: Day(1));
+
+        Assert.Empty(home.Groups);
+        Assert.Empty(home.Invites);
+    }
+
+    [Fact]
+    public void G2_the_creators_group_is_listed() =>
+        Assert.Equal([new GroupSummary(G1, "Lisbon trip")], Home(new() { [G1] = Lisbon }, Alice, [], at: Day(1)).Groups);
+
+    [Fact]
+    public void G3_a_joined_group_is_listed() =>
+        Assert.Equal(
+            [new GroupSummary(G1, "Lisbon trip")],
+            Home(new() { [G1] = [.. Lisbon, new MemberClaimed(M2, Bob)] }, Bob, [], at: Day(1)).Groups);
+
+    [Fact]
+    public void G4_a_slot_added_for_you_or_invited_is_not_membership()
+    {
+        var home = Home(new() { [G1] = Lisbon }, Bob, BobsInvites, at: Day(1));
+
+        Assert.Empty(home.Groups);
+        Assert.Equal([BobByAlice], home.Invites);
+    }
+
+    [Fact]
+    public void G5_several_groups_by_name() =>
+        Assert.Equal(
+            [new GroupSummary(G2, "Barcelona"), new GroupSummary(G1, "Lisbon trip"), new GroupSummary(G3, "Porto")],
+            Home(
+                new()
+                {
+                    [G1] = Lisbon,
+                    [G2] = [.. Group(G2, "Barcelona", Carol, M4), new MemberAdded(M5, "Alice", Carol), new MemberClaimed(M5, Alice)],
+                    [G3] = Group(G3, "Porto", Alice, M3),
+                },
+                Alice, [], at: Day(1)).Groups);
+
+    [Fact]
+    public void G6_other_peoples_groups_are_not_listed() =>
+        Assert.Empty(Home(new() { [G1] = Lisbon }, Carol, [], at: Day(1)).Groups);
+
+    [Fact]
+    public void Names_sort_case_insensitively() =>
+        Assert.Equal(
+            ["alps", "Lisbon trip"],
+            Home(new() { [G1] = Lisbon, [G2] = Group(G2, "alps", Alice, M4) }, Alice, [], at: Day(1)).Groups.Select(g => g.Name));
 }
