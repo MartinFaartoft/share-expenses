@@ -12,7 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("Postgres")
     ?? throw new InvalidOperationException("Missing connection string 'Postgres'.");
 
-builder.Services.AddLedgerStore(connectionString, builder.Environment);
+builder.Services.AddLedgerStore(connectionString);
 builder.Services.AddPasswordlessIdentity(connectionString, builder.Environment);
 builder.Services.AddPublicOrigin(builder.Configuration, builder.Environment);
 builder.Services.AddSignIn(builder.Configuration);
@@ -24,7 +24,7 @@ builder.Services.TryAddSingleton(TimeProvider.System);
 
 var app = builder.Build();
 
-await app.MigrateIdentityInDevelopmentAsync();
+await app.MigrateDatabaseAsync();
 
 app.UseWebStaticFiles();
 app.UseAuthentication();

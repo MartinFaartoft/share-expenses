@@ -122,6 +122,32 @@ only its own slice's screen, so no test depends on another slice's screen.
 ### Hosting consequences
 
 - TLS termination through a reverse proxy (Caddy or nginx) with Let's Encrypt.
+- **The app applies its own schema on startup, in every environment.** The VPS runs
+  no migration hook, so a deploy is a new binary and a restart. Before the app
+  listens, one startup step brings all three stores up to date, and a failure stops
+  the process rather than serving against a half-made schema:
+  - **Identity:** EF Core's `Database.MigrateAsync()`, applying the committed migrations.
+  - **Ledger and Wolverine:** Marten's `Storage.ApplyAllConfiguredChangesToDatabaseAsync()`
+    with `AutoCreate.None`, so nothing is created lazily behind a request. It creates
+    the `ledger` schema, the event tables and every slice's documents. It diffs the
+    configured model against the database and only adds; it never drops or rewrites.
+    **No `wolverine` schema is made or needed:** Wolverine runs mediator-only, with no
+    inbox or outbox. (The 8 tables seen in Development came from the old
+    `CreateOrUpdate`, and sat unused.) The durable outbox for emails (§14) would need
+    them, and this step would have to create them.
+  - **One path for every environment.** Development and the tests take the same step
+    as the VPS, so a missing table cannot hide behind a dev-only shortcut. The dev-only
+    `AutoCreate.CreateOrUpdate` and `MigrateIdentityInDevelopmentAsync` go.
+  - **Migrating is not rebuilding.** A changed fold in a stored projection (the group
+    activity) leaves the old documents stale until `projections rebuild` runs; that
+    stays a deliberate step after such a deploy (§11).
+  - **The database role has DDL rights,** so the app creates its own schemas and
+    tables; nothing is prepared by hand on the VPS.
+  - **A destructive change is not automatic.** EF migrations are reviewed files; Marten
+    only adds. Anything that removes or rewrites data is a hand-written migration,
+    with a `pg_dump` taken first (backups below).
+  - **One instance at a time.** Both tools take a lock, but a rolling deploy with two
+    instances is not a case this app is built for.
 - **Backups are entirely our responsibility.** The event stream *is* the ledger —
   lose it and every balance is gone, with no third party holding a copy.
   Scheduled offsite `pg_dump`, and a restore that has actually been tested rather
@@ -1752,10 +1778,18 @@ a documentation tool, not application code.
   happens when two accounts turn out to be one person.
 - **DEFERRED** Transactional relay — shortlisted in §4; `LogEmailSender` until then.
 - **DEFERRED** `PeriodClosed` / stream archival, until a stream is actually long.
-- **OPEN** Wolverine in production. `AutoCreate.None` covers Marten's schema but
-  not Wolverine's 8 tables in the `wolverine` schema; decide how they are created
-  when deployed. Also decide whether to pre-generate Wolverine's code (`codegen
-  write`, `TypeLoadMode.Static`) instead of compiling it with Roslyn at startup.
+- **OPEN** Wolverine's code in production: pre-generate it (`codegen write`,
+  `TypeLoadMode.Static`) instead of compiling it with Roslyn at startup? Its tables
+  are settled: none in mediator-only mode (§3, Hosting consequences), checked by
+  booting outside Development on an empty database and recording a write
+  (`StartupMigrationTests`).
+- **OPEN** `/health` checks that both databases answer, not that the schema is there.
+  With the startup migration it only answers once the schema is applied, which makes
+  it true; whether it should also check the schema is left until it is seen to lie.
+- **OPEN** Production will not start yet: no mail relay (§4) and `App:PublicOrigin`
+  unset, both by design until chosen. The first boot of an empty database also logs
+  one `fail:` from EF, probing the migrations table it is about to create; it is not a
+  failure.
 - **DEFERRED** Frozen settle-up plan, unless a shifting plan bites in practice.
 - **DEFERRED** Marten-backed `IUserStore`, if EF Core and Marten genuinely chafe.
 - **DEFERRED** `MemberMergedInto` for duplicate slots — out of scope for v1.

@@ -46,12 +46,4 @@ public static class IdentitySetup
         services.AddScoped<IEmailDirectory, IdentityEmailDirectory>();
         return services;
     }
-
-    /// <summary>Development only: anywhere else, migrations are applied deliberately.</summary>
-    public static async Task MigrateIdentityInDevelopmentAsync(this WebApplication app)
-    {
-        if (!app.Environment.IsDevelopment()) return;
-        await using var scope = app.Services.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<IdentityDb>().Database.MigrateAsync();
-    }
 }

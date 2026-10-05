@@ -13,8 +13,7 @@ public static class MartenSetup
 {
     public const string Schema = "ledger";
 
-    public static IServiceCollection AddLedgerStore(
-        this IServiceCollection services, string connectionString, IHostEnvironment env)
+    public static IServiceCollection AddLedgerStore(this IServiceCollection services, string connectionString)
     {
         services
             .AddMarten(opts =>
@@ -23,11 +22,9 @@ public static class MartenSetup
                 opts.DatabaseSchemaName = Schema;
                 opts.Events.DatabaseSchemaName = Schema;
 
-                // Development creates/patches schema objects on the fly. Anywhere else the
-                // schema must already exist — apply changes deliberately, not at runtime.
-                opts.AutoCreateSchemaObjects = env.IsDevelopment()
-                    ? AutoCreate.CreateOrUpdate
-                    : AutoCreate.None;
+                // Nothing is created lazily behind a request: DatabaseMigration applies the
+                // schema at startup, in every environment.
+                opts.AutoCreateSchemaObjects = AutoCreate.None;
 
                 // Typed ids are bare Guids in JSON; registering them lets LINQ
                 // compare and search them like Guids (spec §12, verified by spike).

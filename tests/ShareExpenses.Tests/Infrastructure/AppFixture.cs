@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Npgsql;
 using Testcontainers.PostgreSql;
 using ShareExpenses.Infrastructure.Identity;
 
@@ -80,6 +81,19 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
         var client = CreateClient();
         client.DefaultRequestHeaders.Add(UserHeader, userId.ToString());
         return client;
+    }
+
+    /// <summary>A connection string to a new, empty database on the test container.</summary>
+    public async Task<string> EmptyDatabase()
+    {
+        var name = $"empty_{Guid.NewGuid():N}";
+        await using (var admin = new NpgsqlConnection(_postgres.GetConnectionString()))
+        {
+            await admin.OpenAsync();
+            await using var create = new NpgsqlCommand($"create database {name}", admin);
+            await create.ExecuteNonQueryAsync();
+        }
+        return new NpgsqlConnectionStringBuilder(_postgres.GetConnectionString()) { Database = name }.ConnectionString;
     }
 
     /// <summary>Every email the app sends, instead of logging it.</summary>

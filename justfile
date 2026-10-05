@@ -68,7 +68,7 @@ events:
 rebuild-projections: db
     dotnet run --project {{project}} -- projections rebuild
 
-# Drop all domain data (events, projections, documents) — dev only; Marten recreates the schema
+# Drop all domain data (events, projections, documents) — dev only; the app recreates the schema on its next start
 [confirm("Drop the ledger schema and every event in it?")]
 reset-ledger: db
     {{psql}} -c "drop schema if exists ledger cascade;"
