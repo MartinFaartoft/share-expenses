@@ -42,7 +42,6 @@ public static class IdentitySetup
         services.AddAuthorization(o =>
             o.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
-        services.AddEmailSending(env);
         services.AddScoped<IEmailDirectory, IdentityEmailDirectory>();
         return services;
     }

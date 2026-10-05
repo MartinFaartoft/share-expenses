@@ -14,6 +14,7 @@ var connectionString = builder.Configuration.GetConnectionString("Postgres")
 
 builder.Services.AddLedgerStore(connectionString);
 builder.Services.AddPasswordlessIdentity(connectionString, builder.Environment);
+builder.Services.AddEmailSending(builder.Configuration, builder.Environment);
 builder.Services.AddPublicOrigin(builder.Configuration, builder.Environment);
 builder.Services.AddSignIn(builder.Configuration);
 builder.AddWolverineEndpoints();

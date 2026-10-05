@@ -39,16 +39,46 @@ public sealed class LogEmailSender(ILogger<LogEmailSender> logger) : IEmailSende
 
 public static class EmailSendingRegistration
 {
-    public static IServiceCollection AddEmailSending(this IServiceCollection services, IHostEnvironment env)
+    public const string ApiKeyKey = "Email:Resend:ApiKey";
+    public const string FromKey = "Email:From";
+
+    /// <summary>
+    /// A key means Resend, in any environment. No key means the log sender, except in
+    /// Production: there it would "work" perfectly while silently locking out every real
+    /// user, so the app refuses to start (spec §4).
+    /// </summary>
+    public static IServiceCollection AddEmailSending(
+        this IServiceCollection services, IConfiguration configuration, IHostEnvironment env)
     {
-        // Safety gate (spec §4): choosing a relay is a release blocker for Production.
-        if (env.IsProduction())
+        var apiKey = configuration[ApiKeyKey];
+        var from = configuration[FromKey];
+
+        if (string.IsNullOrWhiteSpace(apiKey))
         {
-            throw new InvalidOperationException(
-                "No mail relay is configured, and LogEmailSender refuses to run in Production: " +
-                "it would silently lock out every user. Choose a relay before deploying (spec §4).");
+            if (env.IsProduction())
+            {
+                throw new InvalidOperationException(
+                    $"No mail relay is configured ({ApiKeyKey}), and LogEmailSender refuses to run in Production: " +
+                    "it would silently lock out every user (spec §4).");
+            }
+
+            return services.AddSingleton<IEmailSender, LogEmailSender>();
         }
 
-        return services.AddSingleton<IEmailSender, LogEmailSender>();
+        if (!System.Net.Mail.MailAddress.TryCreate(from, out _))
+        {
+            throw new InvalidOperationException(
+                $"{FromKey} must be an address, e.g. 'Shared expenses <noreply@example.com>' — got '{from}'.");
+        }
+
+        var options = new EmailOptions(from!, apiKey.Trim());
+        services.AddHttpClient<IEmailSender, ResendEmailSender>(http =>
+        {
+            http.BaseAddress = EmailOptions.ResendApi;
+            http.Timeout = EmailOptions.Timeout;
+            http.DefaultRequestHeaders.Authorization = new("Bearer", options.ApiKey);
+        });
+        services.AddSingleton(options);
+        return services;
     }
 }

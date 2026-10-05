@@ -318,27 +318,111 @@ siblings over Marten documents — eliminates EF, but means writing and testing
 auth plumbing, which §2 puts explicitly off the learning path. Revisit only if
 the two stacks genuinely chafe.
 
-### Mail relay — deferred
+### Mail relay — Resend
 
-**Decision: deferred.** Development and early verification use a
-`LogEmailSender` implementation of `IEmailSender` that writes each sign-in code
-and invite straight to the application log. Entirely adequate while the only
-users are the author and deliberate testers.
+**Decision: Resend, sending from a subdomain of `ftft.dk`.** Development and the
+tests keep `LogEmailSender`; everywhere else the app sends through Resend's HTTP API
+(`POST https://api.resend.com/emails`, a bearer key, a JSON body of `from`, `to`,
+`subject`, `html` and `text`). Shortlisted beside Postmark and Amazon SES; chosen for
+its developer experience, and because the free plan (100 emails a day, 3,000 a month,
+checked on its pricing page) is more than this app sends. Running our own outbound
+SMTP stays rejected: cold IP reputation and unaligned DMARC put sign-in emails in spam
+folders, and a sign-in code in spam is a total lockout the user blames on the app.
 
-**Safety gate:** the log sender must refuse to start when the environment is
-Production. Otherwise it silently locks out every real user, and the failure
-presents as "nobody can log in" with no error anywhere in the system — the log
-sender is working perfectly, it just isn't sending email to anyone. Choosing a
-relay is a release blocker for the first real group, and nothing before that.
+**The sending domain is the app's own subdomain.** The app lives at
+`splitit.ftft.dk`, and mail is sent from `noreply@splitit.ftft.dk`. A subdomain keeps the
+app's sending reputation apart from anything else on `ftft.dk`, which is what Resend
+itself recommends. Its DNS records are TXT and MX entries under `splitit.ftft.dk` (a DKIM
+key, SPF, and a return path), none of which touch the host's own A record. The exact
+names and values are the ones the Resend dashboard shows when the domain is added; they
+are not reproduced here. DMARC: a `_dmarc.splitit.ftft.dk` TXT record, `p=none` with an
+`rua` address first, tightened to `quarantine` once sign-in mail is seen passing. A
+TXT record on `ftft.dk` itself, if one exists, is not inherited by the subdomain's
+SPF or DKIM, only by DMARC.
 
-Shortlist for when that time comes: Postmark (best-in-class transactional
-deliverability), Resend (best developer experience), Amazon SES (cheapest, most
-setup). Free-tier terms shift; verify before committing.
+**Decision: a thin typed `HttpClient`, not the `Resend` NuGet package.** The app
+sends two kinds of email, and the API call is one request. A typed client is about
+thirty lines, has no dependency to follow, and a fake `HttpMessageHandler` tests the
+exact request. The package is the alternative if more of Resend's API is ever wanted.
 
-Running our own outbound SMTP is explicitly rejected: cold IP reputation and
-unaligned DMARC put sign-in emails in spam folders, and a sign-in code in spam is
-a total lockout that the user blames on the app. SPF, DKIM and DMARC must be
-configured on the sending domain whichever provider is eventually chosen.
+**How it is chosen and configured** (`Email:` in configuration; secrets by
+environment variable, never in `appsettings.json` or the repository):
+
+- `Email:Resend:ApiKey` — a key with sending access only, limited to this domain if the
+  dashboard offers it. Set on the VPS as `Email__Resend__ApiKey`.
+- `Email:From` — `Shared expenses <noreply@splitit.ftft.dk>`. **No Reply-To:** it is a
+  no-reply address, nothing receives mail there, and a reply bounces. Should a human
+  ever need to be reachable, the app's pages say so, not the mail headers.
+- **A key present means Resend, in any environment** (so delivery can be tried from a
+  laptop). **No key means `LogEmailSender`, except in Production, where the app refuses
+  to start** — the safety gate below, now a configuration check. A key with no `From`,
+  or a `From` that is not an address, refuses to start too.
+
+**Trying real delivery from a laptop:** set the key and a `From` in the environment
+before `just run` — `Email__Resend__ApiKey=re_…` and `Email__From='Shared expenses
+<noreply@splitit.ftft.dk>'` (double underscores are configuration's `:`). The app then
+sends through Resend instead of logging; unset them and it logs again. Until the domain
+is verified Resend accepts only its own test sender, and only to the account's owner —
+check the dashboard — so set `Email__From` to that address and sign in with the
+account's own email.
+
+**Safety gate:** Production must not run the log sender. Otherwise it silently locks
+out every real user: the failure presents as "nobody can log in" with no error
+anywhere, the log sender working perfectly, just not sending email to anyone.
+
+**Sending is best-effort, as today.** The invite goes out after the commit and the
+sign-in code after it is saved (§14, transactional outbox). A relay failure is logged
+with the status Resend answered and never the address or the code; the user asks for a
+new code, or the inviter's invite stands and the invitee signs in regardless. New here:
+a request timeout (10 seconds) so a slow relay cannot hold a sign-in request open, and
+an `Idempotency-Key` header on every send, which costs nothing and makes a later retry
+safe. Whether to retry is not decided here.
+
+**The emails** are built by a pure function (`EmailContent`), unit-tested, each with a
+plain-text part as well as HTML — plain text is part of deliverability, not a courtesy:
+
+- **Sign-in:** subject `Your sign-in code is 123456`, and the first line says the same,
+  so Apple's one-time-code detection finds it (§14). The code appears in the subject and
+  therefore in lock-screen previews; that is how the autofill works and the code lives
+  for minutes, which is accepted.
+- **Invite:** subject `<inviter> invited you to <group> on Shared expenses`; the body
+  says to sign in with *this* address (the one it was sent to, named) and links to the
+  app. No secret in it (InviteMember).
+- No open or click tracking, and nothing but the link: a tracking redirect in a sign-in
+  mail is a phishing look-alike. (Resend's domain settings have the tracking switches;
+  they should be off.)
+
+**Free-plan limits are the ceiling on sign-ins.** All mail counts against 100 a day, so
+that is also how many codes and invites the app can send in a day. The sign-in limits
+(§4, per address and per IP) are what stop one actor spending it; a quota or rate-limit
+answer (HTTP 429) from Resend is logged as such so it is recognisable, and the paid plan
+is the remedy if real use gets near it.
+
+**Privacy:** Resend becomes a processor of the addresses mail goes to, and nothing more:
+no address enters the ledger (§11), and the relay sees what any mail server sees.
+
+**Verified from a laptop (Resend, `splitit.ftft.dk`):** the headers of a real sign-in
+show `spf=pass`, `dkim=pass` and `dmarc=pass`, and it landed in the inbox, not spam.
+The production key and the VPS environment are what remain.
+
+**One-off setup, by hand, before the first deploy:**
+1. The subdomain is `splitit.ftft.dk`: the host, `App:PublicOrigin`
+   (`https://splitit.ftft.dk`) and `From` alike.
+2. Add it as a domain in the Resend dashboard, in the EU region if offered, and copy the
+   DNS records it shows into `ftft.dk`'s DNS, which Netlify manages today.
+3. Wait for Resend to report the domain verified, then add the DMARC record.
+4. Create the sending-only API key and put it in the VPS environment.
+5. Send one real sign-in to an address at a mail provider you use (Gmail, iCloud), and
+   look at its headers for `spf=pass`, `dkim=pass`, `dmarc=pass`.
+
+**When DNS moves from Netlify to Hetzner, the mail records move with it.** They are
+part of the zone, not of Resend: the DKIM, SPF, return-path and DMARC entries under
+`splitit.ftft.dk`, and the A record the app itself is served from, have to be
+recreated in the new zone *before* the nameservers are switched. Otherwise mail from
+the app fails SPF and DKIM the moment the switch happens, and sign-in codes go to
+spam or are refused, with the app itself looking healthy. Keep a copy of the records
+(the dashboard's "DNS records" view lists them) with the migration checklist, and send
+a real sign-in after the switch (step 5 above).
 
 ### Consequences accepted
 
@@ -1611,8 +1695,9 @@ a documentation tool, not application code.
     step, and pinned by a test.** Still to do: detection in email is Apple's
     heuristic, not a standard, so the sign-in email should state the code plainly
     and early — e.g. "Your sign-in code is 123456", in the subject and the first
-    line — with the mail relay (§4); then verify on a real iPhone and Mac. The log
-    sender sends nothing to detect.
+    line — **done, in the sign-in email built with the mail relay (§4).** Still to do,
+    deferred: verify on a real iPhone and Mac that the keyboard offers the code. If it
+    does not, the wording is what to adjust.
   - **Answered — several pending invites** (by View homepage). Signing in lands on
     the home screen, which lists every invite waiting, soonest deadline first, each
     with Join, above the user's groups; a single invite is shown the same way, and a
@@ -1784,7 +1869,26 @@ a documentation tool, not application code.
   and a sign-in code can be requested again. An outbox would record "send this
   email" in the same transaction as the event and the `Invite` document, and a
   background worker would deliver and retry it — `Invite` is the natural place for
-  delivery status. Revisit with the choice of relay (§4). Wolverine's durable
+  delivery status. Revisited with the choice of relay (§4): it stays best-effort, with
+  an idempotency key on each send so a retry would be safe; an outbox waits until a
+  lost email actually bites. **Deferred, after weighing Wolverine's durable outbox:**
+  - *If built, invites only.* The message carries just the `InviteId`; the handler loads
+    the `Invite` document (which holds the address) and skips a superseded or claimed
+    invite. No new table holds personal data.
+  - *Not sign-in.* A code in a message would sit in plaintext in Wolverine's tables,
+    undoing hashing it on purpose; codes expire in minutes, so a late retry is useless and
+    a fresh code is one request away; and the code is saved through EF Core, not Marten, so
+    it would need a second Wolverine integration.
+  - *What it costs:* leaving `MediatorOnly` (agents and the `wolverine` tables, which the
+    startup migration would have to create — to be verified); email becoming asynchronous,
+    so tests wait on Wolverine's activity tracking; the slice rules needing a role for a
+    message type; and an idempotency key derived from the message (the invite id) instead
+    of the random one per send, since at-least-once allows duplicates (Resend dedupes for
+    24 hours).
+  - *What it does not fix:* delivery to the inbox — bounces and spam — which is Resend's
+    webhooks, a separate feature.
+  - *The cheaper remedy that comes first:* the Invite member screen's re-invite re-sends.
+    Build the outbox after that screen, so there is a baseline to compare it with. Wolverine's durable
   outbox does exactly this, but it runs in mediator-only mode today (no
   inbox/outbox); adopting it means switching durability mode, and the email becomes
   a message handled after the commit. A superseded invite needs no special care:
@@ -1797,7 +1901,7 @@ a documentation tool, not application code.
   signed-in user proving a second address (with a code sent to it) would let them
   claim invites sent there, but raises the rest: which address signs in, what
   happens when two accounts turn out to be one person.
-- **DEFERRED** Transactional relay — shortlisted in §4; `LogEmailSender` until then.
+- **Decided** Transactional relay: Resend, from a subdomain of `ftft.dk` (§4).
 - **DEFERRED** `PeriodClosed` / stream archival, until a stream is actually long.
 - **OPEN** Wolverine's code in production: pre-generate it (`codegen write`,
   `TypeLoadMode.Static`) instead of compiling it with Roslyn at startup? Its tables
@@ -1807,8 +1911,8 @@ a documentation tool, not application code.
 - **OPEN** `/health` checks that both databases answer, not that the schema is there.
   With the startup migration it only answers once the schema is applied, which makes
   it true; whether it should also check the schema is left until it is seen to lie.
-- **OPEN** Production will not start yet: no mail relay (§4) and `App:PublicOrigin`
-  unset, both by design until chosen. The first boot of an empty database also logs
+- **OPEN** Production will not start until the mail relay (§4) and `App:PublicOrigin`
+  are configured, both by design. The first boot of an empty database also logs
   one `fail:` from EF, probing the migrations table it is about to create; it is not a
   failure.
 - **DEFERRED** Frozen settle-up plan, unless a shifting plan bites in practice.
