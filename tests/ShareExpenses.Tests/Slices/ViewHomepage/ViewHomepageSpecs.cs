@@ -6,7 +6,7 @@ using ShareExpenses.Tests.Specs;
 using GroupCreated = ShareExpenses.Slices.CreateGroup.GroupCreated;
 using MemberAdded = ShareExpenses.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = ShareExpenses.Slices.CreateGroup.MemberClaimed;
-using MemberInvited = ShareExpenses.Slices.InviteMember.MemberInvited;
+using MemberInvited = ShareExpenses.Slices.AddMember.MemberInvited;
 
 namespace ShareExpenses.Tests.Slices.ViewHomepage;
 

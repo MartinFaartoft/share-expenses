@@ -1,7 +1,7 @@
 using ShareExpenses.Infrastructure.Invites;
 using ShareExpenses.Shared;
 
-namespace ShareExpenses.Slices.InviteMember;
+namespace ShareExpenses.Slices.AddMember;
 
 // Owned by this slice: it is the first to emit it (spec §12). Additive changes
 // only (spec §11): a change of shape is a new type plus an upcaster.

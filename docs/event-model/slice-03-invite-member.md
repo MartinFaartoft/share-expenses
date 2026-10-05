@@ -4,9 +4,9 @@ Type: **State Change**. Screen → command → events.
 
 | | |
 |---|---|
-| Screen | Invite member (modelled; no frontend yet) |
+| Screen | Invite member (modelled; no frontend yet) — for a placeholder added without an email; one added with one is invited by AddMember |
 | Command | `InviteMember(memberId, email, inviteId, now, by)` + looked up: `emailHolder`, `invitedTo` |
-| Events | `MemberInvited` |
+| Events | `MemberInvited` (owned by AddMember) |
 | Also writes | `Invite` — plain document binding the slot to the address |
 | Code | `src/ShareExpenses/Slices/InviteMember/` |
 | Endpoint | none yet — its screen is not built, so nothing reaches it (spec §3). The slice's logic and specs stand |

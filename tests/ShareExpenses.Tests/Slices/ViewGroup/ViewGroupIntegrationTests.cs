@@ -27,6 +27,7 @@ public class ViewGroupIntegrationTests(AppFixture app)
         Assert.Contains("<title>Lisbon trip · Shared expenses</title>", html);
         Assert.Contains("""<a href="/">← Home</a>""", html);
         Assert.Contains($"""<a class="button" href="/groups/{group.Id}/expenses/new">Add expense</a>""", html);
+        Assert.Contains($"""<a href="/groups/{group.Id}/members/new">Add member</a>""", html);
         Assert.Contains("You're settled up", html);
         Assert.Contains("Nothing yet.", html);
     }

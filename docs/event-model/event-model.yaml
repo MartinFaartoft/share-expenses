@@ -122,18 +122,47 @@ slices:
   - slice: Add a member
     type: State Change
     screen:
-      name: Group setup
+      name: Add member
       fields:
         groupId: GroupId
         displayName: string
+        email: string                                      # optional: given, the new member is invited at once
+      wireframe:
+        - "< Lisbon trip     Add member"
+        - "In this group"
+        - "  Alice (you)"
+        - "  Bob      Invited"
+        - "Name              [........]"
+        - "Email (optional)  [........]"
+        - ""
+        - "        [ Add member ]"
     command:
       name: AddMember
       fields:
         displayName: string
+        email: string                                      # none: a placeholder, invitable later (InviteMember)
         by: { type: UserId, source: system }               # the signed-in user
-        memberId: { type: MemberId, source: system }       # new id
-    events:  [MemberAdded]
-        
+        # new id, chosen when the form is shown and carried in it, so a resubmitted
+        # form names the member it already added instead of adding a second
+        memberId: { type: MemberId, source: system }
+        inviteId: { type: InviteId, source: system }       # new id; names the Invite document
+        # the clock; the invite's deadline is decided now and recorded: now + 30 days
+        now: { type: DateTimeOffset, source: system, feeds: [MemberInvited.expiresAt] }
+        # guards for the invite, as InviteMember's (spec §11): may be stale; the claim
+        # enforces one user, one slot
+        emailHolder: { type: "UserId?", source: lookup }     # Identity: account with this email
+        invitedTo: { type: "MemberId[]", source: lookup }    # Invite: slots invited at it
+    events:
+      # one command, two events: adding with an email is adding and inviting, and a
+      # rejected invite adds no one - the form is corrected and sent again
+      - MemberAdded
+      - name: MemberInvited
+        fields:
+          memberId: MemberId
+          inviteId: InviteId
+          expiresAt: DateTimeOffset
+          by: UserId
+
   - slice: Invite a member
     type: State Change
     screen:
@@ -156,13 +185,7 @@ slices:
         # guards (spec §11): may be stale; the claim enforces one user, one slot
         emailHolder: { type: "UserId?", source: lookup }     # Identity: account with this email
         invitedTo: { type: "MemberId[]", source: lookup }    # Invite: slots invited at it
-    events:
-      - name: MemberInvited
-        fields:
-          memberId: MemberId
-          inviteId: InviteId
-          expiresAt: DateTimeOffset
-          by: UserId
+    events: [MemberInvited]
 
   - slice: View homepage
     type: State Read

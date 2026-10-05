@@ -91,8 +91,7 @@ offline use is out (already a non-goal, §1).
 once screens existed: nothing called it but its own tests, and every screen
 doubled each slice's endpoints and tests. A slice whose screen is not built yet has
 no endpoint at all — its `Decide` or `Read` and its specs stand, unreachable until
-the screen arrives (Add member, Invite member, Record settlement, View settlement
-plan; §14). A native app may want an API later; it
+the screen arrives (Invite member, Record settlement, View settlement plan; §14). A native app may want an API later; it
 would be designed then, for that client, and the endpoints removed here are in the
 git history. **Tests set up through events:** an integration test appends the
 events it needs straight to the store (`tests/…/Infrastructure/Seed.cs`) and drives
@@ -367,6 +366,18 @@ the existing history stays intact.
 Rationale: without this the app fails at the exact moment it is meant to be
 useful — standing in a restaurant, wanting to enter the bill now, with one person
 who will not open their invite until Thursday.
+
+**Decision: adding a person offers inviting them in the same step.** The Add member
+screen takes a name and an optional email; with one, the member is added and invited
+by a single command (`AddMember` emits `MemberAdded` and `MemberInvited`). Without
+one, the person stays a placeholder, invitable later (`InviteMember`).
+
+Rationale: the common case is a person the group wants in now, and two steps for it
+would be two screens for one thought. The placeholder stays the default when no email
+is given, so standing in the restaurant with one name is still one field. One command,
+not two chained: both events or neither, so a refused invite never leaves behind a
+member the form cannot be corrected against. The invite rules are shared, not copied
+(`Shared/`), so the two ways in cannot drift apart.
 
 #### Claiming is driven by the invite, not by a picker
 
@@ -1065,7 +1076,9 @@ that are returned as an `IResult` rather than in a signature.
 
 - **An event is owned by the slice that first emits it** — the same rule as
   "declared once, at first appearance" in `event-model.yaml`. `AddMember` emits
-  `MemberAdded` but does not declare it; it uses `CreateGroup`'s public record.
+  `MemberAdded` but does not declare it; it uses `CreateGroup`'s public record. It
+  does declare `MemberInvited`, emitted when a member is added with an email, which
+  `InviteMember` then uses.
 - Events are the only coupling between slices, which is exactly what the event
   model draws.
 
@@ -1169,19 +1182,25 @@ in place of `Decider.cs`, and no events.
   goes to it. The id comes from the client, so it is not trusted: a malformed one
   is replaced by a fresh id, and an existing one only ever leads to what the user
   could reach anyway. Set by New group (slice-01-create-group.md), followed by Add expense
-  (slice-06-record-expense.md), which also keeps the ids recorded in its state so
-  deciding can tell; Add member and Record settlement should follow it. Ids the server alone needs (the
+  (slice-06-record-expense.md) and Add member (slice-02-add-member.md), which keep
+  the ids recorded in their state so deciding can tell; Record settlement should follow it. Ids the server alone needs (the
   creator's member slot) stay chosen on submit.
 - **`Decision` (in `Shared/`) is the decide result; each endpoint maps it to
   HTTP,** because the mapping differs per slice (AcceptInvite's 409 carries the
   way in). What can go wrong *after* deciding — a stream collision, a concurrency
   conflict — is an exception from Wolverine's save, answered by the endpoint's own
   `OnException`, so each slice keeps its own wording.
-- **Side effects after the commit go in `AfterCommitAsync`.** InviteMember's email
-  must only be sent once the invite is saved: the endpoint fills a `PendingEmail`
+- **Side effects after the commit go in `AfterCommitAsync`.** The invite email, sent
+  by AddMember (with an email) and InviteMember, must only go once the invite is saved: the endpoint fills a `PendingEmail`
   (created by its `Load()`), and `AfterCommitAsync` sends it. Wolverine's `After`
   runs *before* the commit, and would email an invite that was never saved when the
   save loses a race.
+  **Two parameter rules this needs** (found building Add member, where a form post has
+  no JSON body): a service Wolverine does not already know — `PublicOrigin`, registered
+  as an instance — must be marked `[FromServices]`, and the carrier filled by `Load()`
+  must be marked `[NotBody]`. Unmarked, Wolverine reads them as the request body and
+  answers 415; `dotnet run --project src/ShareExpenses -- codegen preview` shows which
+  parameters it took for the body (`ReadJsonAsync`).
 - **Event types are registered with explicit stored names** (`group_created`),
   so a class or folder rename can never change what is in the database.
 - **Naming: every slice folds a `State`; a read slice's output is its read model.**
@@ -1644,10 +1663,10 @@ a documentation tool, not application code.
   - Optional means advisory by default: it reports, and the caller decides
     whether to gate on it.
 - **OPEN** Screens for the slices that lost their endpoint with the JSON API (§3):
-  **Add member**, **Invite member**, **Settle up** (View settlement plan and Record
-  settlement). Until then a group cannot gain members or settle; the group page's
-  Settle up button points at a screen that does not exist, and nothing links to
-  adding a member yet.
+  **Invite member** (for a placeholder added without an email), **Settle up** (View
+  settlement plan and Record settlement). Until then a group cannot settle, and a
+  placeholder cannot be invited later; the group page's Settle up button points at a
+  screen that does not exist.
   Each comes back with a design pass, and with the behaviour its old endpoint had
   that the specs do not cover — in the git history: the invite's `Invite` document
   and email after commit (Invite member), and every write's concurrency 409.
@@ -1655,7 +1674,9 @@ a documentation tool, not application code.
   (Record expense) is built: `/groups/{group}/expenses/new`, from the group
   page, equal split first; shares and exact follow as a second and third pass over
   the same screen (slice-06-record-expense.md, "Prepared for the other split
-  modes").
+  modes"). **Add member** (Add member, with an optional invite) is built:
+  `/groups/{group}/members/new`, from the group page and the Add expense form
+  (slice-02-add-member.md).
 - **OPEN** Default currency from the browser's locale. The New group form
   preselects DKK for everyone. Better: guess from the request — the
   `Accept-Language` header's first region (`da-DK` → DKK, `en-GB` → GBP), mapped

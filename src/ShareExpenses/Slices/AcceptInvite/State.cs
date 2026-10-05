@@ -2,7 +2,7 @@ using System.Collections.Immutable;
 using Marten.Schema;
 using ShareExpenses.Shared;
 using ShareExpenses.Slices.CreateGroup;
-using ShareExpenses.Slices.InviteMember;
+using ShareExpenses.Slices.AddMember;
 
 namespace ShareExpenses.Slices.AcceptInvite;
 

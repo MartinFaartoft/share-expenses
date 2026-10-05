@@ -1,6 +1,6 @@
 using Marten;
+using ShareExpenses.Slices.AddMember;
 using ShareExpenses.Slices.CreateGroup;
-using ShareExpenses.Slices.InviteMember;
 using ShareExpenses.Slices.RecordExpense;
 using ShareExpenses.Slices.RecordSettlement;
 using ShareExpenses.Slices.ViewGroup;
@@ -20,7 +20,7 @@ public static class AllSlices
     public static void Register(StoreOptions opts)
     {
         CreateGroupSlice.Register(opts);
-        InviteMemberSlice.Register(opts);
+        AddMemberSlice.Register(opts);
         RecordExpenseSlice.Register(opts);
         RecordSettlementSlice.Register(opts);
         ViewGroupSlice.Register(opts);

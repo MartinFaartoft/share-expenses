@@ -8,7 +8,7 @@ using GroupCreated = ShareExpenses.Slices.CreateGroup.GroupCreated;
 using LedgerState = ShareExpenses.Slices.ViewBalances.State;
 using MemberAdded = ShareExpenses.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = ShareExpenses.Slices.CreateGroup.MemberClaimed;
-using MemberInvited = ShareExpenses.Slices.InviteMember.MemberInvited;
+using MemberInvited = ShareExpenses.Slices.AddMember.MemberInvited;
 using SettlementRecorded = ShareExpenses.Slices.RecordSettlement.SettlementRecorded;
 
 namespace ShareExpenses.Tests.Slices.ViewSettlementPlan;

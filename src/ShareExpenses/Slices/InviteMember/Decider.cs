@@ -1,4 +1,5 @@
 using ShareExpenses.Shared;
+using ShareExpenses.Slices.AddMember;
 
 namespace ShareExpenses.Slices.InviteMember;
 
@@ -40,12 +41,6 @@ internal static class Decider
 
     public const string MemberNotFound = "member not found";
 
-    /// <summary>
-    /// How long a new invite lives. Applied once, when inviting, and recorded on the
-    /// event as a deadline: changing this does not move invites already sent.
-    /// </summary>
-    public static readonly TimeSpan InviteLifetime = TimeSpan.FromDays(30);
-
     /// <param name="state">The group's state, or null if its stream does not exist.</param>
     public static Decision Decide(State? state, Command command)
     {
@@ -59,24 +54,13 @@ internal static class Decider
             return Decision.Reject("member has already joined");
 
         var email = EmailAddress.Trim(command.Email);
-        if (!EmailAddress.IsPlausible(email))
-            return Decision.Reject("email is not a valid address");
-
-        // Guard: the address belongs to someone already in the group — including
-        // the creator, and whatever address they use today.
-        if (command.EmailHolder is { } holder && state.Members.TryGetValue(holder, out var held))
-            return Decision.Reject($"{email} has already joined as {state.Slots[held].Name}");
-
-        // Guard: the address has an open invite on another slot. Invites to slots
-        // since claimed (or gone) no longer hold the address.
-        var openElsewhere = (command.InvitedTo ?? new HashSet<MemberId>())
-            .Where(m => m != command.MemberId)
-            .Select(m => state.Slots.GetValueOrDefault(m))
-            .FirstOrDefault(s => s is { Claimed: false });
-        if (openElsewhere is not null)
-            return Decision.Reject($"that email is already invited as {openElsewhere.Name}");
+        if (Invitations.Refusal(email, command.EmailHolder, command.InvitedTo, command.MemberId,
+                joinedAs: user => state.Members.TryGetValue(user, out var held) ? state.Slots[held].Name : null,
+                openSlotName: slot => state.Slots.GetValueOrDefault(slot) is { Claimed: false } open ? open.Name : null)
+            is { } refusal)
+            return Decision.Reject(refusal);
 
         return Decision.Accept(new MemberInvited(
-            command.MemberId, command.InviteId, command.Now + InviteLifetime, command.By));
+            command.MemberId, command.InviteId, command.Now + Invitations.Lifetime, command.By));
     }
 }

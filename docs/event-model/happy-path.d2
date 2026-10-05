@@ -49,6 +49,7 @@ gpN0_1: "" { class: gapN }
 gpN0_2: "" { class: gapN }
 dvN1: "" { class: divN }
 n1: "2 - Add a member                        " { class: slicename }
+gpN1_1: "" { class: gapN }
 dvN2: "" { class: divN }
 n2: "3 - Invite a member                     " { class: slicename }
 dvN3: "" { class: divN }
@@ -72,7 +73,8 @@ s0: "New group                         \n                                  \n< H
 gp2_0_1: "" { class: gap }
 gp2_0_2: "" { class: gap }
 dv2_1: "" { class: div }
-s1: "Group setup                       \n                                  \n- groupId: GroupId                \n- displayName: string             \n                                  \n                                  " { class: screen }
+s1: "Add member                        \n                                  \n< Lisbon trip     Add member      \nIn this group                     \n  Alice (you)                     \n  Bob      Invited                \nName              [........]      \nEmail (optional)  [........]      \n                                  \n        [ Add member ]            " { class: screen }
+gp2_1_1: "" { class: gap }
 dv2_2: "" { class: div }
 s2: "Invite member                     \n                                  \n- groupId: GroupId                \n- memberId: MemberId              \n- email: string                   \n                                  " { class: screen }
 dv2_3: "" { class: div }
@@ -97,6 +99,7 @@ gp3_0_1: "" { class: gap }
 gp3_0_2: "" { class: gap }
 dv3_1: "" { class: div }
 gp3_1: "" { class: gap }
+gp3_1_1: "" { class: gap }
 dv3_2: "" { class: div }
 gp3_2: "" { class: gap }
 dv3_3: "" { class: div }
@@ -120,7 +123,8 @@ c0: "CreateGroup                       \n                                  \n- g
 gp4_0_1: "" { class: gap }
 gp4_0_2: "" { class: gap }
 dv4_1: "" { class: div }
-c1: "AddMember                         \n                                  \n- displayName: string             \n- by: UserId (sys)                \n- memberId: MemberId (sys)        \n                                  " { class: command }
+c1: "AddMember                         \n                                  \n- displayName: string             \n- email: string                   \n- by: UserId (sys)                \n- memberId: MemberId (sys)        \n- inviteId: InviteId (sys)        \n- now: DateTimeOffset (sys)       \n- emailHolder: UserId? (lku)      \n- invitedTo: MemberId[] (lku)     " { class: command }
+gp4_1_1: "" { class: gap }
 dv4_2: "" { class: div }
 c2: "InviteMember                      \n                                  \n- memberId: MemberId              \n- email: string                   \n- inviteId: InviteId (sys)        \n- now: DateTimeOffset (sys)       \n- by: UserId (sys)                \n- emailHolder: UserId? (lku)      \n- invitedTo: MemberId[] (lku)     " { class: command }
 dv4_3: "" { class: div }
@@ -145,6 +149,7 @@ e0_1: "MemberAdded                       \n                                  \n-
 e0_2: "MemberClaimed                     \n                                  \n- memberId: MemberId              \n- userId: UserId                  \n                                  \n                                  " { class: event }
 dv5_1: "" { class: div }
 e1_0: "MemberAdded                       \n                                  \n- memberId: MemberId              \n- displayName: string             \n- by: UserId                      \n                                  " { class: event }
+e1_1: "MemberInvited                     \n                                  \n- memberId: MemberId              \n- inviteId: InviteId              \n- expiresAt: DateTimeOffset       \n- by: UserId                      " { class: event }
 dv5_2: "" { class: div }
 e2_0: "MemberInvited                     \n                                  \n- memberId: MemberId              \n- inviteId: InviteId              \n- expiresAt: DateTimeOffset       \n- by: UserId                      " { class: event }
 dv5_3: "" { class: div }
@@ -169,6 +174,7 @@ c0 -> e0_1
 c0 -> e0_2
 s1 -> c1
 c1 -> e1_0
+c1 -> e1_1
 s2 -> c2
 c2 -> e2_0
 s4 -> c4

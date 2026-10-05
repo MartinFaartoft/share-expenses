@@ -6,7 +6,7 @@ using ExpenseRecorded = ShareExpenses.Slices.RecordExpense.ExpenseRecorded;
 using GroupCreated = ShareExpenses.Slices.CreateGroup.GroupCreated;
 using MemberAdded = ShareExpenses.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = ShareExpenses.Slices.CreateGroup.MemberClaimed;
-using MemberInvited = ShareExpenses.Slices.InviteMember.MemberInvited;
+using MemberInvited = ShareExpenses.Slices.AddMember.MemberInvited;
 using SettlementRecorded = ShareExpenses.Slices.RecordSettlement.SettlementRecorded;
 
 namespace ShareExpenses.Tests.Infrastructure;
@@ -63,7 +63,7 @@ public sealed class Seed(AppFixture app)
             Email = email,
             NormalizedEmail = EmailAddress.Normalize(email),
         });
-        session.Events.Append(groupId.Value, new MemberInvited(member, inviteId, app.Clock.GetUtcNow() + ShareExpenses.Slices.InviteMember.Decider.InviteLifetime, by));
+        session.Events.Append(groupId.Value, new MemberInvited(member, inviteId, app.Clock.GetUtcNow() + Invitations.Lifetime, by));
         await session.SaveChangesAsync();
     }
 }

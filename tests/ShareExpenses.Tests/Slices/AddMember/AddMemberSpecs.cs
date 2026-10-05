@@ -22,6 +22,15 @@ public class AddMemberSpecs
     private static readonly UserId Alice = new(Guid.Parse("00000000-0000-0000-0000-0000000000c1"));
     private static readonly UserId Bob = new(Guid.Parse("00000000-0000-0000-0000-0000000000c2"));
     private static readonly UserId Mallory = new(Guid.Parse("00000000-0000-0000-0000-0000000000c9"));
+    private static readonly InviteId I0 = new(Guid.Parse("00000000-0000-0000-0000-0000000000d0"));
+    private static readonly InviteId I1 = new(Guid.Parse("00000000-0000-0000-0000-0000000000d1"));
+
+    /// <summary>"Now" for every scenario; a new invite expires 30 days later.</summary>
+    private static readonly DateTimeOffset T0 = new(2026, 10, 1, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset T30 = T0.AddDays(30);
+
+    /// <summary>The deadline of some earlier invite in a Given; deciding never reads it.</summary>
+    private static readonly DateTimeOffset Earlier = T0.AddDays(20);
 
     /// <summary>The group as CreateGroup leaves it.</summary>
     private static readonly object[] Lisbon =
@@ -34,9 +43,13 @@ public class AddMemberSpecs
     /// <summary>The next member slot the handler would be given; pinned per scenario.</summary>
     private MemberId _next = M2;
 
-    private DecideSpec<Command> Spec => new((history, command) => Decider.Decide(Fold.Of<State>(history), command, _next));
+    private DecideSpec<Command> Spec => new((history, command) => Decider.Decide(Fold.Of<State>(history), command));
 
-    private static Command AddMember(string? displayName, UserId by) => new(displayName, by);
+    private Command AddMember(string? displayName, UserId by) => new(_next, displayName, null, I1, T0, by);
+
+    private Command AddMember(
+        string? displayName, string? email, UserId by, UserId? emailHolder = null, params MemberId[] invitedTo) =>
+        new(_next, displayName, email, I1, T0, by, emailHolder, invitedTo.ToHashSet());
 
     [Fact]
     public void S1_adds_a_placeholder_member_by_name_alone() =>
@@ -100,6 +113,63 @@ public class AddMemberSpecs
         Spec.Given(Lisbon)
             .When(AddMember("  Bob ", Alice))
             .Then(new MemberAdded(M2, "Bob", Alice));
+
+    [Fact]
+    public void S10_with_an_email_adds_and_invites_in_one() =>
+        Spec.Given(Lisbon)
+            .When(AddMember("Bob", "bob@example.com", Alice))
+            .Then(new MemberAdded(M2, "Bob", Alice), new MemberInvited(M2, I1, T30, Alice));
+
+    [Theory]
+    [InlineData("   ")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void S11_a_blank_email_is_no_email(string? email) =>
+        Spec.Given(Lisbon)
+            .When(AddMember("Bob", email, Alice))
+            .Then(new MemberAdded(M2, "Bob", Alice));
+
+    [Fact]
+    public void S12_an_email_that_is_not_plausibly_one_adds_no_one() =>
+        Spec.Given(Lisbon)
+            .When(AddMember("Bob", "bob", Alice))
+            .ThenRejected("email is not a valid address");
+
+    [Fact]
+    public void S13_the_address_of_a_user_already_in_the_group_adds_no_one() =>
+        Spec.Given(Lisbon)
+            .When(AddMember("Bob", "alice@example.com", Alice, emailHolder: Alice))
+            .ThenRejected("alice@example.com has already joined as Alice");
+
+    [Fact]
+    public void S14_an_address_with_an_open_invite_on_another_slot_adds_no_one()
+    {
+        _next = M3;
+        Spec.Given([.. Lisbon, new MemberAdded(M2, "Bobby", Alice), new MemberInvited(M2, I0, Earlier, Alice)])
+            .When(AddMember("Bob", "BOB@example.com", Alice, invitedTo: M2))
+            .ThenRejected("that email is already invited as Bobby");
+    }
+
+    [Fact]
+    public void S15_an_invite_to_a_slot_since_claimed_no_longer_holds_its_address()
+    {
+        _next = M3;
+        Spec.Given([.. Lisbon, new MemberAdded(M2, "Bobby", Alice), new MemberInvited(M2, I0, Earlier, Alice), new MemberClaimed(M2, Bob)])
+            .When(AddMember("Bob", "bob@example.com", Alice, invitedTo: M2))
+            .Then(new MemberAdded(M3, "Bob", Alice), new MemberInvited(M3, I1, T30, Alice));
+    }
+
+    [Fact]
+    public void S16_the_name_is_checked_before_the_email() =>
+        Spec.Given(Lisbon)
+            .When(AddMember("", "bob", Alice))
+            .ThenRejected("name is required");
+
+    [Fact]
+    public void S17_a_member_id_already_added_is_not_added_twice() =>
+        Spec.Given([.. Lisbon, new MemberAdded(M2, "Bob", Alice)])
+            .When(AddMember("Bob", Alice))
+            .ThenAlreadyRecorded("member already added");
 
     [Fact]
     public void A_non_member_learns_nothing_from_validation() =>

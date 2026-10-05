@@ -1,5 +1,6 @@
 using ShareExpenses.Shared;
 using ShareExpenses.Slices.InviteMember;
+using MemberInvited = ShareExpenses.Slices.AddMember.MemberInvited;
 using ShareExpenses.Tests.Specs;
 // Only the public events: tests can see every slice's internals, so a namespace
 // import would bring in CreateGroup's own Command too.

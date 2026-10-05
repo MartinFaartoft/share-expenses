@@ -55,6 +55,7 @@ public partial class RecordExpenseIntegrationTests(AppFixture app)
         Assert.Contains($"""<input type="checkbox" name="participants" value="{l.Alice}" checked />""", html);
         Assert.Contains($"""<input type="checkbox" name="participants" value="{l.Bob}" checked />""", html);
         Assert.Contains($"""<input type="checkbox" name="participants" value="{l.Carol}" checked />""", html);
+        Assert.Contains($"""Someone missing? <a href="/groups/{l.Group.Id}/members/new">Add a member</a>""", html);
         Assert.True(html.IndexOf(l.Alice.ToString(), StringComparison.Ordinal) < html.IndexOf(l.Bob.ToString(), StringComparison.Ordinal));
         Assert.True(html.IndexOf(l.Bob.ToString(), StringComparison.Ordinal) < html.IndexOf(l.Carol.ToString(), StringComparison.Ordinal));
         Assert.Contains($"""<input type="date" name="paidOn" value="{Today}" max="{DateOnly.Parse(Today).AddDays(1):yyyy-MM-dd}" required />""", html);
