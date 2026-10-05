@@ -21,7 +21,7 @@
 </form>
 
 @code {
-    [Parameter, EditorRequired] public string Email { get; set; } = "";
+    [Parameter] public string Email { get; set; } = "";
     [Parameter] public string? Error { get; set; }
     [Parameter] public string? ReturnUrl { get; set; }
 }

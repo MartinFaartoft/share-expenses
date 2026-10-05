@@ -58,7 +58,7 @@
 </Page>
 
 @code {
-    [Parameter, EditorRequired] public GroupActivityReadModel ReadModel { get; set; } = null!;
+    [Parameter] public GroupActivityReadModel ReadModel { get; set; } = null!;
     
     private string Side(Shared.MemberId payer) => payer == ReadModel.You ? "mine" : "theirs";
 

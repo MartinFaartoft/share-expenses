@@ -17,7 +17,7 @@
 </Page>
 
 @code {
-    [Parameter, EditorRequired] public GroupBalancesReadModel Model { get; set; } = default!;
+    [Parameter] public GroupBalancesReadModel Model { get; set; } = default!;
 
     private string Standing(long balance) =>
         balance < 0 ? $"owes {Money.Format(balance, Model.Currency)}"
