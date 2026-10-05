@@ -1,6 +1,8 @@
+using System.Net;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
+using Microsoft.AspNetCore.HttpOverrides;
 
 namespace ShareExpenses.Web;
 
@@ -33,8 +35,27 @@ public static class WebSetup
         services.AddRazorComponents();
         services.AddAntiforgery();
         services.AddSingleton<IAuthorizationMiddlewareResultHandler, SignInRedirect>();
+        services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+            options.ForwardLimit = 1;
+            // The default trusts loopback only. Caddy reaches the app over a docker bridge network
+            // whose range docker picks, and nothing else can reach the app, so trust the private
+            // ranges — never every address, or any client could claim to be anyone.
+            foreach (var (address, prefix) in PrivateRanges)
+                options.KnownIPNetworks.Add(new System.Net.IPNetwork(IPAddress.Parse(address), prefix));
+        });
         return services;
     }
+
+    private static readonly (string Address, int Prefix)[] PrivateRanges =
+        [("10.0.0.0", 8), ("172.16.0.0", 12), ("192.168.0.0", 16)];
+
+    /// <summary>
+    /// First in the pipeline: behind the reverse proxy the connection is always the proxy's, so
+    /// the client address (the rate limiter's key) and the scheme are the forwarded ones.
+    /// </summary>
+    public static void UseWebForwardedHeaders(this WebApplication app) => app.UseForwardedHeaders();
 
     /// <summary>Static files, before authentication: the stylesheet and htmx are public.</summary>
     public static void UseWebStaticFiles(this WebApplication app) => app.UseStaticFiles();

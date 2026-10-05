@@ -45,4 +45,4 @@
 @host = https://localhost:7194
 
 ### Health: the app is up and reaches both databases. Expect 200.
-GET {{host}}/health
+GET {{host}}/healthz

@@ -1,0 +1,15 @@
+service: splitit
+domain: splitit.ftft.dk
+type: app
+port: 8080
+
+env:
+  App__PublicOrigin: https://splitit.ftft.dk
+  Email__From: no-reply@splitit.ftft.dk
+
+secrets:
+  Email__Resend__ApiKey: ${secrets.RESEND_API_KEY}
+
+database:
+  type: postgres
+  version: "16"

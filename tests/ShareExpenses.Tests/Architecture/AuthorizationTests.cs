@@ -21,7 +21,7 @@ public class AuthorizationTests(AppFixture app)
 {
     private static readonly string[] AllowList =
     [
-        "GET /health",
+        "GET /healthz",
         "GET /sign-in",
         "POST /sign-in",
         "POST /sign-in/code",

@@ -1,12 +1,21 @@
 using System.Net;
 using System.Text.RegularExpressions;
 using Marten;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
+using ShareExpenses.Infrastructure.Identity;
 using ShareExpenses.Infrastructure.Invites;
 using ShareExpenses.Shared;
 using ShareExpenses.Slices.AddMember;
 using ShareExpenses.Tests.Infrastructure;
+using GroupCreated = ShareExpenses.Slices.CreateGroup.GroupCreated;
 using MemberAdded = ShareExpenses.Slices.CreateGroup.MemberAdded;
+using MemberClaimed = ShareExpenses.Slices.CreateGroup.MemberClaimed;
 
 namespace ShareExpenses.Tests.Slices.AddMember;
 
@@ -271,6 +280,75 @@ public partial class AddMemberIntegrationTests(AppFixture app)
 
         Assert.Contains("that email is already invited as Bobby", html);
         Assert.Equal(eventsBefore, (await StreamOf(group.Id)).Count);
+    }
+
+    // ── With the real sender ─────────────────────────────────────────────────────
+
+    private sealed class CapturingHandler : HttpMessageHandler
+    {
+        public List<(HttpRequestMessage Request, string Body)> Received { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Received.Add((request, await request.Content!.ReadAsStringAsync(ct)));
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"id":"abc"}""") };
+        }
+    }
+
+    private sealed class ProductionLike : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = "Production";
+        public string ApplicationName { get; set; } = "test";
+        public string ContentRootPath { get; set; } = "";
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+
+    [Fact]
+    public async Task With_the_resend_sender_registered_as_in_production_the_endpoint_still_builds_and_sends_the_invite()
+    {
+        // The other tests swap in a recording sender; this is the registration Production uses.
+        // Wolverine must be able to generate the endpoint's code with it (found by `codegen test`
+        // in the container image: an opaque factory registration needed service location).
+        var resend = new CapturingHandler();
+        var settings = new Dictionary<string, string?>
+        {
+            ["Email:Resend:ApiKey"] = "re_test",
+            ["Email:From"] = "Shared expenses <noreply@splitit.ftft.dk>",
+        };
+        // Its own database: a second host on the shared one disturbs the fixture host's async daemon.
+        var database = await app.EmptyDatabase();
+        await using var factory = app.WithWebHostBuilder(host => host
+            .UseSetting("ConnectionStrings:Default", database)
+            .ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IEmailSender>();
+                services.AddEmailSending(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), new ProductionLike());
+                services.AddHttpClient(nameof(IEmailSender)).ConfigurePrimaryHttpMessageHandler(() => resend);
+            }));
+        var browser = factory.CreateClient(new() { AllowAutoRedirect = false });
+        browser.DefaultRequestHeaders.Add(AppFixture.UserHeader, _alice.ToString());
+
+        var groupId = GroupId.New();
+        var aliceSlot = MemberId.New();
+        await using (var session = factory.Services.GetRequiredService<IDocumentStore>().LightweightSession())
+        {
+            session.Events.StartStream(groupId.Value,
+                new GroupCreated(groupId, "Lisbon trip", "GBP", _alice),
+                new MemberAdded(aliceSlot, "Alice", _alice),
+                new MemberClaimed(aliceSlot, _alice));
+            await session.SaveChangesAsync();
+        }
+        var group = new SeededGroup(new Seed(app), groupId, _alice, aliceSlot);
+        var form = await ScreenPage(browser, group.Id);
+        var email = UniqueEmail("bob");
+
+        var response = await Submit(browser, form, group, "Bob", email);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var (request, body) = Assert.Single(resend.Received);
+        Assert.Equal("https://api.resend.com/emails", request.RequestUri?.ToString());
+        Assert.Contains(email, body);
+        Assert.Contains("Alice invited you to Lisbon trip on Shared expenses", body);
     }
 
     // ── Submitting twice ──────────────────────────────────────────────────────────

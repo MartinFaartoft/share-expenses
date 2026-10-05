@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+.git/
+.github/
+.venv/
+.config/
+tests/
+docs/
+tmp/
+*.md
+*.user
+compose.yaml
+justfile
+Dockerfile
+.dockerignore

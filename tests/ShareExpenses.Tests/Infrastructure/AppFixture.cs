@@ -111,7 +111,7 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
-        builder.UseSetting("ConnectionStrings:Postgres", _postgres.GetConnectionString());
+        builder.UseSetting("ConnectionStrings:Default", _postgres.GetConnectionString());
         // Every test request comes from the same (absent) client IP: lift that limit;
         // the sign-in tests check the per-address limits instead.
         builder.UseSetting("SignIn:RequestsPerIp", "100000");

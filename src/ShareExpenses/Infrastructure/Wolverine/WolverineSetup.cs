@@ -17,6 +17,7 @@ public static class WolverineSetup
             // (spec §14, emails) would mean moving off this mode.
             opts.Durability.Mode = DurabilityMode.MediatorOnly;
             opts.CodeGeneration.AlwaysUseServiceLocationFor<IEmailDirectory>();
+            opts.CodeGeneration.AlwaysUseServiceLocationFor<IEmailSender>();
         });
         builder.Services.AddWolverineHttp();
     }

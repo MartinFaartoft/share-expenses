@@ -9,8 +9,8 @@ using ShareExpenses.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var connectionString = builder.Configuration.GetConnectionString("Postgres")
-    ?? throw new InvalidOperationException("Missing connection string 'Postgres'.");
+var connectionString = builder.Configuration.GetConnectionString("Default")
+    ?? throw new InvalidOperationException("Missing connection string 'Default'.");
 
 builder.Services.AddLedgerStore(connectionString);
 builder.Services.AddPasswordlessIdentity(connectionString, builder.Environment);
@@ -27,6 +27,7 @@ var app = builder.Build();
 
 await app.MigrateDatabaseAsync();
 
+app.UseWebForwardedHeaders();
 app.UseWebStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -39,7 +40,7 @@ app.UseRateLimiter();
 app.MapWolverineEndpoints();
 app.MapSignIn();
 
-app.MapGet("/health", async (IQuerySession marten, IdentityDb identity, CancellationToken ct) =>
+app.MapGet("/healthz", async (IQuerySession marten, IdentityDb identity, CancellationToken ct) =>
 {
     var martenOk = await marten.QueryAsync<int>("select 1", ct) is [1];
     var identityOk = await identity.Database.CanConnectAsync(ct);

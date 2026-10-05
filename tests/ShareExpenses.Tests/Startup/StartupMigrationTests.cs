@@ -19,13 +19,13 @@ public class StartupMigrationTests(AppFixture app)
         var connectionString = await app.EmptyDatabase();
         await using var factory = app.WithWebHostBuilder(host => host
             .UseEnvironment("Staging")
-            .UseSetting("ConnectionStrings:Postgres", connectionString)
+            .UseSetting("ConnectionStrings:Default", connectionString)
             .UseSetting("App:PublicOrigin", "https://example.test"));
         var alice = UserId.New();
         var browser = factory.CreateClient(new() { AllowAutoRedirect = false });
         browser.DefaultRequestHeaders.Add(AppFixture.UserHeader, alice.ToString());
 
-        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/health")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/healthz")).StatusCode);
         var form = await (await browser.GetAsync("/groups/new")).Content.ReadAsStringAsync();
         var created = await Forms.Post(browser, "/groups", Forms.TokenIn(form)!,
             ("groupName", "Lisbon trip"), ("currency", "GBP"), ("memberName", "Alice"));

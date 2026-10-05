@@ -121,6 +121,18 @@ only its own slice's screen, so no test depends on another slice's screen.
 ### Hosting consequences
 
 - TLS termination through a reverse proxy (Caddy or nginx) with Let's Encrypt.
+- **The app trusts the proxy's forwarded address and scheme, and only the proxy's.**
+  Behind Caddy every connection comes from the proxy, so the sign-in rate limit (§4) would
+  count all users as one address. `UseWebForwardedHeaders` runs first in the pipeline and
+  honours `X-Forwarded-For` and `X-Forwarded-Proto` (one hop) from the private ranges
+  (`10/8`, `172.16/12`, `192.168/16`) — the docker network Caddy reaches the app over, which
+  nothing else can — and from loopback. Anyone else's forwarded headers are ignored, so a
+  made-up address buys nothing; Caddy itself overwrites a client's `X-Forwarded-*`. Tests:
+  the rules in isolation, and the real app's limiter counting each client separately.
+- **Tests that start a second copy of the app use their own database.** A second host on
+  the shared one runs its own Marten async daemon and disturbs the fixture host's, so
+  tests that wait for projections then time out, depending on test order
+  (`AppFixture.EmptyDatabase`).
 - **The app applies its own schema on startup, in every environment.** The VPS runs
   no migration hook, so a deploy is a new binary and a restart. Before the app
   listens, one startup step brings all three stores up to date, and a failure stops
@@ -241,7 +253,7 @@ it was silently public — and a group's data leaked rather than 404'd. With the
 fallback, forgetting is safe rather than merely caught.
 
 **The allow-list is pinned by an architecture test.** Today: the sign-in screen's
-`GET /sign-in`, `POST /sign-in/code` and `POST /sign-in`, and `GET /health`; candidates later, an
+`GET /sign-in`, `POST /sign-in/code` and `POST /sign-in`, and `GET /healthz`; candidates later, an
 invite landing page if one returns. `AuthorizationTests` walks the running app's
 `EndpointDataSource` — Wolverine's endpoints and minimal APIs alike — and requires
 the set carrying `IAllowAnonymous` to equal the allow-list exactly, so it fails on
@@ -1285,6 +1297,13 @@ in place of `Decider.cs`, and no events.
   must be marked `[NotBody]`. Unmarked, Wolverine reads them as the request body and
   answers 415; `dotnet run --project src/ShareExpenses -- codegen preview` shows which
   parameters it took for the body (`ReadJsonAsync`).
+  **A third:** a service registered through a factory (`AddHttpClient<IEmailSender,…>`,
+  the Resend sender) is "opaque" to Wolverine, which refuses to generate code that
+  needs it unless `AlwaysUseServiceLocationFor<IEmailSender>()` says it may (as for
+  `IEmailDirectory`). Found by running `codegen test` in the container image, which the
+  tests missed because they swap in a recording sender; a test now posts to Add member
+  with the Production registration. `just image` builds the image; to check one,
+  `docker run … share-expenses:dev codegen test` with the same environment.
 - **Event types are registered with explicit stored names** (`group_created`),
   so a class or folder rename can never change what is in the database.
 - **Naming: every slice folds a `State`; a read slice's output is its read model.**
@@ -1908,7 +1927,7 @@ a documentation tool, not application code.
   are settled: none in mediator-only mode (§3, Hosting consequences), checked by
   booting outside Development on an empty database and recording a write
   (`StartupMigrationTests`).
-- **OPEN** `/health` checks that both databases answer, not that the schema is there.
+- **OPEN** `/healthz` checks that both databases answer, not that the schema is there.
   With the startup migration it only answers once the schema is applied, which makes
   it true; whether it should also check the schema is left until it is seen to lie.
 - **OPEN** Production will not start until the mail relay (§4) and `App:PublicOrigin`

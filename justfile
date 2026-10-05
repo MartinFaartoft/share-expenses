@@ -36,15 +36,19 @@ run: db
     #!/usr/bin/env bash
     set -euo pipefail
     url=https://localhost:7194
-    # /health answers 200 only when the app is up and reaches both databases.
+    # /healthz answers 200 only when the app is up and reaches both databases.
     (
         for _ in $(seq 1 120); do
-            if curl -skf "$url/health" > /dev/null 2>&1; then open "$url/sign-in"; exit 0; fi
+            if curl -skf "$url/healthz" > /dev/null 2>&1; then open "$url/sign-in"; exit 0; fi
             sleep 1
         done
         echo "the app did not become healthy within 2 minutes; not opening the browser" >&2
     ) &
     exec dotnet run --project {{project}} --launch-profile https
+
+# Build the container image the way the codex platform does
+image:
+    docker build -t share-expenses:dev .
 
 # ── Database ────────────────────────────────────────────────────────────────────
 
