@@ -91,8 +91,8 @@ offline use is out (already a non-goal, §1).
 once screens existed: nothing called it but its own tests, and every screen
 doubled each slice's endpoints and tests. A slice whose screen is not built yet has
 no endpoint at all — its `Decide` or `Read` and its specs stand, unreachable until
-the screen arrives (Create group, Add member, Invite member, Record expense, Record
-settlement, View settlement plan; §14). A native app may want an API later; it
+the screen arrives (Add member, Invite member, Record settlement, View settlement
+plan; §14). A native app may want an API later; it
 would be designed then, for that client, and the endpoints removed here are in the
 git history. **Tests set up through events:** an integration test appends the
 events it needs straight to the store (`tests/…/Infrastructure/Seed.cs`) and drives
@@ -1142,8 +1142,9 @@ in place of `Decider.cs`, and no events.
   and resubmit — creates one thing, not two: the second submit finds it exists and
   goes to it. The id comes from the client, so it is not trusted: a malformed one
   is replaced by a fresh id, and an existing one only ever leads to what the user
-  could reach anyway. Set by New group (slice-01-create-group.md); Add member, Add
-  expense and Record settlement should follow it. Ids the server alone needs (the
+  could reach anyway. Set by New group (slice-01-create-group.md), followed by Add expense
+  (slice-06-record-expense.md), which also keeps the ids recorded in its state so
+  deciding can tell; Add member and Record settlement should follow it. Ids the server alone needs (the
   creator's member slot) stay chosen on submit.
 - **`Decision` (in `Shared/`) is the decide result; each endpoint maps it to
   HTTP,** because the mapping differs per slice (AcceptInvite's 409 carries the
@@ -1524,7 +1525,9 @@ a documentation tool, not application code.
   - **Amounts on screen** go through `Web/Money`: minor units to the currency's
     decimals, with its symbol where it reads cleanly in a left-to-right line (£, €,
     $, R$), the ISO code otherwise (CHF, KWD). The only place minor units become
-    decimals.
+    decimals. **Amounts typed** go through `Money.TryParse`, its mirror: the currency's
+    units with one `.` or `,` and at most the currency's decimals, no thousands
+    separators (ambiguous); anything else is unreadable and deciding rejects it.
   - **One "not found" page** (`Web/NotFoundPage`) for anything missing or not
     yours: one 404, whatever the reason.
   - **A screen whose read model is polymorphic** (the group history) needs its
@@ -1615,14 +1618,18 @@ a documentation tool, not application code.
   - Optional means advisory by default: it reports, and the caller decides
     whether to gate on it.
 - **OPEN** Screens for the slices that lost their endpoint with the JSON API (§3):
-  **Add member**, **Invite member**, **Add expense** (Record expense), **Settle up**
-  (View settlement plan and Record settlement). Until then a group cannot gain
-  members or record anything; the group page's Add expense and Settle up buttons
-  point at screens that do not exist, and nothing links to adding a member yet.
+  **Add member**, **Invite member**, **Settle up** (View settlement plan and Record
+  settlement). Until then a group cannot gain members or settle; the group page's
+  Settle up button points at a screen that does not exist, and nothing links to
+  adding a member yet.
   Each comes back with a design pass, and with the behaviour its old endpoint had
   that the specs do not cover — in the git history: the invite's `Invite` document
   and email after commit (Invite member), and every write's concurrency 409.
-  **New group** (Create group) is built: `/groups/new`, from Home.
+  **New group** (Create group) is built: `/groups/new`, from Home. **Add expense**
+  (Record expense) is built: `/groups/{group}/expenses/new`, from the group
+  page, equal split first; shares and exact follow as a second and third pass over
+  the same screen (slice-06-record-expense.md, "Prepared for the other split
+  modes").
 - **OPEN** Default currency from the browser's locale. The New group form
   preselects DKK for everyone. Better: guess from the request — the
   `Accept-Language` header's first region (`da-DK` → DKK, `en-GB` → GBP), mapped

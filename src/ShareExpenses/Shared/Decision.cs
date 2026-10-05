@@ -15,6 +15,8 @@ internal abstract record Decision
     public static Decision NotFound(string reason) => new Rejected(reason, Rejection.NotFound);
 
     public static Decision AlreadyMember(string reason) => new Rejected(reason, Rejection.AlreadyMember);
+
+    public static Decision AlreadyRecorded(string reason) => new Rejected(reason, Rejection.AlreadyRecorded);
 }
 
 internal enum Rejection
@@ -22,4 +24,5 @@ internal enum Rejection
     Invalid,
     NotFound,
     AlreadyMember,
+    AlreadyRecorded,
 }

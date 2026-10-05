@@ -224,22 +224,28 @@ slices:
       fields:
         groupId: GroupId
         description: string
-        amountMinor: long                                  # in the group currency's minor unit
+        amountMinor: long                                  # typed in the currency's units ("120.50"); the endpoint converts
         payerMemberId: MemberId
         # one of: equal (participants) | shares (a share each) | exact (an amount each)
+        # the first screen offers equal only; the form already carries its mode
         split: ExpenseSplit
         paidOn: DateOnly
       wireframe:
-        - "Dinner          [ 120.00 ]"
-        - "paid by         [ Alice v ]"
-        - "split  (equal) exact shares"
-        - "[x] Alice [x] Bob [ ] Carol"
-        - "on              [ 2 Oct ]"
-        - "             [ Add ]"
+        - "< Lisbon trip     Add expense"
+        - "What for          [ Dinner   ]"
+        - "Amount (GBP £)    [ 120.00   ]"
+        - "Paid by           [ Alice v  ]"
+        - "Shared equally between"
+        - "  [x] Alice  [x] Bob  [ ] Carol"
+        - "Date              [ 2 Oct    ]"
+        - ""
+        - "         [ Add expense ]"
     command:
       name: RecordExpense
       fields:
-        expenseId: { type: ExpenseId, source: system }     # new id
+        # new id, chosen when the form is shown and carried in it, so a resubmitted
+        # form names the expense it already recorded instead of recording a second
+        expenseId: { type: ExpenseId, source: system }
         description: string
         amountMinor: long
         payerMemberId: MemberId

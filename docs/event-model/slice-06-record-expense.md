@@ -4,11 +4,11 @@ Type: **State Change**. Screen → command → events.
 
 | | |
 |---|---|
-| Screen | Add expense |
+| Screen | Add expense — the form to record one, reached from the group page. Equal split only for now (see The screen) |
 | Command | `RecordExpense(expenseId, description, amountMinor, payerMemberId, split, paidOn, now, by)`; `splits` computed by deciding |
 | Events | `ExpenseRecorded` |
 | Code | `src/ShareExpenses/Slices/RecordExpense/` |
-| Endpoint | none yet — its screen is not built, so nothing reaches it (spec §3). The slice's logic and specs stand |
+| Endpoints | `GET /groups/{group}/expenses/new` — the form; `POST /groups/{group}/expenses` — its submit; sign-in required |
 
 Records one expense: who paid, how much, who it is split between and how (spec §7).
 The event carries both the split as entered — one of three shapes, one per mode —
@@ -175,6 +175,16 @@ defaults: `paidOn = 2026-10-01`.
 30 - a date is required
     WHEN   RecordExpense("Dinner", 9000, m1, equal [m1], paidOn none, alice)
     THEN   rejected - date is required
+
+31 - the amount must be readable
+    WHEN   RecordExpense("Dinner", no amount, m1, equal [m1], alice)
+    THEN   rejected - amount must be a number
+
+32 - an expense id already recorded is not recorded twice
+    GIVEN  ... AND ExpenseRecorded(e1, "Dinner", 9000, m1, equal [m1, m2, m3],
+                                   {m1: 3000, m2: 3000, m3: 3000}, 2026-10-01, alice)
+    WHEN   RecordExpense(e1, "Dinner", 9000, m1, equal [m1, m2, m3], alice)
+    THEN   rejected (already recorded) - expense already recorded
 ```
 
 ## Notes
@@ -195,7 +205,7 @@ defaults: `paidOn = 2026-10-01`.
   or a share or amount missing from its entry, is not a split at all: the request
   fails to read and is answered 400 before anything is decided. What deciding
   checks is what a well-formed split can still get wrong (scenarios 21–26).
-- **Order of checks:** membership, then description, amount, payer, the split
+- **Order of checks:** membership, then the id (already recorded), description, amount, payer, the split
   (present, members, not empty, no duplicates, then the mode's own rule), the date.
   A non-member gets `group not found` whatever else is wrong. Once a member,
   rejections may name what is wrong — including that a slot is not in the group:
@@ -217,6 +227,81 @@ defaults: `paidOn = 2026-10-01`.
   the amounts: the event's shape does not depend on the order of a request.
 - **A zero exact amount** is allowed (`exact [m1: 5000, m2: 0]`): recorded as
   entered, though it changes no balance.
+
+## The screen
+
+- **Reached from the group page:** the **Add expense** button under the history,
+  and the empty state ("Nothing yet. Add the first expense."). A link in View
+  group's screen: an address, not a dependency on this slice.
+- **The fields,** top to bottom, as in the model:
+  - **What for** — the description; `required`, `maxlength` 100 (a hint: the
+    decider counts visible characters, `maxlength` UTF-16 units).
+  - **Amount** — a text input, `inputmode="decimal"`, labelled with the group's
+    currency (`GBP £`, as `Web/Money.Label`). The user types it in the currency's
+    units; `Money.TryParse` (beside `Money.Format`, the only place minor units become
+    decimals) turns it into `amountMinor`: digits with at most one `.` or `,` and at
+    most the currency's decimals after it (2 for GBP, 0 for JPY, 3 for KWD); no
+    thousands separators, which would be ambiguous (`1,234`). Anything else is
+    unreadable, and goes to deciding as no amount (scenario 31).
+  - **Paid by** — a `<select>` of the group's member slots in member-added order,
+    **the signed-in user's own slot preselected**, marked "(you)". Placeholders are
+    listed like anyone (scenario 2).
+  - **Shared between** — one checkbox per slot, in member-added order, **all
+    checked**. Equal split (scenarios 1–6). Unchecking everyone is rejected by
+    deciding (scenario 23), not prevented by the page.
+  - **Date** — `<input type="date">`, preselected to today (UTC) and capped at
+    tomorrow (UTC), as deciding is (scenario 27). A person east of UTC late in the
+    evening sees yesterday preselected and changes it; a browser-local default would
+    need script.
+- **Add expense** posts the form — a plain form, no htmx, as New group. Recorded:
+  **back to the group page** (302), where the expense is the newest entry and the
+  user's standing has moved (View group's projection is inline, so it is already
+  there). Rejected: the page again, **with what was typed** and the reason under
+  the form (`role="alert"`), 200.
+- **A Back link** to the group, named by it ("← Lisbon trip").
+- **A non-member, a missing group and a malformed id** get the one not-found page
+  (404), on the form and on the submit alike.
+
+### Prepared for the other split modes
+
+Only equal is offered now. The seams are in place so shares and exact add to the
+screen rather than reshape it:
+
+- **The form carries its mode** (a hidden `mode` field, `equal`). The endpoint turns
+  mode plus the form's fields into an `ExpenseSplit` in one function that `switch`es
+  on mode; a mode it does not build yet — a forged post, or a later client — is
+  answered as a rejection ("split mode not supported"), never a 500.
+- **The form reads its fields by name from the posted form,** not as one parameter
+  per field, so a mode's own fields (`shares-<memberId>`, `amount-<memberId>`,
+  one per slot) join without changing the endpoint's signature.
+- **The split section is its own component** (`EqualSplitFields.razor`), chosen by
+  mode, so another mode is another component beside it.
+- **Not decided yet,** left to the slice that builds the second mode: how the user
+  switches mode (radios that swap the section in with htmx, falling back to a
+  full-page reload without script), and how an exact split shows the running
+  total against the amount.
+
+## Notes on the screen
+
+- **The screen folds this slice's own `State`,** not View group's read model: a
+  slice does not reach into another's (spec §12). `State` grows what the form
+  needs — the group's name and currency, each slot's name, and which slot each user
+  holds (for the preselected payer) — and the ids of expenses already recorded. The
+  form is built from it for the `GET` (folded live, `[ReadAggregate]`), and the same
+  `State` is what the `POST` decides on.
+- **Submitting twice records one expense.** As New group: the expense's id is
+  chosen when the form is *shown* and carried in a hidden field, and `State` keeps
+  the ids recorded, so deciding knows one it has seen (scenario 32). A double tap, a
+  retry after a dropped connection, the back button and resubmit all name an expense
+  that now exists, and go **back to the group page** as if they had recorded it. The id
+  comes from the client, so it is not trusted: a malformed one is replaced by a fresh
+  id (the form still works, without the guard), and the worst a forged one does is
+  record under an id the forger chose — within a group they are a member of.
+- **The amount's text is kept** as typed when the page is shown again, not
+  reformatted from the number.
+- **Antiforgery** on the submit (`[ValidateAntiforgery]`, spec §3).
+- **A concurrent save** answers 409, as AddMember (the open "409 retry UX in forms"
+  task, spec §14).
 
 ## Deferred to the slices that introduce the events
 

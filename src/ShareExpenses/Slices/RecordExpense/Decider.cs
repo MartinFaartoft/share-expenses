@@ -4,7 +4,7 @@ namespace ShareExpenses.Slices.RecordExpense;
 
 /// <summary>The command, as in <c>event-model.yaml</c>. Inputs are raw; deciding validates them.</summary>
 /// <param name="ExpenseId">The new expense's id, chosen by the caller.</param>
-/// <param name="AmountMinor">In the group currency's minor unit.</param>
+/// <param name="AmountMinor">In the group currency's minor unit; null if what was typed is not an amount.</param>
 /// <param name="Split">As entered: well-formed — a malformed split does not read — but not yet checked.</param>
 /// <param name="Now">The clock, read by the caller, so deciding stays pure and testable.</param>
 /// <remarks>
@@ -14,7 +14,7 @@ namespace ShareExpenses.Slices.RecordExpense;
 internal sealed record Command(
     ExpenseId ExpenseId,
     string? Description,
-    long AmountMinor,
+    long? AmountMinor,
     MemberId? PayerMemberId,
     ExpenseSplit? Split,
     DateOnly? PaidOn,
@@ -35,8 +35,11 @@ internal static class Decider
     public static Decision Decide(State? state, Command command)
     {
         // Membership first: a non-member learns nothing, not even from validation.
-        if (state is null || !state.Members.Contains(command.By))
+        if (state is null || !state.Members.ContainsKey(command.By))
             return Decision.NotFound(GroupNotFound);
+
+        if (state.Expenses.Contains(command.ExpenseId))
+            return Decision.AlreadyRecorded("expense already recorded");
 
         var description = command.Description?.Trim() ?? "";
         if (description.Length == 0)
@@ -44,9 +47,11 @@ internal static class Decider
         if (Names.VisibleLength(description) > MaxDescription)
             return Decision.Reject($"description must be at most {MaxDescription} characters");
 
-        if (command.AmountMinor <= 0)
+        if (command.AmountMinor is not { } total)
+            return Decision.Reject("amount must be a number");
+        if (total <= 0)
             return Decision.Reject("amount must be positive");
-        if (command.AmountMinor > MaxAmountMinor)
+        if (total > MaxAmountMinor)
             return Decision.Reject("amount is too large");
 
         if (command.PayerMemberId is not { } payer || !state.Slots.Contains(payer))
@@ -65,7 +70,6 @@ internal static class Decider
         // Recorded as entered, but in member-added order: the event's shape does not
         // depend on the order of a request, and the splits are computed in that order.
         var split = entered.OrderedBy(state.Slots.IndexOf);
-        var total = command.AmountMinor;
         switch (split)
         {
             case SharesSplit shares when shares.Shares.Any(s => s.Shares <= 0):

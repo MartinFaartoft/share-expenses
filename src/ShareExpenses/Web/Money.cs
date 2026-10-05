@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using ShareExpenses.Shared;
 
 namespace ShareExpenses.Web;
@@ -10,7 +11,7 @@ namespace ShareExpenses.Web;
 /// only place minor units become decimals. The symbol is the one .NET knows for the
 /// ISO code, else the code itself (CHF 140.00).
 /// </summary>
-public static class Money
+public static partial class Money
 {
     private static readonly FrozenDictionary<string, string> Symbols = KnownSymbols();
 
@@ -23,6 +24,28 @@ public static class Money
         var number = amount.ToString("N" + places, CultureInfo.InvariantCulture);
         return Symbols.TryGetValue(currency, out var symbol) ? symbol + number : currency + " " + number;
     }
+
+    /// <summary>
+    /// An amount as typed, in the currency's units ("120.50"), to minor units. Digits with
+    /// at most one <c>.</c> or <c>,</c> and no more decimals than the currency has; no
+    /// thousands separators, which would be ambiguous.
+    /// </summary>
+    public static bool TryParse(string? text, string currency, out long minor)
+    {
+        minor = 0;
+        var places = Currency.MinorUnitsOf(currency);
+        var match = Typed().Match(text?.Trim() ?? "");
+        if (!match.Success)
+            return false;
+        var fraction = match.Groups["fraction"].Value;
+        if (fraction.Length > places)
+            return false;
+        return long.TryParse(match.Groups["whole"].Value + fraction.PadRight(places, '0'),
+            NumberStyles.None, CultureInfo.InvariantCulture, out minor);
+    }
+
+    [GeneratedRegex(@"^(?<whole>\d+)(?:[.,](?<fraction>\d+))?$")]
+    private static partial Regex Typed();
 
     /// <summary>A currency as a picker names it: the code, then the symbol amounts are shown with, if any (GBP £, DKK).</summary>
     public static string Label(string currency) =>

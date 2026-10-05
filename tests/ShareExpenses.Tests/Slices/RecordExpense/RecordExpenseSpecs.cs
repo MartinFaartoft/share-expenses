@@ -290,6 +290,18 @@ public class RecordExpenseSpecs
             .ThenRejected("date is required");
 
     [Fact]
+    public void S31_the_amount_must_be_readable() =>
+        Spec.Given(Lisbon)
+            .When(new Command(E1, "Dinner", null, M1, Equal(M1), Oct1, Now, Alice))
+            .ThenRejected("amount must be a number");
+
+    [Fact]
+    public void S32_an_expense_id_already_recorded_is_not_recorded_twice() =>
+        Spec.Given([.. Lisbon, Recorded("Dinner", 9000, M1, Equal(M1, M2, M3), Splits((M1, 3000), (M2, 3000), (M3, 3000)), Alice)])
+            .When(RecordExpense("Dinner", 9000, M1, Equal(M1, M2, M3), Alice))
+            .ThenAlreadyRecorded("expense already recorded");
+
+    [Fact]
     public void A_non_member_learns_nothing_from_validation() =>
         Spec.Given(Lisbon)
             .When(RecordExpense("", -5, M9, null, Mallory))
