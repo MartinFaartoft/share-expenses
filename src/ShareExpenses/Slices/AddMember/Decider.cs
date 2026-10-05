@@ -26,8 +26,8 @@ internal static class Decider
         var name = command.DisplayName?.Trim() ?? "";
         if (name.Length == 0)
             return Decision.Reject("name is required");
-        if (Names.VisibleLength(name) > Names.MaxDisplayName)
-            return Decision.Reject($"name must be at most {Names.MaxDisplayName} characters");
+        if (Names.VisibleLength(name) > Names.DisplayNameMaxLength)
+            return Decision.Reject($"name must be at most {Names.DisplayNameMaxLength} characters");
         if (state.NameKeys.Contains(Names.ComparisonKey(name)))
             return Decision.Reject("a member with that name already exists");
 

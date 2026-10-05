@@ -1,5 +1,3 @@
-@* The Home screen (slice-04-view-homepage.md): invites waiting, then the user's groups. *@
-@using ShareExpenses.Slices.ViewHomepage
 <Page Title="Shared expenses">
     @if (Model.Invites.Count > 0)
     {
@@ -40,5 +38,5 @@
 </Page>
 
 @code {
-    [Parameter, EditorRequired] public HomepageReadModel Model { get; set; } = default!;
+    [Parameter, EditorRequired] public HomepageReadModel Model { get; set; } = null!;
 }

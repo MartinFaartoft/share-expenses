@@ -21,8 +21,8 @@ internal static class Decider
         var groupName = command.GroupName?.Trim() ?? "";
         if (groupName.Length == 0)
             return Decision.Reject("name is required");
-        if (Names.VisibleLength(groupName) > Names.MaxGroupName)
-            return Decision.Reject($"name must be at most {Names.MaxGroupName} characters");
+        if (Names.VisibleLength(groupName) > Names.GroupNameMaxLength)
+            return Decision.Reject($"name must be at most {Names.GroupNameMaxLength} characters");
 
         if (!Currency.TryNormalise(command.Currency, out var currency))
             return Decision.Reject("currency must be a known ISO 4217 code");
@@ -30,8 +30,8 @@ internal static class Decider
         var memberName = command.MemberName?.Trim() ?? "";
         if (memberName.Length == 0)
             return Decision.Reject("your name is required");
-        if (Names.VisibleLength(memberName) > Names.MaxDisplayName)
-            return Decision.Reject($"your name must be at most {Names.MaxDisplayName} characters");
+        if (Names.VisibleLength(memberName) > Names.DisplayNameMaxLength)
+            return Decision.Reject($"your name must be at most {Names.DisplayNameMaxLength} characters");
 
         // The creator is seated and claimed in the same breath: a group whose
         // creator is not a member is a meaningless state (spec §11).

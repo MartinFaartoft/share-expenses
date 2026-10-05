@@ -1,18 +1,8 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace ShareExpenses.Shared;
 
-// Typed ids (spec §12): a Guid that knows what it identifies, so a member id cannot
-// be passed where a user id belongs. Hand-written on purpose — few types, nothing
-// generated. Each one serialises as a bare Guid, so stored events and documents
-// look exactly as they would with plain Guids; the wrapper exists only in code.
-//
-// Marten takes Guid stream ids, so stream calls pass `groupId.Value`. Everything
-// else — event payloads, folded state, documents, LINQ — uses the typed id.
-
-/// <summary>Implemented by every typed id; lets one JSON converter serve them all.</summary>
 public interface ITypedId<TSelf> where TSelf : struct, ITypedId<TSelf>
 {
     Guid Value { get; }
@@ -20,7 +10,6 @@ public interface ITypedId<TSelf> where TSelf : struct, ITypedId<TSelf>
     static abstract TSelf From(Guid value);
 }
 
-/// <summary>A group, and the id of its event stream.</summary>
 [JsonConverter(typeof(TypedIdJsonConverter<GroupId>))]
 public readonly record struct GroupId(Guid Value) : ITypedId<GroupId>
 {
@@ -30,7 +19,6 @@ public readonly record struct GroupId(Guid Value) : ITypedId<GroupId>
     public override string ToString() => Value.ToString();
 }
 
-/// <summary>A member slot within one group. Expenses reference members, never users (spec §4).</summary>
 [JsonConverter(typeof(TypedIdJsonConverter<MemberId>))]
 public readonly record struct MemberId(Guid Value) : ITypedId<MemberId>
 {
@@ -40,10 +28,6 @@ public readonly record struct MemberId(Guid Value) : ITypedId<MemberId>
     public override string ToString() => Value.ToString();
 }
 
-/// <summary>
-/// An invite: names the plain <c>Invite</c> document that binds a member slot to the
-/// address it was invited at, and is recorded on <c>MemberInvited</c>.
-/// </summary>
 [JsonConverter(typeof(TypedIdJsonConverter<InviteId>))]
 public readonly record struct InviteId(Guid Value) : ITypedId<InviteId>
 {
@@ -53,7 +37,6 @@ public readonly record struct InviteId(Guid Value) : ITypedId<InviteId>
     public override string ToString() => Value.ToString();
 }
 
-/// <summary>An expense within a group, recorded by <c>ExpenseRecorded</c>.</summary>
 [JsonConverter(typeof(TypedIdJsonConverter<ExpenseId>))]
 public readonly record struct ExpenseId(Guid Value) : ITypedId<ExpenseId>
 {
@@ -63,7 +46,6 @@ public readonly record struct ExpenseId(Guid Value) : ITypedId<ExpenseId>
     public override string ToString() => Value.ToString();
 }
 
-/// <summary>A settlement within a group: one member paying another, recorded by <c>SettlementRecorded</c>.</summary>
 [JsonConverter(typeof(TypedIdJsonConverter<SettlementId>))]
 public readonly record struct SettlementId(Guid Value) : ITypedId<SettlementId>
 {
@@ -73,7 +55,6 @@ public readonly record struct SettlementId(Guid Value) : ITypedId<SettlementId>
     public override string ToString() => Value.ToString();
 }
 
-/// <summary>A login identity. Recorded as the actor (<c>by</c>) and on claims.</summary>
 [JsonConverter(typeof(TypedIdJsonConverter<UserId>))]
 public readonly record struct UserId(Guid Value) : ITypedId<UserId>
 {
@@ -83,7 +64,6 @@ public readonly record struct UserId(Guid Value) : ITypedId<UserId>
     public override string ToString() => Value.ToString();
 }
 
-/// <summary>Writes and reads a typed id as a bare Guid, including as a dictionary key.</summary>
 public sealed class TypedIdJsonConverter<TId> : JsonConverter<TId> where TId : struct, ITypedId<TId>
 {
     public override TId Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
@@ -101,8 +81,7 @@ public sealed class TypedIdJsonConverter<TId> : JsonConverter<TId> where TId : s
 
 internal static class TypedId
 {
-    /// <summary>Route/query binding: ASP.NET finds each id's static <c>TryParse</c>.</summary>
-    public static bool TryParse<TId>(string? s, [MaybeNullWhen(false)] out TId id) where TId : struct, ITypedId<TId>
+    public static bool TryParse<TId>(string? s, out TId id) where TId : struct, ITypedId<TId>
     {
         id = Guid.TryParse(s, out var guid) ? TId.From(guid) : default;
         return guid != Guid.Empty;

@@ -1,11 +1,5 @@
 namespace ShareExpenses.Infrastructure;
 
-/// <summary>
-/// The scheme and host that links sent to people point at, e.g. invite links in
-/// emails. Configured as <c>App:PublicOrigin</c> and required outside Development:
-/// deriving it from the incoming request would let whoever controls the Host header
-/// shape the links in our emails. Development falls back to the request's own host.
-/// </summary>
 public sealed class PublicOrigin(string? configured)
 {
     public const string ConfigKey = "App:PublicOrigin";

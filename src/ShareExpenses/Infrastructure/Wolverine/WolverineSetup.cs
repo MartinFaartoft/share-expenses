@@ -4,11 +4,6 @@ using Wolverine.Http;
 
 namespace ShareExpenses.Infrastructure.Wolverine;
 
-/// <summary>
-/// Wolverine (spec §12, phase 2): every slice's endpoint runs on its HTTP endpoints
-/// and aggregate handler workflow. Marten's side of the integration is
-/// <c>IntegrateWithWolverine</c> in <c>MartenSetup</c>.
-/// </summary>
 public static class WolverineSetup
 {
     public const string Schema = "wolverine";
@@ -21,20 +16,11 @@ public static class WolverineSetup
             // the aggregate handler workflow are all that is used. The durable outbox
             // (spec §14, emails) would mean moving off this mode.
             opts.Durability.Mode = DurabilityMode.MediatorOnly;
-
-            // Wolverine builds services inline in generated code, so it needs their
-            // concrete types public. The Identity-backed directory stays internal;
-            // resolving it from the container instead is the allowed exception.
             opts.CodeGeneration.AlwaysUseServiceLocationFor<IEmailDirectory>();
         });
         builder.Services.AddWolverineHttp();
     }
 
-    /// <summary>
-    /// Wolverine finds its endpoints by scanning the assembly — there is no explicit
-    /// registration to call. <c>dotnet run -- describe</c> lists what it found. Routes
-    /// are written in full, each screen at its own address (spec §3): no route prefix.
-    /// </summary>
     public static void MapWolverineEndpoints(this WebApplication app) =>
-        global::Wolverine.Http.WolverineHttpEndpointRouteBuilderExtensions.MapWolverineEndpoints(app);
+        WolverineHttpEndpointRouteBuilderExtensions.MapWolverineEndpoints(app);
 }

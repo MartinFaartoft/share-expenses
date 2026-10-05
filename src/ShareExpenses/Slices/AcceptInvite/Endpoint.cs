@@ -51,7 +51,7 @@ public static class Endpoint
         // Lookup (spec §11): the invites in this group sent to the user's address —
         // verified, since accounts are only created by signing in with a code sent to it.
         var address = await directory.AddressOf(userId, ct);
-        var invites = address is null ? [] : await Invite.AddressedTo(session, address, groupId, ct);
+        var invites = address is null ? [] : await Invite.GetInvitesFor(session, address, groupId, ct);
         var command = new Command(clock.GetUtcNow(), userId, invites.Select(i => i.InviteId).ToHashSet());
 
         switch (Decider.Decide(state, command))

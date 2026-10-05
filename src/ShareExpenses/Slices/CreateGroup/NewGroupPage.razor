@@ -10,7 +10,7 @@
         <input type="hidden" name="groupId" value="@Form.GroupId" />
         <label>
             Group name
-            <input name="groupName" value="@Form.GroupName" maxlength="@Names.MaxGroupName" required autofocus />
+            <input name="groupName" value="@Form.GroupName" maxlength="@Names.GroupNameMaxLength" required autofocus />
         </label>
         <label>
             Currency
@@ -23,7 +23,7 @@
         </label>
         <label>
             Your name in this group
-            <input name="memberName" value="@Form.MemberName" maxlength="@Names.MaxDisplayName" required autocomplete="given-name" />
+            <input name="memberName" value="@Form.MemberName" maxlength="@Names.DisplayNameMaxLength" required autocomplete="given-name" />
             <span class="hint">What the others in the group see you as.</span>
         </label>
         @if (Form.Error is not null)

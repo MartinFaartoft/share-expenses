@@ -1,27 +1,25 @@
-@* The group page (slice-07-view-group.md): where you stand, then the history, chat style. *@
-@using ShareExpenses.Slices.ViewGroup
-<Page Title="@Model.GroupName">
+<Page Title="@ReadModel.GroupName">
     <nav class="back"><a href="/">← Home</a></nav>
 
     <section class="summary" aria-label="Your balance">
-        @if (Model.BalanceMinor < 0)
+        @if (ReadModel.BalanceMinor < 0)
         {
-            <p>You owe <strong>@Money.Format(Model.BalanceMinor, Model.Currency)</strong></p>
+            <p>You owe <strong>@Money.Format(ReadModel.BalanceMinor, ReadModel.Currency)</strong></p>
         }
-        else if (Model.BalanceMinor > 0)
+        else if (ReadModel.BalanceMinor > 0)
         {
-            <p>You are owed <strong>@Money.Format(Model.BalanceMinor, Model.Currency)</strong></p>
+            <p>You are owed <strong>@Money.Format(ReadModel.BalanceMinor, ReadModel.Currency)</strong></p>
         }
         else
         {
             <p>You're settled up</p>
         }
-        <a class="button" href="/groups/@Model.GroupId/settle-up">Settle up</a>
+        <a class="button" href="/groups/@ReadModel.GroupId/settle-up">Settle up</a>
     </section>
 
     <section aria-labelledby="history">
         <h2 id="history">History</h2>
-        @if (Model.History.Count == 0)
+        @if (ReadModel.History.Count == 0)
         {
             <p class="hint">Nothing yet. Add the first expense.</p>
         }
@@ -29,21 +27,21 @@
         {
             @* Newest first in the markup; column-reverse shows it at the bottom, scrolled into view. *@
             <ol class="history">
-                @foreach (var entry in Model.History)
+                @foreach (var entry in ReadModel.History)
                 {
                     @switch (entry)
                     {
                         case ActivityExpense e:
                             <li class="@Side(e.PayerMemberId) expense">
                                 <span class="what">@e.Description</span>
-                                <span class="amount">@Money.Format(e.AmountMinor, Model.Currency)</span>
+                                <span class="amount">@Money.Format(e.AmountMinor, ReadModel.Currency)</span>
                                 <span class="meta">@Who(e.PayerMemberId, e.PayerName) paid · @Day(e.PaidOn)</span>
                             </li>
                             break;
                         case ActivitySettlement s:
                             <li class="@Side(s.FromMemberId) settlement">
-                                <span class="what">@Who(s.FromMemberId, s.FromName) paid @(s.ToMemberId == Model.You ? "you" : s.ToName)</span>
-                                <span class="amount">@Money.Format(s.AmountMinor, Model.Currency)</span>
+                                <span class="what">@Who(s.FromMemberId, s.FromName) paid @(s.ToMemberId == ReadModel.You ? "you" : s.ToName)</span>
+                                <span class="amount">@Money.Format(s.AmountMinor, ReadModel.Currency)</span>
                                 <span class="meta">Settlement · @Day(s.PaidOn)</span>
                             </li>
                             break;
@@ -54,18 +52,17 @@
     </section>
 
     <p class="actions">
-        <a class="button" href="/groups/@Model.GroupId/expenses/new">Add expense</a>
-        <a href="/groups/@Model.GroupId/balances">Balances</a>
+        <a class="button" href="/groups/@ReadModel.GroupId/expenses/new">Add expense</a>
+        <a href="/groups/@ReadModel.GroupId/balances">Balances</a>
     </p>
 </Page>
 
 @code {
-    [Parameter, EditorRequired] public GroupActivityReadModel Model { get; set; } = default!;
+    [Parameter, EditorRequired] public GroupActivityReadModel ReadModel { get; set; } = null!;
+    
+    private string Side(Shared.MemberId payer) => payer == ReadModel.You ? "mine" : "theirs";
 
-    /// <summary>Entries you paid on the left; everyone else's on the right.</summary>
-    private string Side(ShareExpenses.Shared.MemberId payer) => payer == Model.You ? "mine" : "theirs";
-
-    private string Who(ShareExpenses.Shared.MemberId member, string name) => member == Model.You ? "You" : name;
+    private string Who(Shared.MemberId member, string name) => member == ReadModel.You ? "You" : name;
 
     private static string Day(DateOnly day) => day.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
 }
