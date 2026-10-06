@@ -7,7 +7,7 @@ Type: **State Read**. Events → read model → screen.
 | Screen | Balances — opened from the group page: everyone in the group and where they stand |
 | Read model | `GroupBalancesReadModel` — **live**: the group stream folded per request, nothing stored |
 | Query | `ViewBalances(userId, now)` — the signed-in user, and the clock for invite status; the group from the route selects the stream |
-| Code | `src/ShareExpenses/Slices/ViewBalances/` |
+| Code | `src/SplitIt/Slices/ViewBalances/` |
 | Endpoint | `GET /groups/{group}/balances` — the screen; sign-in required |
 
 Every member slot of the group — joined, invited or placeholder — with its balance

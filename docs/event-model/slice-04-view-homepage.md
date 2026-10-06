@@ -7,7 +7,7 @@ Type: **State Read**. Events → read model → screen.
 | Screen | Home — where signing in lands: invites waiting (each with Join), then your groups |
 | Read model | `HomepageReadModel`, in two parts kept differently (spec §11): **groups** from the stored, **asynchronous** `UserGroups` projection; **invites** **live**, each invited group's stream folded per request |
 | Query | `ViewHomepage(userId, now)` + looked up: `invitedAs`, the `Invite` documents addressed to the user's account email |
-| Code | `src/ShareExpenses/Slices/ViewHomepage/` |
+| Code | `src/SplitIt/Slices/ViewHomepage/` |
 | Endpoint | `GET /` — the screen; sign-in required |
 
 Where a signed-in user starts. Invites waiting for them come first — who invited

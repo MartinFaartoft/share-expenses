@@ -1,8 +1,8 @@
-# Commands for working on share-expenses. `just` lists them; `just <recipe>` runs one.
+# Commands for working on splitit. `just` lists them; `just <recipe>` runs one.
 # Needs: .NET SDK (global.json), Docker, d2 (brew install d2), just (brew install just).
 
-project := "src/ShareExpenses"
-psql := "docker compose exec postgres psql -U share_expenses -d share_expenses"
+project := "src/SplitIt"
+psql := "docker compose exec postgres psql -U splitit -d splitit"
 
 # List the recipes
 default:
@@ -48,7 +48,7 @@ run: db
 
 # Build the container image the way the codex platform does
 image:
-    docker build -t share-expenses:dev .
+    docker build -t splitit:dev .
 
 # ── Database ────────────────────────────────────────────────────────────────────
 

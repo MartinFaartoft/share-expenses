@@ -8,7 +8,7 @@ Type: **State Change**. Screen → command → events.
 | Command | `AcceptInvite(now, userId)` + looked up: `invitedAs`; the slot is found by deciding |
 | Events | `MemberClaimed` (owned by CreateGroup) |
 | Also writes | deletes the slot's `Invite` — the address is not kept once claimed |
-| Code | `src/ShareExpenses/Slices/AcceptInvite/` |
+| Code | `src/SplitIt/Slices/AcceptInvite/` |
 | Endpoint | `POST /invites/{group}/join` — Join on the Home screen; no fields but the antiforgery token; sign-in required |
 
 The invite binds the slot, and the invited address is the key (spec §4): a user

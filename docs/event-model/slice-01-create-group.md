@@ -7,7 +7,7 @@ Type: **State Change**. Screen → command → events.
 | Screen | New group — the form to start a group, reached from Home |
 | Command | `CreateGroup(groupName, currency, memberName, createdBy)` |
 | Events | `GroupCreated`, `MemberAdded`, `MemberClaimed` |
-| Code | `src/ShareExpenses/Slices/CreateGroup/` |
+| Code | `src/SplitIt/Slices/CreateGroup/` |
 | Endpoints | `GET /groups/new` — the form; `POST /groups` — its submit; sign-in required |
 
 ## Specifications

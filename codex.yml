@@ -12,4 +12,4 @@ secrets:
 
 database:
   type: postgres
-  version: "16"
+  version: "17"

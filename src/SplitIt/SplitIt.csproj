@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <PackageReference Include="Marten" Version="9.43.0" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="WolverineFx.Http.Marten" Version="6.44.0" />
+    <PackageReference Include="WolverineFx.RuntimeCompilation" Version="6.44.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Slice types are internal (spec §12); tests reach them directly. -->
+    <InternalsVisibleTo Include="SplitIt.Tests" />
+  </ItemGroup>
+
+</Project>

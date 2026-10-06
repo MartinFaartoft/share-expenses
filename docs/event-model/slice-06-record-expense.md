@@ -7,7 +7,7 @@ Type: **State Change**. Screen → command → events.
 | Screen | Add expense — the form to record one, reached from the group page. Equal split only for now (see The screen) |
 | Command | `RecordExpense(expenseId, description, amountMinor, payerMemberId, split, paidOn, now, by)`; `splits` computed by deciding |
 | Events | `ExpenseRecorded` |
-| Code | `src/ShareExpenses/Slices/RecordExpense/` |
+| Code | `src/SplitIt/Slices/RecordExpense/` |
 | Endpoints | `GET /groups/{group}/expenses/new` — the form; `POST /groups/{group}/expenses` — its submit; sign-in required |
 
 Records one expense: who paid, how much, who it is split between and how (spec §7).

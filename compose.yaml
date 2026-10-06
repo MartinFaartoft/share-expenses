@@ -3,15 +3,15 @@ services:
   postgres:
     image: postgres:17
     environment:
-      POSTGRES_DB: share_expenses
-      POSTGRES_USER: share_expenses
-      POSTGRES_PASSWORD: share_expenses
+      POSTGRES_DB: splitit
+      POSTGRES_USER: splitit
+      POSTGRES_PASSWORD: splitit
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U share_expenses -d share_expenses"]
+      test: ["CMD-SHELL", "pg_isready -U splitit -d splitit"]
       interval: 2s
       timeout: 3s
       retries: 15

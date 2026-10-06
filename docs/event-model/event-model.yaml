@@ -1,4 +1,4 @@
-# Event model for the shared expenses app - the source of truth.
+# Event model for the SplitIt app - the source of truth.
 #
 # Render and validate with:
 #     .venv/bin/python docs/event-model/generate.py

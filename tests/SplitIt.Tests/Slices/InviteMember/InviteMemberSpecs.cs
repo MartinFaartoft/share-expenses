@@ -1,0 +1,173 @@
+using SplitIt.Shared;
+using SplitIt.Slices.InviteMember;
+using MemberInvited = SplitIt.Slices.AddMember.MemberInvited;
+using SplitIt.Tests.Specs;
+// Only the public events: tests can see every slice's internals, so a namespace
+// import would bring in CreateGroup's own Command too.
+using GroupCreated = SplitIt.Slices.CreateGroup.GroupCreated;
+using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
+using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
+
+namespace SplitIt.Tests.Slices.InviteMember;
+
+/// <summary>
+/// docs/event-model/slice-03-invite-member.md, line for line. The spec's WITH lines
+/// are the looked-up values carried on the command. Selected scenarios run against
+/// a real store in <see cref="InviteMemberIntegrationTests"/>.
+/// </summary>
+public class InviteMemberSpecs
+{
+    private static readonly GroupId G1 = new(Guid.Parse("00000000-0000-0000-0000-0000000000a1"));
+    private static readonly MemberId M1 = new(Guid.Parse("00000000-0000-0000-0000-0000000000b1"));
+    private static readonly MemberId M2 = new(Guid.Parse("00000000-0000-0000-0000-0000000000b2"));
+    private static readonly MemberId M3 = new(Guid.Parse("00000000-0000-0000-0000-0000000000b3"));
+    private static readonly MemberId M9 = new(Guid.Parse("00000000-0000-0000-0000-0000000000b9"));
+    private static readonly UserId Alice = new(Guid.Parse("00000000-0000-0000-0000-0000000000c1"));
+    private static readonly UserId Bob = new(Guid.Parse("00000000-0000-0000-0000-0000000000c2"));
+    private static readonly UserId Carol = new(Guid.Parse("00000000-0000-0000-0000-0000000000c3"));
+    private static readonly UserId Mallory = new(Guid.Parse("00000000-0000-0000-0000-0000000000c9"));
+    private static readonly InviteId I0 = new(Guid.Parse("00000000-0000-0000-0000-0000000000d0"));
+    private static readonly InviteId I1 = new(Guid.Parse("00000000-0000-0000-0000-0000000000d1"));
+
+    /// <summary>"Now" for every scenario; a new invite expires 30 days later.</summary>
+    private static readonly DateTimeOffset T0 = new(2026, 10, 1, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset T30 = T0.AddDays(30);
+
+    /// <summary>The deadline of some earlier invite in a Given; deciding never reads it.</summary>
+    private static readonly DateTimeOffset Earlier = T0.AddDays(20);
+
+    /// <summary>The group as CreateGroup leaves it, plus a placeholder "Bob".</summary>
+    private static readonly object[] Lisbon =
+    [
+        new GroupCreated(G1, "Lisbon trip", "GBP", Alice),
+        new MemberAdded(M1, "Alice", Alice),
+        new MemberClaimed(M1, Alice),
+        new MemberAdded(M2, "Bob", Alice),
+    ];
+
+    // MemberInvited is ignored on purpose: no address is in the stream, so the state
+    // has nothing to take from it — the guards use looked-up values instead.
+    private static readonly DecideSpec<Command> Spec = new((history, command) =>
+        Decider.Decide(Fold.Of<State>(history, ignoring: typeof(MemberInvited)), command));
+
+    private static Command InviteMember(
+        MemberId member, string? email, UserId by, UserId? emailHolder = null, params MemberId[] invitedTo) =>
+        new(member, email, I1, T0, by, emailHolder, invitedTo.ToHashSet());
+
+    [Fact]
+    public void S1_invites_a_placeholder_member() =>
+        Spec.Given(Lisbon)
+            .When(InviteMember(M2, "bob@example.com", Alice))
+            .Then(new MemberInvited(M2, I1, T30, Alice));
+
+    [Fact]
+    public void S2_the_group_must_exist() =>
+        Spec.Given()
+            .When(InviteMember(M2, "bob@example.com", Alice))
+            .ThenNotFound("group not found");
+
+    [Fact]
+    public void S3_only_members_of_the_group_may_invite() =>
+        Spec.Given(Lisbon)
+            .When(InviteMember(M2, "bob@example.com", Mallory))
+            .ThenNotFound("group not found");
+
+    [Fact]
+    public void S4_the_slot_must_exist_in_the_group() =>
+        Spec.Given(Lisbon)
+            .When(InviteMember(M9, "bob@example.com", Alice))
+            .ThenNotFound("member not found");
+
+    [Fact]
+    public void S5_a_slot_that_has_already_joined_cannot_be_invited() =>
+        Spec.Given(Lisbon)
+            .When(InviteMember(M1, "alice@example.com", Alice))
+            .ThenRejected("member has already joined");
+
+    [Theory]
+    [InlineData("bob")]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    [InlineData("@example.com")]
+    [InlineData("bob@")]
+    [InlineData("bob@@example.com")]
+    [InlineData("bob@exa@mple.com")]
+    [InlineData("bob smith@example.com")]
+    public void S6_rejects_an_address_that_is_not_plausibly_an_email(string? email) =>
+        Spec.Given(Lisbon)
+            .When(InviteMember(M2, email, Alice))
+            .ThenRejected("email is not a valid address");
+
+    [Fact]
+    public void S6_rejects_an_address_longer_than_254_characters() =>
+        Spec.Given(Lisbon)
+            .When(InviteMember(M2, new string('b', 243) + "@example.com", Alice))
+            .ThenRejected("email is not a valid address");
+
+    [Fact]
+    public void S6_accepts_an_address_of_exactly_254_characters_after_trimming() =>
+        Spec.Given(Lisbon)
+            .When(InviteMember(M2, "  " + new string('b', 242) + "@example.com ", Alice))
+            .Then(new MemberInvited(M2, I1, T30, Alice));
+
+    [Fact]
+    public void S7_re_inviting_replaces_the_previous_invite() =>
+        Spec.Given([.. Lisbon, new MemberInvited(M2, I0, Earlier, Alice)])
+            .When(InviteMember(M2, "bob@example.com", Alice, invitedTo: M2))
+            .Then(new MemberInvited(M2, I1, T30, Alice));
+
+    [Fact]
+    public void S8_an_address_with_an_open_invite_cannot_be_invited_to_another_slot() =>
+        Spec.Given([.. Lisbon, new MemberAdded(M3, "Bobby", Alice), new MemberInvited(M2, I0, Earlier, Alice)])
+            .When(InviteMember(M3, "BOB@example.com", Alice, invitedTo: M2))
+            .ThenRejected("that email is already invited as Bob");
+
+    [Fact]
+    public void S9_the_address_of_a_user_already_in_the_group_cannot_be_invited() =>
+        Spec.Given([.. Lisbon, new MemberClaimed(M2, Bob), new MemberAdded(M3, "Bobby", Alice)])
+            .When(InviteMember(M3, "bob@example.com", Alice, emailHolder: Bob))
+            .ThenRejected("bob@example.com has already joined as Bob");
+
+    [Fact]
+    public void S10_including_the_creators() =>
+        Spec.Given([.. Lisbon, new MemberAdded(M3, "Bobby", Alice)])
+            .When(InviteMember(M3, "alice@example.com", Alice, emailHolder: Alice))
+            .ThenRejected("alice@example.com has already joined as Alice");
+
+    [Fact]
+    public void S11_an_invite_to_a_slot_since_claimed_no_longer_holds_its_address() =>
+        Spec.Given(
+            [
+                .. Lisbon,
+                new MemberInvited(M2, I0, Earlier, Alice),
+                new MemberClaimed(M2, Bob),
+                new MemberAdded(M3, "Bobby", Alice),
+            ])
+            .When(InviteMember(M3, "bob@example.com", Alice, emailHolder: null, invitedTo: M2))
+            .Then(new MemberInvited(M3, I1, T30, Alice));
+
+    [Fact]
+    public void S12_an_account_outside_the_group_is_no_obstacle() =>
+        Spec.Given(Lisbon)
+            .When(InviteMember(M2, "carol@example.com", Alice, emailHolder: Carol))
+            .Then(new MemberInvited(M2, I1, T30, Alice));
+
+    [Fact]
+    public void A_non_member_learns_nothing_from_validation() =>
+        Spec.Given(Lisbon)
+            .When(InviteMember(M9, "not-an-email", Mallory))
+            .ThenNotFound("group not found");
+
+    [Fact]
+    public void Any_member_may_invite_and_is_recorded_as_the_actor() =>
+        Spec.Given([.. Lisbon, new MemberAdded(M3, "Carol", Alice), new MemberClaimed(M3, Bob)])
+            .When(InviteMember(M2, "bob@example.com", Bob))
+            .Then(new MemberInvited(M2, I1, T30, Bob));
+
+    [Fact]
+    public void An_invite_for_a_slot_no_longer_in_the_group_is_ignored() =>
+        Spec.Given(Lisbon)
+            .When(InviteMember(M2, "bob@example.com", Alice, invitedTo: M9))
+            .Then(new MemberInvited(M2, I1, T30, Alice));
+}

@@ -8,7 +8,7 @@ Type: **State Change**. Screen → command → events.
 | Command | `InviteMember(memberId, email, inviteId, now, by)` + looked up: `emailHolder`, `invitedTo` |
 | Events | `MemberInvited` (owned by AddMember) |
 | Also writes | `Invite` — plain document binding the slot to the address |
-| Code | `src/ShareExpenses/Slices/InviteMember/` |
+| Code | `src/SplitIt/Slices/InviteMember/` |
 | Endpoint | none yet — its screen is not built, so nothing reaches it (spec §3). The slice's logic and specs stand |
 
 Invites an email address to one member slot (spec §4: the invite binds the slot).

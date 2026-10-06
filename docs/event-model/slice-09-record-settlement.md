@@ -7,7 +7,7 @@ Type: **State Change**. Screen → command → events.
 | Screen | Settle up — "Paid" on a line of the plan, or any payment entered by hand |
 | Command | `RecordSettlement(settlementId, fromMemberId, toMemberId, amountMinor, paidOn, now, by)` |
 | Events | `SettlementRecorded` |
-| Code | `src/ShareExpenses/Slices/RecordSettlement/` |
+| Code | `src/SplitIt/Slices/RecordSettlement/` |
 | Endpoint | none yet — its screen is not built, so nothing reaches it (spec §3). The slice's logic and specs stand |
 
 Records that one member paid another, outside the app (spec §1: the app produces

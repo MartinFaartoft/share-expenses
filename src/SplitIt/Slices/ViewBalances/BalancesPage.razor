@@ -1,0 +1,26 @@
+@* The balances page (slice-08-view-balances.md): everyone in the group and where they stand. *@
+@using SplitIt.Slices.ViewBalances
+<Page Title="Balances">
+    <nav class="back"><a href="/groups/@Model.GroupId">← @Model.GroupName</a></nav>
+
+    <ul class="members">
+        @foreach (var member in Model.Members)
+        {
+            <li>
+                <span>@member.Name@(member.MemberId == Model.You ? " (you)" : "")@(member.Status == "joined" ? "" : $" — {member.Status}")</span>
+                <span class="amount">@Standing(member.BalanceMinor)</span>
+            </li>
+        }
+    </ul>
+
+    <a class="button" href="/groups/@Model.GroupId/settle-up">Settle up</a>
+</Page>
+
+@code {
+    [Parameter] public GroupBalancesReadModel Model { get; set; } = default!;
+
+    private string Standing(long balance) =>
+        balance < 0 ? $"owes {Money.Format(balance, Model.Currency)}"
+        : balance > 0 ? $"is owed {Money.Format(balance, Model.Currency)}"
+        : "settled up";
+}

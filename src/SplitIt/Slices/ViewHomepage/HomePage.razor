@@ -1,0 +1,42 @@
+<Page Title="SplitIt">
+    @if (Model.Invites.Count > 0)
+    {
+        <section aria-labelledby="invites">
+            <h2 id="invites">Invited</h2>
+            <ul class="cards">
+                @foreach (var invite in Model.Invites)
+                {
+                    <li>
+                        <p><strong>@invite.InvitedBy</strong> invited you to <strong>@invite.GroupName</strong> as @invite.MemberName.</p>
+                        <form method="post" action="/invites/@invite.GroupId/join">
+                            <AntiforgeryToken />
+                            <button type="submit">Join</button>
+                        </form>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+
+    <section aria-labelledby="groups">
+        <h2 id="groups">Your groups</h2>
+        @if (Model.Groups.Count == 0)
+        {
+            <p class="hint">You're not in any groups yet. Start one, or wait for an invite.</p>
+        }
+        else
+        {
+            <ul class="links">
+                @foreach (var group in Model.Groups)
+                {
+                    <li><a href="/groups/@group.GroupId">@group.Name</a></li>
+                }
+            </ul>
+        }
+        <p class="actions"><a class="button" href="/groups/new">New group</a></p>
+    </section>
+</Page>
+
+@code {
+    [Parameter] public HomepageReadModel Model { get; set; } = null!;
+}

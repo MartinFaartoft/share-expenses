@@ -8,7 +8,7 @@ Type: **State Change**. Screen → command → events.
 | Command | `AddMember(displayName, email?, by)` + `memberId`, `inviteId`, `now`; looked up, only with an email: `emailHolder`, `invitedTo` |
 | Events | `MemberAdded` (owned by CreateGroup); `MemberInvited`, when an email is given |
 | Also writes | `Invite` — plain document binding the slot to the address, when invited |
-| Code | `src/ShareExpenses/Slices/AddMember/` |
+| Code | `src/SplitIt/Slices/AddMember/` |
 | Endpoints | `GET /groups/{group}/members/new` — the screen; `POST /groups/{group}/members` — its submit; sign-in required |
 
 Adds a member by name (spec §4). Without an email it is a **placeholder**: someone

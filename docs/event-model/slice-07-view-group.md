@@ -7,7 +7,7 @@ Type: **State Read**. Events → read model → screen.
 | Screen | Group — the group page: what has been spent and paid, chat style, and where you stand |
 | Read model | `GroupActivityReadModel`, from the **stored, inline** `GroupActivity` projection |
 | Query | `ViewGroup(userId)` — the signed-in user; the group from the route selects the stream |
-| Code | `src/ShareExpenses/Slices/ViewGroup/` |
+| Code | `src/SplitIt/Slices/ViewGroup/` |
 | Endpoint | `GET /groups/{group}` — the screen; sign-in required |
 
 The group as its members use it: the money that has moved — expenses and

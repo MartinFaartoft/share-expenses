@@ -1,4 +1,4 @@
-# Shared Expenses — Spec
+# SplitIt — Spec
 
 A small app for splitting costs inside a group (a trip, a flatshare, a dinner series),
 and for working out who should transfer what to whom to clear the balances.
@@ -386,7 +386,7 @@ environment variable, never in `appsettings.json` or the repository):
 
 - `Email:Resend:ApiKey` — a key with sending access only, limited to this domain if the
   dashboard offers it. Set on the VPS as `Email__Resend__ApiKey`.
-- `Email:From` — `Shared expenses <noreply@splitit.ftft.dk>`. **No Reply-To:** it is a
+- `Email:From` — noreply@splitit.ftft.dk. **No Reply-To:** it is a
   no-reply address, nothing receives mail there, and a reply bounces. Should a human
   ever need to be reachable, the app's pages say so, not the mail headers.
 - **A key present means Resend, in any environment** (so delivery can be tried from a
@@ -395,8 +395,7 @@ environment variable, never in `appsettings.json` or the repository):
   or a `From` that is not an address, refuses to start too.
 
 **Trying real delivery from a laptop:** set the key and a `From` in the environment
-before `just run` — `Email__Resend__ApiKey=re_…` and `Email__From='Shared expenses
-<noreply@splitit.ftft.dk>'` (double underscores are configuration's `:`). The app then
+before `just run` — `Email__Resend__ApiKey=re_…` and `Email__From='noreply@splitit.ftft.dk'` (double underscores are configuration's `:`). The app then
 sends through Resend instead of logging; unset them and it logs again. Until the domain
 is verified Resend accepts only its own test sender, and only to the account's owner —
 check the dashboard — so set `Email__From` to that address and sign in with the
@@ -421,7 +420,7 @@ plain-text part as well as HTML — plain text is part of deliverability, not a 
   so Apple's one-time-code detection finds it (§14). The code appears in the subject and
   therefore in lock-screen previews; that is how the autofill works and the code lives
   for minutes, which is accepted.
-- **Invite:** subject `<inviter> invited you to <group> on Shared expenses`; the body
+- **Invite:** subject `<inviter> invited you to <group> on SplitIt`; the body
   says to sign in with *this* address (the one it was sent to, named) and links to the
   app. No secret in it (InviteMember).
 - No open or click tracking, and nothing but the link: a tracking redirect in a sign-in
@@ -1166,14 +1165,14 @@ it cost:
 **Decision: one folder per event-model slice, and the folder owns everything about
 it** — events, command, state, decision logic, read model, projection and HTTP
 endpoints. Folder and namespace are named after the slice in `event-model.yaml`,
-in PascalCase: `Slices/CreateGroup`, namespace `ShareExpenses.Slices.CreateGroup`.
+in PascalCase: `Slices/CreateGroup`, namespace `SplitIt.Slices.CreateGroup`.
 
 Rationale: the event model is already cut into slices, so the code should be cut
 the same way. A slice can then be read, changed or deleted as one unit, and a
 diff touching two slice folders is a signal worth noticing in review.
 
 ```
-src/ShareExpenses/
+src/SplitIt/
   Program.cs          hosting only
   AllSlices.cs        what the slices register with the store
   Infrastructure/     Identity (EF, sign-in; its screen in Identity/Screens/), Marten store, Wolverine
@@ -1262,7 +1261,7 @@ Originally `AllSlices.cs` called every slice's `Register` and `Map` by name, and
 reflection-based discovery was rejected as saving a line per slice at the cost of
 knowing what is wired up. Wolverine discovers endpoints by scanning, with no
 explicit alternative, so that decision is reversed for endpoints: the API surface
-is listed by `dotnet run --project src/ShareExpenses -- describe` (or the OpenAPI
+is listed by `dotnet run --project src/SplitIt -- describe` (or the OpenAPI
 document) instead of read from one file.
 
 Store registrations stay explicit, because they protect stored data: `AllSlices`
@@ -1270,7 +1269,7 @@ calls the `Register` of every slice that has a `<Name>Slice`, and the architectu
 test checks every event is registered. Rejected: an attribute on each event
 (`[StoredAs("group_created")]`) found by a scan — it would remove the last
 per-slice file, but leave nothing in the app wired up by name. (Named `AllSlices`,
-not `Slices`: a class cannot share a name with the `ShareExpenses.Slices`
+not `Slices`: a class cannot share a name with the `SplitIt.Slices`
 namespace.)
 
 The architecture tests run every rule against the application *and* against
@@ -1336,7 +1335,7 @@ in place of `Decider.cs`, and no events.
   no JSON body): a service Wolverine does not already know — `PublicOrigin`, registered
   as an instance — must be marked `[FromServices]`, and the carrier filled by `Load()`
   must be marked `[NotBody]`. Unmarked, Wolverine reads them as the request body and
-  answers 415; `dotnet run --project src/ShareExpenses -- codegen preview` shows which
+  answers 415; `dotnet run --project src/SplitIt -- codegen preview` shows which
   parameters it took for the body (`ReadJsonAsync`).
   **A third:** a service registered through a factory (`AddHttpClient<IEmailSender,…>`,
   the Resend sender) is "opaque" to Wolverine, which refuses to generate code that
@@ -1344,7 +1343,7 @@ in place of `Decider.cs`, and no events.
   `IEmailDirectory`). Found by running `codegen test` in the container image, which the
   tests missed because they swap in a recording sender; a test now posts to Add member
   with the Production registration. `just image` builds the image; to check one,
-  `docker run … share-expenses:dev codegen test` with the same environment.
+  `docker run … splitit:dev codegen test` with the same environment.
 - **Event types are registered with explicit stored names** (`group_created`),
   so a class or folder rename can never change what is in the database.
 - **Naming: every slice folds a `State`; a read slice's output is its read model.**
@@ -1798,7 +1797,7 @@ a documentation tool, not application code.
   - **What a slice owns:** `Slices/<Name>/`, `tests/…/Slices/<Name>/`, and
     `docs/event-model/slice-NN-*.md`.
   - **Shared files every slice touches** — `AllSlices.cs`, `event-model.yaml`, the
-    generated `.d2`/`.png`, `ShareExpenses.http`, `spec.md`: allowed, but listed
+    generated `.d2`/`.png`, `SplitIt.http`, `spec.md`: allowed, but listed
     in the output so the change is visible; ideally only the active slice's
     section of the YAML may change.
   - **Everything else** (`Shared/`, `Infrastructure/`, other slices): a failure,
