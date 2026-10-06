@@ -9,6 +9,7 @@ using LedgerState = SplitIt.Slices.ViewBalances.State;
 using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
 using MemberInvited = SplitIt.Slices.AddMember.MemberInvited;
+using ExpenseRemoved = SplitIt.Slices.RemoveExpense.ExpenseRemoved;
 using SettlementRecorded = SplitIt.Slices.RecordSettlement.SettlementRecorded;
 
 namespace SplitIt.Tests.Slices.ViewSettlementPlan;
@@ -156,5 +157,17 @@ public class ViewSettlementPlanSpecs
             var ledger = Fold.Of<LedgerState>(history)!.Slots.Select(s => (s.MemberId, s.BalanceMinor));
             Assert.Equal(ledger, plan);
         }
+    }
+
+    [Fact]
+    public void A_removed_expense_leaves_the_plan_as_if_never_recorded() =>
+        Assert.Empty(Read([.. Lisbon, Dinner, new ExpenseRemoved(E1, Bob)], Alice)!.Transfers);
+
+    [Fact]
+    public void A_removed_expense_lowers_its_pairs_shared_history_score_back()
+    {
+        var state = Fold.Of<State>([.. Lisbon, Dinner, Expense(E2, M1, 1000, (M1, 500), (M2, 500)), new ExpenseRemoved(E1, Alice)])!;
+
+        Assert.Equal((1, 0), (state.Score(M1, M2), state.Score(M1, M3)));
     }
 }

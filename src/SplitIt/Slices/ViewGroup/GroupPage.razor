@@ -50,7 +50,7 @@
                             <li class="@Side(e.PayerMemberId) expense">
                                 <span class="what">@e.Description</span>
                                 <span class="amount">@Money.Format(e.AmountMinor, ReadModel.Currency)</span>
-                                <span class="meta">@Who(e.PayerMemberId, e.PayerName) paid · @Day(e.PaidOn)</span>
+                                <span class="meta">@Who(e.PayerMemberId, e.PayerName) paid · @Day(e.PaidOn) · <a href="/groups/@ReadModel.GroupId/expenses/@e.ExpenseId/remove">Remove</a></span>
                             </li>
                             break;
                         case ActivitySettlement s:

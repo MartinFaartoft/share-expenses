@@ -40,6 +40,8 @@ internal sealed class DecideSpec<TCommand>(Func<IReadOnlyList<object>, TCommand,
 
         public void ThenAlreadyRecorded(string reason) => ThenRefused(reason, Rejection.AlreadyRecorded);
 
+        public void ThenAlreadyRemoved(string reason) => ThenRefused(reason, Rejection.AlreadyRemoved);
+
         private void ThenRefused(string reason, Rejection kind)
         {
             if (decision is Decision.Accepted accepted)

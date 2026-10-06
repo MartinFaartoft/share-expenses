@@ -272,3 +272,5 @@ ul.people li {
 ul.people .status { color: var(--muted); font-size: 0.9375rem; }
 ul.people .status { margin-left: auto; }
 ul.people a { color: var(--accent); text-decoration: none; font-weight: 600; min-width: 4.5rem; text-align: right; }
+ol.history .meta a { color: var(--muted); }
+ol.history .meta a { color: var(--muted); }

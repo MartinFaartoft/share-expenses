@@ -5,6 +5,7 @@ using SplitIt.Slices.CreateGroup;
 using SplitIt.Slices.AddMember;
 using SplitIt.Slices.RecordExpense;
 using SplitIt.Slices.RecordSettlement;
+using SplitIt.Slices.RemoveExpense;
 
 namespace SplitIt.Slices.ViewBalances;
 
@@ -13,6 +14,9 @@ namespace SplitIt.Slices.ViewBalances;
 /// <param name="InvitedUntil">The current invite's recorded deadline, if any; whether it is still open is decided on reading.</param>
 /// <param name="BalanceMinor">Paid minus shared, in minor units (spec §9): positive is owed, negative owes.</param>
 internal sealed record Slot(MemberId MemberId, string Name, UserId? ClaimedBy, DateTimeOffset? InvitedUntil, long BalanceMinor);
+
+/// <summary>What an expense did to the balances, kept so a removal can undo it.</summary>
+internal sealed record Booked(MemberId PayerMemberId, long AmountMinor, IReadOnlyList<Split> Splits);
 
 /// <summary>
 /// What the balances are computed from, folded <em>live</em> from the group stream per
@@ -23,7 +27,7 @@ internal sealed record Slot(MemberId MemberId, string Name, UserId? ClaimedBy, D
 ///
 /// FOLD CHECKLIST — when these slices are built, fold their events here and add the
 /// deferred specs in slice-08-view-balances.md:
-///   ExpenseRemoved, SettlementRemoved      → undo the entry's effect
+///   SettlementRemoved                      → undo the entry's effect
 ///   the expense corrections                → undo, then redo an expense's effect
 ///   MemberRenamed / GroupRenamed           → rename
 ///   MemberClaimReleased                    → clear ClaimedBy
@@ -32,12 +36,16 @@ internal sealed record Slot(MemberId MemberId, string Name, UserId? ClaimedBy, D
 /// The alias is required: every slice has a State (spec §12).
 /// </summary>
 [DocumentAlias("view_balances_state")]
-internal sealed record State(string GroupName, string Currency, ImmutableList<Slot> Slots)
+internal sealed record State(
+    string GroupName,
+    string Currency,
+    ImmutableList<Slot> Slots,
+    ImmutableDictionary<ExpenseId, Booked> Expenses)
 {
     /// <summary>The group's stream id.</summary>
     public Guid Id { get; init; }
 
-    public static State Create(GroupCreated e) => new(e.Name, e.Currency, []);
+    public static State Create(GroupCreated e) => new(e.Name, e.Currency, [], ImmutableDictionary<ExpenseId, Booked>.Empty);
 
     public State Apply(MemberAdded e) =>
         this with { Slots = Slots.Add(new Slot(e.MemberId, e.DisplayName, null, null, 0)) };
@@ -52,6 +60,7 @@ internal sealed record State(string GroupName, string Currency, ImmutableList<Sl
         var debits = e.Splits.ToDictionary(s => s.MemberId, s => s.AmountMinor);
         return this with
         {
+            Expenses = Expenses.SetItem(e.ExpenseId, new Booked(e.PayerMemberId, e.AmountMinor, e.Splits)),
             Slots =
             [
                 .. Slots.Select(slot => slot with
@@ -59,6 +68,27 @@ internal sealed record State(string GroupName, string Currency, ImmutableList<Sl
                     BalanceMinor = slot.BalanceMinor
                                    + (slot.MemberId == e.PayerMemberId ? e.AmountMinor : 0)
                                    - debits.GetValueOrDefault(slot.MemberId),
+                }),
+            ],
+        };
+    }
+
+    public State Apply(ExpenseRemoved e)
+    {
+        if (!Expenses.TryGetValue(e.ExpenseId, out var booked))
+            return this;
+
+        var debits = booked.Splits.ToDictionary(s => s.MemberId, s => s.AmountMinor);
+        return this with
+        {
+            Expenses = Expenses.Remove(e.ExpenseId),
+            Slots =
+            [
+                .. Slots.Select(slot => slot with
+                {
+                    BalanceMinor = slot.BalanceMinor
+                                   - (slot.MemberId == booked.PayerMemberId ? booked.AmountMinor : 0)
+                                   + debits.GetValueOrDefault(slot.MemberId),
                 }),
             ],
         };

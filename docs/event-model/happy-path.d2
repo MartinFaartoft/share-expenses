@@ -66,6 +66,8 @@ dvN8: "" { class: divN }
 n8: "9 - Record settlement                   " { class: slicename }
 dvN9: "" { class: divN }
 n9: "10 - View settlement plan               " { class: slicename }
+dvN10: "" { class: divN }
+n10: "11 - Remove expense                     " { class: slicename }
 
 # ===== row 2: screens =====
 l2: "SCREENS" { class: lanelabel }
@@ -91,6 +93,8 @@ dv2_8: "" { class: div }
 s8: "Settle up                         \n                                  \nBob pays Alice  30.00 [Paid]      \n                                  \nor record any payment:            \n[ Bob v ] -> [ Alice v ]          \n[ 30.00 ]  on [ 2 Oct ]           \n             [ Record ]           " { class: screen }
 dv2_9: "" { class: div }
 s9: "Settle up                         \n                                  \nBob pays Alice  30.00 [Paid]      \n                                  \nor record any payment:            \n[ Bob v ] -> [ Alice v ]          \n[ 30.00 ]  on [ 2 Oct ]           \n             [ Record ]           " { class: screen }
+dv2_10: "" { class: div }
+s10: "Remove expense                    \n                                  \n< Lisbon trip     Remove expense  \nDinner            £90.00          \nAlice paid · 2 Oct                \n                                  \nBalances will update.             \n       [ Remove expense ]         " { class: screen }
 
 # ===== row 3: read models =====
 l3: "READ MODELS" { class: lanelabel }
@@ -116,6 +120,8 @@ dv3_8: "" { class: div }
 gp3_8: "" { class: gap }
 dv3_9: "" { class: div }
 rm9: "SettlementPlanReadModel           \n                                  \n- userId: UserId (sys)            \n- currency: string                \n- you: MemberId                   \n- transfers: Transfer[]           " { class: view }
+dv3_10: "" { class: div }
+gp3_10: "" { class: gap }
 
 # ===== row 4: commands =====
 l4: "COMMANDS" { class: lanelabel }
@@ -141,6 +147,8 @@ dv4_8: "" { class: div }
 c8: "RecordSettlement                  \n                                  \n- settlementId: SettlementId (sys)\n- fromMemberId: MemberId          \n- toMemberId: MemberId            \n- amountMinor: long               \n- paidOn: DateOnly                \n- now: DateTimeOffset (sys)       \n- by: UserId (sys)                " { class: command }
 dv4_9: "" { class: div }
 gp4_9: "" { class: gap }
+dv4_10: "" { class: div }
+c10: "RemoveExpense                     \n                                  \n- expenseId: ExpenseId            \n- by: UserId (sys)                \n                                  \n                                  " { class: command }
 
 # ===== row 5: event stream =====
 l5: "EVENT STREAM" { class: lanelabel }
@@ -166,6 +174,8 @@ dv5_8: "" { class: div }
 e8_0: "SettlementRecorded                \n                                  \n- settlementId: SettlementId      \n- fromMemberId: MemberId          \n- toMemberId: MemberId            \n- amountMinor: long               \n- paidOn: DateOnly                \n- by: UserId                      " { class: event }
 dv5_9: "" { class: div }
 gp5_9: "" { class: gap }
+dv5_10: "" { class: div }
+e10_0: "ExpenseRemoved                    \n                                  \n- expenseId: ExpenseId            \n- by: UserId                      \n                                  \n                                  " { class: event }
 
 # --- State Change slices: screen -> command -> event(s)
 s0 -> c0
@@ -183,6 +193,8 @@ s5 -> c5
 c5 -> e5_0
 s8 -> c8
 c8 -> e8_0
+s10 -> c10
+c10 -> e10_0
 
 # --- State Read slices: events -> read model -> screen
 e0_0 -> rm3
@@ -194,6 +206,7 @@ e0_0 -> rm6
 e1_0 -> rm6
 e4_0 -> rm6
 e5_0 -> rm6
+e10_0 -> rm6: "loops back" { style.stroke-dash: 4 }
 e8_0 -> rm6: "loops back" { style.stroke-dash: 4 }
 rm6 -> s6
 e0_0 -> rm7
@@ -201,11 +214,13 @@ e1_0 -> rm7
 e2_0 -> rm7
 e4_0 -> rm7
 e5_0 -> rm7
+e10_0 -> rm7: "loops back" { style.stroke-dash: 4 }
 e8_0 -> rm7: "loops back" { style.stroke-dash: 4 }
 rm7 -> s7
 e0_0 -> rm9
 e1_0 -> rm9
 e4_0 -> rm9
 e5_0 -> rm9
+e10_0 -> rm9: "loops back" { style.stroke-dash: 4 }
 e8_0 -> rm9
 rm9 -> s9

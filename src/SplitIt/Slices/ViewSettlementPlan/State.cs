@@ -4,8 +4,12 @@ using SplitIt.Shared;
 using SplitIt.Slices.CreateGroup;
 using SplitIt.Slices.RecordExpense;
 using SplitIt.Slices.RecordSettlement;
+using SplitIt.Slices.RemoveExpense;
 
 namespace SplitIt.Slices.ViewSettlementPlan;
+
+/// <summary>What an expense did to the balances and the score, kept so a removal can undo it.</summary>
+internal sealed record Booked(MemberId PayerMemberId, long AmountMinor, IReadOnlyList<Split> Splits);
 
 /// <summary>A member slot, with its balance: paid minus shared (spec §9).</summary>
 internal sealed record Slot(MemberId MemberId, string Name, UserId? ClaimedBy, long BalanceMinor);
@@ -21,7 +25,7 @@ internal sealed record Slot(MemberId MemberId, string Name, UserId? ClaimedBy, l
 ///
 /// FOLD CHECKLIST — when these slices are built, fold their events here and add the
 /// deferred specs in slice-10-view-settlement-plan.md:
-///   ExpenseRemoved, SettlementRemoved  → undo the balance effect (and the score)
+///   SettlementRemoved                  → undo the balance effect
 ///   the expense corrections            → undo, then redo
 ///   MemberRenamed                      → rename
 ///   MemberClaimReleased                → clear ClaimedBy
@@ -33,12 +37,13 @@ internal sealed record State(
     string GroupName,
     string Currency,
     ImmutableList<Slot> Slots,
-    ImmutableDictionary<(MemberId, MemberId), int> SharedHistory)
+    ImmutableDictionary<(MemberId, MemberId), int> SharedHistory,
+    ImmutableDictionary<ExpenseId, Booked> Expenses)
 {
     /// <summary>The group's stream id.</summary>
     public Guid Id { get; init; }
 
-    public static State Create(GroupCreated e) => new(e.Name, e.Currency, [], ImmutableDictionary<(MemberId, MemberId), int>.Empty);
+    public static State Create(GroupCreated e) => new(e.Name, e.Currency, [], ImmutableDictionary<(MemberId, MemberId), int>.Empty, ImmutableDictionary<ExpenseId, Booked>.Empty);
 
     public State Apply(MemberAdded e) => this with { Slots = Slots.Add(new Slot(e.MemberId, e.DisplayName, null, 0)) };
 
@@ -53,17 +58,49 @@ internal sealed record State(
             BalanceMinor = s.BalanceMinor + (s.MemberId == e.PayerMemberId ? e.AmountMinor : 0) - debits.GetValueOrDefault(s.MemberId),
         });
 
-        // Everyone in it — payer, and every member of the split, even at zero — shared it.
-        var involved = e.Splits.Select(s => s.MemberId).Append(e.PayerMemberId).Distinct().ToList();
+        return this with
+        {
+            Slots = [.. slots],
+            SharedHistory = Shared(e.PayerMemberId, e.Splits, +1),
+            Expenses = Expenses.SetItem(e.ExpenseId, new Booked(e.PayerMemberId, e.AmountMinor, e.Splits)),
+        };
+    }
+
+    public State Apply(ExpenseRemoved e)
+    {
+        if (!Expenses.TryGetValue(e.ExpenseId, out var booked))
+            return this;
+
+        var debits = booked.Splits.ToDictionary(s => s.MemberId, s => s.AmountMinor);
+        var slots = Slots.Select(s => s with
+        {
+            BalanceMinor = s.BalanceMinor
+                           - (s.MemberId == booked.PayerMemberId ? booked.AmountMinor : 0)
+                           + debits.GetValueOrDefault(s.MemberId),
+        });
+
+        return this with
+        {
+            Slots = [.. slots],
+            SharedHistory = Shared(booked.PayerMemberId, booked.Splits, -1),
+            Expenses = Expenses.Remove(e.ExpenseId),
+        };
+    }
+
+    // Everyone in an expense — payer, and every member of the split, even at zero — shared it.
+    private ImmutableDictionary<(MemberId, MemberId), int> Shared(MemberId payer, IReadOnlyList<Split> splits, int by)
+    {
+        var involved = splits.Select(s => s.MemberId).Append(payer).Distinct().ToList();
         var history = SharedHistory;
         for (var i = 0; i < involved.Count; i++)
             for (var j = i + 1; j < involved.Count; j++)
             {
                 var pair = Key(involved[i], involved[j]);
-                history = history.SetItem(pair, history.GetValueOrDefault(pair) + 1);
+                var score = history.GetValueOrDefault(pair) + by;
+                history = score > 0 ? history.SetItem(pair, score) : history.Remove(pair);
             }
 
-        return this with { Slots = [.. slots], SharedHistory = history };
+        return history;
     }
 
     public State Apply(SettlementRecorded e) => this with

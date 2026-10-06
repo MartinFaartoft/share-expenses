@@ -321,15 +321,16 @@ slices:
         currency: { type: string, source: [GroupCreated] }
         you: { type: MemberId, source: [MemberClaimed] }   # the caller's own slot
         # the caller's balance (spec §9)
-        balance: { type: long, source: [ExpenseRecorded, SettlementRecorded] }
+        balance: { type: long, source: [ExpenseRecorded, ExpenseRemoved, SettlementRecorded] }
         # the money: expenses and settlements in one list, each marked by kind and
         # named, newest first; an expense with its split as entered and its amounts
-        history: { type: "ActivityEntry[]", source: [MemberAdded, ExpenseRecorded, SettlementRecorded] }
+        history: { type: "ActivityEntry[]", source: [MemberAdded, ExpenseRecorded, ExpenseRemoved, SettlementRecorded] }
       reads:
         - GroupCreated
         - MemberAdded
         - MemberClaimed
         - ExpenseRecorded
+        - ExpenseRemoved
         - SettlementRecorded   # emitted in Record settlement: drawn dashed
 
   - slice: View balances
@@ -361,13 +362,14 @@ slices:
         currency: { type: string, source: [GroupCreated] }
         you: { type: MemberId, source: [MemberClaimed] }   # the caller's own slot
         # each slot with its name, status (joined, invited, placeholder) and balance
-        members: { type: "MemberBalance[]", source: [MemberAdded, MemberInvited, MemberClaimed, ExpenseRecorded, SettlementRecorded] }
+        members: { type: "MemberBalance[]", source: [MemberAdded, MemberInvited, MemberClaimed, ExpenseRecorded, ExpenseRemoved, SettlementRecorded] }
       reads:
         - GroupCreated
         - MemberAdded
         - MemberInvited
         - MemberClaimed
         - ExpenseRecorded
+        - ExpenseRemoved
         - SettlementRecorded   # emitted in Record settlement: drawn dashed
 
   - slice: Record settlement
@@ -420,10 +422,36 @@ slices:
         currency: { type: string, source: [GroupCreated] }
         you: { type: MemberId, source: [MemberClaimed] }   # the caller's own slot
         # who pays whom, with names, ordered by payer then recipient (member-added)
-        transfers: { type: "Transfer[]", source: [MemberAdded, ExpenseRecorded, SettlementRecorded] }
+        transfers: { type: "Transfer[]", source: [MemberAdded, ExpenseRecorded, ExpenseRemoved, SettlementRecorded] }
       reads:
         - GroupCreated
         - MemberAdded
         - MemberClaimed
         - ExpenseRecorded
+        - ExpenseRemoved
         - SettlementRecorded
+
+  - slice: Remove expense
+    type: State Change
+    screen:
+      name: Remove expense
+      fields:
+        groupId: GroupId
+        expenseId: ExpenseId
+      wireframe:
+        - "< Lisbon trip     Remove expense"
+        - "Dinner            £90.00"
+        - "Alice paid · 2 Oct"
+        - ""
+        - "Balances will update."
+        - "       [ Remove expense ]"
+    command:
+      name: RemoveExpense
+      fields:
+        expenseId: ExpenseId
+        by: { type: UserId, source: system }               # the signed-in user: any member
+    events:
+      - name: ExpenseRemoved
+        fields:
+          expenseId: ExpenseId
+          by: UserId

@@ -300,6 +300,9 @@ screen rather than reshape it:
 - **The amount's text is kept** as typed when the page is shown again, not
   reformatted from the number.
 - **Antiforgery** on the submit (`[ValidateAntiforgery]`, spec §3).
+- **A removed expense stays recorded:** its id remains known to this slice after
+  `ExpenseRemoved` (Remove expense), so the same form submitted again is "already
+  recorded" and does not bring the expense back.
 - **A concurrent save** answers 409, as AddMember (the open "409 retry UX in forms"
   task, spec §14).
 

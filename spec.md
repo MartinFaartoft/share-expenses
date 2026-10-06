@@ -1819,6 +1819,10 @@ a documentation tool, not application code.
   modes"). **Add member** (Add member, with an optional invite) is built:
   `/groups/{group}/members/new`, from the group page and the Add expense form
   (slice-02-add-member.md).
+  **Remove expense** is designed, not built (slice-11-remove-expense.md): a confirm
+  page per expense, linked from its row in the group's history; any member may
+  remove any expense (§5); the removal is an event beside the original (§7), and
+  the group history, balances and settle-up plan fold it.
 - **OPEN** Default currency from the browser's locale. The New group form
   preselects DKK for everyone. Better: guess from the request — the
   `Accept-Language` header's first region (`da-DK` → DKK, `en-GB` → GBP), mapped

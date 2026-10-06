@@ -118,10 +118,15 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 - **Members only:** a non-member, a missing group and a malformed group id are the
   same 404 — the group's existence is not disclosed (spec §4).
 
+- **A removed expense leaves the history and stops counting** (`ExpenseRemoved`,
+  Remove expense): its row goes, and the balances of everyone in it move back, as if
+  it had never been recorded. Entries keep their order when something is recorded
+  after a removal. Each expense row links to its Remove expense page.
+
 ## Deferred to the slices that introduce the events
 
-- **A removed expense or settlement** leaves the history and stops counting — with
-  `ExpenseRemoved`, `SettlementRemoved`.
+- **A removed settlement** leaves the history and stops counting — with
+  `SettlementRemoved`.
 - **Corrected expenses** — with the correction events (§11).
 - **Renamed members and groups** show their new names — with `MemberRenamed`, `GroupRenamed`.
 - **A released claim** — the user loses access — with `MemberClaimReleased`.

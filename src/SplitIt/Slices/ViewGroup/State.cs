@@ -4,6 +4,7 @@ using SplitIt.Shared;
 using SplitIt.Slices.CreateGroup;
 using SplitIt.Slices.RecordExpense;
 using SplitIt.Slices.RecordSettlement;
+using SplitIt.Slices.RemoveExpense;
 
 namespace SplitIt.Slices.ViewGroup;
 
@@ -49,7 +50,7 @@ internal sealed record Settlement(
 ///
 /// FOLD CHECKLIST — when these slices are built, fold their events here and add the
 /// deferred specs in slice-07-view-group.md:
-///   ExpenseRemoved, SettlementRemoved      → undo the entry's effect
+///   SettlementRemoved                      → undo the entry's effect
 ///   the expense corrections                → undo, then redo an expense's effect
 ///   MemberRenamed / GroupRenamed           → rename
 ///   MemberClaimReleased                    → clear ClaimedBy
@@ -114,8 +115,25 @@ internal sealed record State(
         };
     }
 
-    /// <summary>How many expenses and settlements have been recorded: the next one's position.</summary>
-    private int Entries => Expenses.Count + Settlements.Count;
+    public State Apply(ExpenseRemoved e)
+    {
+        if (Expenses.FirstOrDefault(x => x.ExpenseId == e.ExpenseId) is not { } expense)
+            return this;
+
+        var debits = expense.Splits.ToDictionary(s => s.MemberId, s => s.AmountMinor);
+        var slots = Slots.Select(slot => slot with
+        {
+            BalanceMinor = slot.BalanceMinor
+                           - (slot.MemberId == expense.PayerMemberId ? expense.AmountMinor : 0)
+                           + debits.GetValueOrDefault(slot.MemberId),
+        });
+
+        return this with { Slots = [.. slots], Expenses = Expenses.Remove(expense) };
+    }
+
+    /// <summary>The next entry's position: after every one still in the history, so a removal frees none.</summary>
+    private int Entries =>
+        Expenses.Select(x => x.Recorded).Concat(Settlements.Select(x => x.Recorded)).DefaultIfEmpty(-1).Max() + 1;
 
     private State WithSlot(MemberId member, Func<Slot, Slot> change) =>
         this with { Slots = [.. Slots.Select(slot => slot.MemberId == member ? change(slot) : slot)] };

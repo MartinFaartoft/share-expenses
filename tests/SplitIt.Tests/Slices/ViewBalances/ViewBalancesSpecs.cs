@@ -11,6 +11,7 @@ using MemberInvited = SplitIt.Slices.AddMember.MemberInvited;
 using RecordExpenseCommand = SplitIt.Slices.RecordExpense.Command;
 using RecordExpenseDecider = SplitIt.Slices.RecordExpense.Decider;
 using RecordExpenseState = SplitIt.Slices.RecordExpense.State;
+using ExpenseRemoved = SplitIt.Slices.RemoveExpense.ExpenseRemoved;
 using SettlementRecorded = SplitIt.Slices.RecordSettlement.SettlementRecorded;
 
 namespace SplitIt.Tests.Slices.ViewBalances;
@@ -228,6 +229,53 @@ public class ViewBalancesSpecs
                     Fold.Of<SplitIt.Slices.ViewGroup.State>(history), new SplitIt.Slices.ViewGroup.Query(user));
                 Assert.Equal(balances[slot], group!.BalanceMinor);
             }
+        }
+    }
+
+    [Fact]
+    public void A_removed_expense_stops_counting()
+    {
+        var balances = View(
+        [
+            .. Lisbon,
+            Expense(E1, "Dinner", 9000, M1, [(M1, 3000), (M2, 3000), (M3, 3000)]),
+            Expense(E2, "Taxi", 3000, M2, [(M2, 1500), (M3, 1500)]),
+            new ExpenseRemoved(E1, Bob),
+        ]);
+
+        Assert.Equal(
+            [("Alice", "joined", 0L), ("Bob", "joined", 1500L), ("Carol", "placeholder", -1500L)],
+            Members(balances));
+    }
+
+    [Fact]
+    public void Balances_still_agree_with_view_group_after_removals()
+    {
+        var random = new Random(20261006);
+        MemberId[] slots = [M1, M2, M3];
+
+        for (var run = 0; run < 200; run++)
+        {
+            List<object> history = [.. Lisbon];
+            var expenses = new List<ExpenseId>();
+            for (var i = 0; i < random.Next(1, 15); i++)
+            {
+                var sharers = slots.Where(_ => random.Next(2) == 0).DefaultIfEmpty(M1).ToList();
+                var total = random.NextInt64(1, 1_000_000);
+                var id = ExpenseId.New();
+                expenses.Add(id);
+                history.Add(new ExpenseRecorded(
+                    id, "Spend", total, slots[random.Next(slots.Length)],
+                    new EqualSplit(sharers), [.. sharers.Select((m, j) => new Split(m, j == 0 ? total : 0))], Oct1, Alice));
+                if (random.Next(3) == 0)
+                    history.Add(new ExpenseRemoved(expenses[random.Next(expenses.Count)], Alice));
+            }
+
+            var balances = View(history).Members.ToDictionary(m => m.MemberId, m => m.BalanceMinor);
+            Assert.Equal(0, balances.Values.Sum());
+            var group = SplitIt.Slices.ViewGroup.Reader.Read(
+                Fold.Of<SplitIt.Slices.ViewGroup.State>(history), new SplitIt.Slices.ViewGroup.Query(Alice));
+            Assert.Equal(balances[M1], group!.BalanceMinor);
         }
     }
 }

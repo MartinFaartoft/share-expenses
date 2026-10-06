@@ -1,0 +1,20 @@
+@using SplitIt.Shared
+@using SplitIt.Web
+<Page Title="Remove expense" BackHref="@($"/groups/{GroupId}")">
+    <p><strong>@Expense.Description</strong> <span class="amount">@Money.Format(Expense.AmountMinor, Currency)</span></p>
+    <p class="hint">@(IsPayer ? "You" : PayerName) paid · @Expense.PaidOn.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</p>
+    <form method="post" action="/groups/@GroupId/expenses/@ExpenseId/remove">
+        <AntiforgeryToken />
+        <p class="hint">Balances will update.</p>
+        <button type="submit">Remove expense</button>
+    </form>
+</Page>
+
+@code {
+    [Parameter] public GroupId GroupId { get; set; }
+    [Parameter] public ExpenseId ExpenseId { get; set; }
+    [Parameter] public string Currency { get; set; } = "";
+    [Parameter] public SplitIt.Slices.RemoveExpense.RecordedExpense Expense { get; set; } = default!;
+    [Parameter] public string PayerName { get; set; } = "";
+    [Parameter] public bool IsPayer { get; set; }
+}

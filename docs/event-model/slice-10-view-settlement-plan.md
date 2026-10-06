@@ -137,8 +137,8 @@ And over many random balance sets, always:
      reload never reshuffles it, and each payer's lines sit together.
 - **Shared-history score** for a pair: the number of expenses in which both appear,
   as payer or as a member of the split (even with a zero exact amount). Expenses
-  only: a settlement is not shared spending (spec §7). Later, removed expenses stop
-  counting.
+  only: a settlement is not shared spending (spec §7). A removed expense stops
+  counting: its balances move back and its pairs are scored down again (below).
 - **Honest bounds** (spec §10): greedy is a heuristic. At most `n − 1` transfers,
   every exact match taken; not a proven minimum.
 - **Live, not stored** (spec §11): folded from the one group stream per request,
@@ -150,10 +150,14 @@ And over many random balance sets, always:
 - **Members only:** a non-member, a missing group and a malformed group id are the
   same 404 (spec §4).
 
+- **A removed expense stops counting** (`ExpenseRemoved`, Remove expense): the
+  balances are as if it had never been recorded, and each pair that shared it
+  loses that one from its shared-history score, so the plan, and its tie-breaks,
+  are what they would have been.
+
 ## Deferred to the slices that introduce the events
 
-- **Removed expenses and settlements** stop counting — with `ExpenseRemoved`,
-  `SettlementRemoved`.
+- **Removed settlements** stop counting — with `SettlementRemoved`.
 - **Corrected expenses** — with the correction events.
 - **Renamed members** show their new names — with `MemberRenamed`.
 - **Removed members** — with `MemberRemoved`: a member is removed only at zero

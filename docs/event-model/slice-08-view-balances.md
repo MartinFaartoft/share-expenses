@@ -113,10 +113,12 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 - **Members only:** a non-member, a missing group and a malformed group id are the
   same 404 — the group's existence is not disclosed (spec §4).
 
+- **A removed expense stops counting** (`ExpenseRemoved`, Remove expense): every
+  balance is as if it had never been recorded, and they still sum to zero.
+
 ## Deferred to the slices that introduce the events
 
-- **A removed expense or settlement** stops counting — with `ExpenseRemoved`,
-  `SettlementRemoved`.
+- **A removed settlement** stops counting — with `SettlementRemoved`.
 - **Corrected expenses** — with the correction events (§11).
 - **Renamed members** show their new names — with `MemberRenamed`.
 - **A released claim** returns the slot to placeholder — with `MemberClaimReleased`.

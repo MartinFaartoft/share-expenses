@@ -7,6 +7,7 @@ using ExpenseRecorded = SplitIt.Slices.RecordExpense.ExpenseRecorded;
 using GroupCreated = SplitIt.Slices.CreateGroup.GroupCreated;
 using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
+using ExpenseRemoved = SplitIt.Slices.RemoveExpense.ExpenseRemoved;
 using SettlementRecorded = SplitIt.Slices.RecordSettlement.SettlementRecorded;
 
 namespace SplitIt.Tests.Slices.ViewGroup;
@@ -134,4 +135,61 @@ public class ViewGroupSpecs
     public void S9_an_unclaimed_placeholder_confers_no_access() =>
         // Carol's slot exists, but no user holds it: Carol herself is not a member yet.
         Assert.Null(Read(Lisbon, new Query(Carol)));
+
+    [Fact]
+    public void A_removed_expense_leaves_the_history_and_your_standing_moves_back()
+    {
+        var group = View([.. Lisbon, Expense(E1, "Dinner", 9000, M1, Dinner), new ExpenseRemoved(E1, Bob)]);
+
+        Assert.Empty(group.History);
+        Assert.Equal(0, group.BalanceMinor);
+    }
+
+    [Fact]
+    public void Removing_one_expense_leaves_the_others_counting()
+    {
+        var group = View(
+        [
+            .. Lisbon,
+            Expense(E1, "Dinner", 9000, M1, Dinner),
+            Expense(E2, "Taxi", 3000, M2, [(M2, 1500), (M3, 1500)]),
+            new ExpenseRemoved(E1, Alice),
+        ]);
+
+        Assert.Equal(["Taxi"], group.History.Select(h => ((ActivityExpense)h).Description));
+        Assert.Equal(0, group.BalanceMinor);
+    }
+
+    [Fact]
+    public void Entries_recorded_after_a_removal_keep_their_order()
+    {
+        var group = View(
+        [
+            .. Lisbon,
+            Expense(E1, "Dinner", 9000, M1, Dinner),
+            Expense(E2, "Taxi", 3000, M1, [(M1, 3000)]),
+            new ExpenseRemoved(E1, Alice),
+            Expense(E3, "Coffee", 300, M1, [(M1, 300)]),
+            new SettlementRecorded(S1, M2, M1, 100, Oct1, Bob),
+        ]);
+
+        Assert.Equal(
+            ["settlement", "Coffee", "Taxi"],
+            group.History.Select(h => h is ActivityExpense e ? e.Description : "settlement"));
+    }
+
+    [Fact]
+    public void Removing_an_unknown_expense_changes_nothing() =>
+        Assert.Equal(
+            View([.. Lisbon, Expense(E1, "Dinner", 9000, M1, Dinner)]),
+            View([.. Lisbon, Expense(E1, "Dinner", 9000, M1, Dinner), new ExpenseRemoved(E2, Alice)]),
+            new ReadModelComparer());
+
+    private sealed class ReadModelComparer : IEqualityComparer<GroupActivityReadModel>
+    {
+        public bool Equals(GroupActivityReadModel? x, GroupActivityReadModel? y) =>
+            x!.BalanceMinor == y!.BalanceMinor && x.History.Count == y.History.Count;
+
+        public int GetHashCode(GroupActivityReadModel obj) => 0;
+    }
 }
