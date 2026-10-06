@@ -15,8 +15,22 @@
     <script src="/js/htmx-2.0.4.min.js" defer></script>
 </head>
 <body>
+    @if (TopBar is not null)
+    {
+        <header class="topbar">@TopBar</header>
+    }
+    else if (BackHref is not null)
+    {
+        <header class="topbar">
+            <a class="up" href="@BackHref" aria-label="Back">‹</a>
+            <h1>@Title</h1>
+        </header>
+    }
     <main>
-        <h1>@Title</h1>
+        @if (TopBar is null && BackHref is null)
+        {
+            <h1>@Title</h1>
+        }
         @ChildContent
     </main>
 </body>
@@ -24,5 +38,9 @@
 
 @code {
     [Parameter] public string Title { get; set; } = "";
+    /// <summary>Where "back" goes: shows a sticky bar with a back chevron and the title.</summary>
+    [Parameter] public string? BackHref { get; set; }
+    /// <summary>A sticky app bar (back, title, menu) that replaces the plain heading.</summary>
+    [Parameter] public RenderFragment? TopBar { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 }

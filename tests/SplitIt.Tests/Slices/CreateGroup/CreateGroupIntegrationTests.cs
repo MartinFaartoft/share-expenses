@@ -29,7 +29,7 @@ public partial class CreateGroupIntegrationTests(AppFixture app)
         var html = await FormPage(app.BrowserFor(_alice));
 
         Assert.Contains("<title>New group · SplitIt</title>", html);
-        Assert.Contains("""<a href="/">← Home</a>""", html);
+        Assert.Contains("""<a class="up" href="/" aria-label="Back">‹</a>""", html);
         Assert.Contains("""<form method="post" action="/groups">""", html);
         Assert.Contains("""<input name="groupName" value="" maxlength="100" required autofocus />""", html);
         Assert.Contains("""<input name="memberName" value="" maxlength="50" required autocomplete="given-name" />""", html);

@@ -25,8 +25,8 @@ public class ViewGroupIntegrationTests(AppFixture app)
         var html = await PageOf(group.Id);
 
         Assert.Contains("<title>Lisbon trip · SplitIt</title>", html);
-        Assert.Contains("""<a href="/">← Home</a>""", html);
-        Assert.Contains($"""<a class="button" href="/groups/{group.Id}/expenses/new">Add expense</a>""", html);
+        Assert.Contains("""<a class="up" href="/" aria-label="Home">‹</a>""", html);
+        Assert.Contains($"""<a class="fab" href="/groups/{group.Id}/expenses/new" aria-label="Add expense">+</a>""", html);
         Assert.Contains($"""<a href="/groups/{group.Id}/members/new">Add member</a>""", html);
         Assert.Contains("You're settled up", html);
         Assert.Contains("Nothing yet.", html);
@@ -82,7 +82,7 @@ public class ViewGroupIntegrationTests(AppFixture app)
     {
         var (group, _) = await Lisbon();
 
-        Assert.Contains($"""<a href="/groups/{group.Id}/balances">Balances</a>""", await PageOf(group.Id));
+        Assert.Contains($"""<a class="balance" href="/groups/{group.Id}/balances">""", await PageOf(group.Id));
     }
 
     [Fact]

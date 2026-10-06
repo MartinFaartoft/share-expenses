@@ -101,8 +101,6 @@ ul.links a {
 
 /* ── The group page ─────────────────────────────────────────────────────────── */
 
-nav.back { margin-bottom: 0.5rem; }
-nav.back a { color: var(--accent); text-decoration: none; }
 
 a.button {
   display: inline-block;
@@ -115,6 +113,28 @@ a.button {
   text-decoration: none;
 }
 
+/* Floating "+" for the page's primary create action, lower right. */
+a.fab {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  width: 3.5rem;
+  height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  color: #fff;
+  font-size: 0; /* hide the text, keep it for layout */
+  background:
+    linear-gradient(#fff, #fff) center / 1.5rem 0.2rem no-repeat,
+    linear-gradient(#fff, #fff) center / 0.2rem 1.5rem no-repeat,
+    var(--accent);
+  border-radius: 50%;
+  text-decoration: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
 section.summary {
   display: flex;
   align-items: center;
@@ -125,7 +145,59 @@ section.summary {
   border: 1px solid #e1e4ea;
   border-radius: var(--radius);
 }
-section.summary p { margin: 0; font-size: 1.125rem; }
+section.summary a.balance {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 3rem;
+  font-size: 1.125rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+section.summary .chevron { color: var(--muted); font-size: 1.5rem; }
+
+/* ── App bar: back, title, overflow menu ────────────────────────────────────── */
+
+header.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 0.25rem 0.5rem;
+  background: var(--surface);
+}
+header.topbar h1 { flex: 1; margin: 0; font-size: 1.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+header.topbar .up, header.topbar summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  font-size: 1.75rem;
+  line-height: 1;
+  color: var(--accent);
+  text-decoration: none;
+  list-style: none;
+  cursor: pointer;
+}
+header.topbar summary::-webkit-details-marker { display: none; }
+details.menu { position: relative; }
+details.menu .menu-items {
+  position: absolute;
+  right: 0;
+  min-width: 11rem;
+  background: #fff;
+  border: 1px solid #e1e4ea;
+  border-radius: var(--radius);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+details.menu .menu-items a { display: block; padding: 0.875rem 1rem; color: var(--ink); text-decoration: none; }
 
 /* Chat style: newest at the bottom, already scrolled into view (column-reverse). */
 ol.history {

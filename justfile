@@ -46,6 +46,10 @@ run: db
     ) &
     exec dotnet run --project {{project}} --launch-profile https
 
+# Like `run`, but with dotnet watch: live browser reload on CSS/Razor changes, restart on C# changes
+watch: db
+    dotnet watch run --project {{project}} --launch-profile https
+
 # Build the container image the way the codex platform does
 image:
     docker build -t splitit:dev .

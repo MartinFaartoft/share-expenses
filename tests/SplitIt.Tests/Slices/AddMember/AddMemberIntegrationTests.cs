@@ -48,7 +48,7 @@ public partial class AddMemberIntegrationTests(AppFixture app)
         var html = await ScreenPage(app.BrowserFor(_alice), group.Id);
 
         Assert.Contains("<title>Add member · SplitIt</title>", html);
-        Assert.Contains($"""<a href="/groups/{group.Id}">← Lisbon trip</a>""", html);
+        Assert.Contains($"""<a class="up" href="/groups/{group.Id}" aria-label="Back">‹</a>""", html);
         Assert.Matches(
             """<li><span>Alice</span> <span class="status">You</span></li>\s*<li><span>Bob</span> <span class="status">Joined</span></li>\s*<li><span>Carol</span> <span class="status">Not invited</span></li>\s*<li><span>Dave</span> <span class="status">Invited</span></li>""",
             html);

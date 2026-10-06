@@ -104,7 +104,7 @@ public class ViewHomepageIntegrationTests(AppFixture app)
         var html = await HomeOf(await app.AccountFor(Unique("dave")));
 
         Assert.Contains("You're not in any groups yet. Start one, or wait for an invite.", html);
-        Assert.Contains("""<a class="button" href="/groups/new">New group</a>""", html);
+        Assert.Contains("""<a class="fab" href="/groups/new" aria-label="New group">+</a>""", html);
         Assert.DoesNotContain("Invited", html);
     }
 
@@ -116,7 +116,7 @@ public class ViewHomepageIntegrationTests(AppFixture app)
 
         await app.ProjectionsCaughtUp();
 
-        Assert.Contains("""<a class="button" href="/groups/new">New group</a>""", await HomeOf(bob));
+        Assert.Contains("""<a class="fab" href="/groups/new" aria-label="New group">+</a>""", await HomeOf(bob));
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────────

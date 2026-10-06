@@ -1,9 +1,7 @@
 @* The New group screen (slice-01-create-group.md): a plain form; created, it goes into the group. *@
 @using SplitIt.Shared
 @using SplitIt.Slices.CreateGroup
-<Page Title="New group">
-    <nav class="back"><a href="/">← Home</a></nav>
-
+<Page Title="New group" BackHref="/">
     <form method="post" action="/groups">
         <AntiforgeryToken />
         @* Chosen when the form was shown: submitting it twice creates one group. *@

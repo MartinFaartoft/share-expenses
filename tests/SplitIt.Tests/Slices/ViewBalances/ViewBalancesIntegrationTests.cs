@@ -19,7 +19,7 @@ public partial class ViewBalancesIntegrationTests(AppFixture app)
         var html = await PageOf(group.Id);
 
         Assert.Contains("<title>Balances · SplitIt</title>", html);
-        Assert.Contains($"""<a href="/groups/{group.Id}">← Lisbon trip</a>""", html);
+        Assert.Contains($"""<a class="up" href="/groups/{group.Id}" aria-label="Back">‹</a>""", html);
         Assert.Equal(
             [("Alice (you)", "settled up"), ("Bob — placeholder", "settled up"), ("Carol — placeholder", "settled up")],
             Lines(html));

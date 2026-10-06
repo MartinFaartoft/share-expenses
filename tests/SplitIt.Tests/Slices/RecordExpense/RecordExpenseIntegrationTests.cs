@@ -42,7 +42,7 @@ public partial class RecordExpenseIntegrationTests(AppFixture app)
         var html = await FormPage(app.BrowserFor(_alice), l.Group.Id);
 
         Assert.Contains("<title>Add expense · SplitIt</title>", html);
-        Assert.Contains($"""<a href="/groups/{l.Group.Id}">← Lisbon trip</a>""", html);
+        Assert.Contains($"""<a class="up" href="/groups/{l.Group.Id}" aria-label="Back">‹</a>""", html);
         Assert.Contains($"""<form method="post" action="/groups/{l.Group.Id}/expenses">""", html);
         Assert.Contains("""<input type="hidden" name="mode" value="equal" />""", html);
         Assert.Contains("""<input name="description" value="" maxlength="100" required autofocus />""", html);

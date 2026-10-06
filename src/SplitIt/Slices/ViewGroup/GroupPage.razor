@@ -1,20 +1,35 @@
 <Page Title="@ReadModel.GroupName">
-    <nav class="back"><a href="/">← Home</a></nav>
-
+    <TopBar>
+        <a class="up" href="/" aria-label="Home">‹</a>
+        <h1>@ReadModel.GroupName</h1>
+        <details class="menu">
+            <summary aria-label="More">⋯</summary>
+            <div class="menu-items">
+                <a href="/groups/@ReadModel.GroupId/members/new">Add member</a>
+            </div>
+        </details>
+    </TopBar>
+    <ChildContent>
     <section class="summary" aria-label="Your balance">
-        @if (ReadModel.BalanceMinor < 0)
+        <a class="balance" href="/groups/@ReadModel.GroupId/balances">
+            @if (ReadModel.BalanceMinor < 0)
+            {
+                <span>You owe <strong>@Money.Format(ReadModel.BalanceMinor, ReadModel.Currency)</strong></span>
+            }
+            else if (ReadModel.BalanceMinor > 0)
+            {
+                <span>You are owed <strong>@Money.Format(ReadModel.BalanceMinor, ReadModel.Currency)</strong></span>
+            }
+            else
+            {
+                <span>You're settled up</span>
+            }
+            <span class="chevron" aria-hidden="true">›</span>
+        </a>
+        @if (ReadModel.BalanceMinor != 0)
         {
-            <p>You owe <strong>@Money.Format(ReadModel.BalanceMinor, ReadModel.Currency)</strong></p>
+            <a class="button" href="/groups/@ReadModel.GroupId/settle-up">Settle up</a>
         }
-        else if (ReadModel.BalanceMinor > 0)
-        {
-            <p>You are owed <strong>@Money.Format(ReadModel.BalanceMinor, ReadModel.Currency)</strong></p>
-        }
-        else
-        {
-            <p>You're settled up</p>
-        }
-        <a class="button" href="/groups/@ReadModel.GroupId/settle-up">Settle up</a>
     </section>
 
     <section aria-labelledby="history">
@@ -51,11 +66,8 @@
         }
     </section>
 
-    <p class="actions">
-        <a class="button" href="/groups/@ReadModel.GroupId/expenses/new">Add expense</a>
-        <a href="/groups/@ReadModel.GroupId/balances">Balances</a>
-        <a href="/groups/@ReadModel.GroupId/members/new">Add member</a>
-    </p>
+    <a class="fab" href="/groups/@ReadModel.GroupId/expenses/new" aria-label="Add expense">+</a>
+    </ChildContent>
 </Page>
 
 @code {

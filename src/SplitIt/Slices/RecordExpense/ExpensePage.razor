@@ -1,9 +1,7 @@
 @* The Add expense screen (slice-06-record-expense.md): a plain form; recorded, it goes back to the group. *@
 @using SplitIt.Shared
 @using SplitIt.Web
-<Page Title="Add expense">
-    <nav class="back"><a href="/groups/@Form.GroupId">← @Form.GroupName</a></nav>
-
+<Page Title="Add expense" BackHref="/groups/@Form.GroupId">
     <form method="post" action="/groups/@Form.GroupId/expenses">
         <AntiforgeryToken />
         <input type="hidden" name="expenseId" value="@Form.ExpenseId" />
