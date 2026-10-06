@@ -50,7 +50,7 @@ public partial class AddMemberIntegrationTests(AppFixture app)
         Assert.Contains("<title>Add member · SplitIt</title>", html);
         Assert.Contains($"""<a class="up" href="/groups/{group.Id}" aria-label="Back">‹</a>""", html);
         Assert.Matches(
-            """<li><span>Alice</span> <span class="status">You</span></li>\s*<li><span>Bob</span> <span class="status">Joined</span></li>\s*<li><span>Carol</span> <span class="status">Not invited</span></li>\s*<li><span>Dave</span> <span class="status">Invited</span></li>""",
+            """<li>\s*<span>Alice</span> <span class="status">You</span>\s*</li>\s*<li>\s*<span>Bob</span> <span class="status">Joined</span>\s*</li>\s*<li>\s*<span>Carol</span> <span class="status">Not invited</span>\s*<a href="[^"]+">Invite</a>\s*</li>\s*<li>\s*<span>Dave</span> <span class="status">Invited</span>\s*<a href="[^"]+">Re-invite</a>\s*</li>""",
             html);
         Assert.Contains($"""<form method="post" action="/groups/{group.Id}/members">""", html);
         Assert.Contains("""name="displayName" value="" maxlength="50" required autofocus""", html);

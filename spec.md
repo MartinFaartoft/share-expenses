@@ -91,7 +91,7 @@ offline use is out (already a non-goal, §1).
 once screens existed: nothing called it but its own tests, and every screen
 doubled each slice's endpoints and tests. A slice whose screen is not built yet has
 no endpoint at all — its `Decide` or `Read` and its specs stand, unreachable until
-the screen arrives (Invite member; §14). A native app may want an API later; it
+the screen arrives (none at the moment; §14). A native app may want an API later; it
 would be designed then, for that client, and the endpoints removed here are in the
 git history. **Tests set up through events:** an integration test appends the
 events it needs straight to the store (`tests/…/Infrastructure/Seed.cs`) and drives
@@ -1806,13 +1806,12 @@ a documentation tool, not application code.
     made while building AddMember.
   - Optional means advisory by default: it reports, and the caller decides
     whether to gate on it.
-- **OPEN** Screens for the slices that lost their endpoint with the JSON API (§3):
-  **Invite member** (for a placeholder added without an email). Until then a
-  placeholder cannot be invited later, except by giving an email when adding them.
-  It comes back with a design pass, and with the behaviour its old endpoint had
-  that the specs do not cover — in the git history: the invite's `Invite` document
-  and email after commit. (Settle up is built: View settlement plan owns the
-  screen and Record settlement the submit, with idempotency by settlement id.)
+- Screens for the slices that lost their endpoint with the JSON API (§3) are all
+  built. **Invite member**: `/groups/{group}/members/{member}/invite`, from the
+  Invite / Re-invite link on Add member's list (slice-03-invite-member.md); inviting
+  a slot again replaces its `Invite` document and sends the email again. **Settle
+  up**: View settlement plan owns the screen and Record settlement the submit, with
+  idempotency by settlement id.
   **New group** (Create group) is built: `/groups/new`, from Home. **Add expense**
   (Record expense) is built: `/groups/{group}/expenses/new`, from the group
   page, equal split first; shares and exact follow as a second and third pass over

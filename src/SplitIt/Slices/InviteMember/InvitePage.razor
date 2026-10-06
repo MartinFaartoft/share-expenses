@@ -1,0 +1,20 @@
+@* The Invite member screen (slice-03-invite-member.md): an email for a slot; inviting again replaces the invite, and sends it again. *@
+<Page Title="@($"Invite {Form.MemberName}")" BackHref="@($"/groups/{Form.GroupId}/members/new")">
+    <form method="post" action="/groups/@Form.GroupId/members/@Form.MemberId/invite">
+        <AntiforgeryToken />
+        <label>
+            Email
+            <input type="email" name="email" value="@Form.Email" required autofocus autocomplete="off" />
+            <span class="hint">@Form.MemberName gets an email to join the group. Inviting again replaces an earlier invite.</span>
+        </label>
+        @if (Form.Error is not null)
+        {
+            <p class="error" role="alert">@Form.Error</p>
+        }
+        <button type="submit">Invite</button>
+    </form>
+</Page>
+
+@code {
+    [Parameter] public InviteForm Form { get; set; } = default!;
+}

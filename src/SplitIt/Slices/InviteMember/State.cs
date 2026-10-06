@@ -6,7 +6,7 @@ using SplitIt.Slices.CreateGroup;
 namespace SplitIt.Slices.InviteMember;
 
 /// <summary>A member slot as InviteMember sees it.</summary>
-internal sealed record Slot(string Name, bool Claimed);
+public sealed record Slot(string Name, bool Claimed);
 
 /// <summary>
 /// What InviteMember needs to know about a group, folded from its stream by Marten
@@ -22,13 +22,12 @@ internal sealed record Slot(string Name, bool Claimed);
 ///   MemberRenamed       → rename the slot                  (rejections name it)
 ///   GroupArchived / GroupUnarchived → track Archived       (no changes to an archived group)
 ///
-/// Internal, as is <see cref="Slot"/>, until the slice has a screen: Wolverine will
-/// fetch it for the endpoint, putting it in the endpoint's signature, so public (spec
-/// §12). The alias is required: every slice has a State, and Marten would
+/// Public, as is <see cref="Slot"/>: Wolverine fetches it for the endpoint, putting it
+/// in the endpoint's signature (spec §12). The alias is required: every slice has a State, and Marten would
 /// otherwise name them all ledger.state.
 /// </summary>
 [DocumentAlias("invite_member_state")]
-internal sealed record State(
+public sealed record State(
     string GroupName,
     ImmutableDictionary<UserId, MemberId> Members,
     ImmutableDictionary<MemberId, Slot> Slots)

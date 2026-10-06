@@ -5,7 +5,13 @@
         <ul class="people">
             @foreach (var person in Form.People)
             {
-                <li><span>@person.Name</span> <span class="status">@person.Status</span></li>
+                <li>
+                    <span>@person.Name</span> <span class="status">@person.Status</span>
+                    @if (person.Status is "Not invited" or "Invite expired" or "Invited")
+                    {
+                        <a href="/groups/@Form.GroupId/members/@person.MemberId/invite">@(person.Status == "Invited" ? "Re-invite" : "Invite")</a>
+                    }
+                </li>
             }
         </ul>
     </section>

@@ -4,12 +4,12 @@ Type: **State Change**. Screen → command → events.
 
 | | |
 |---|---|
-| Screen | Invite member (modelled; no frontend yet) — for a placeholder added without an email; one added with one is invited by AddMember |
+| Screen | Invite member — for a placeholder added without an email (or to invite again); one added with one is invited by AddMember. Reached from the **Invite** / **Re-invite** link on Add member's list |
 | Command | `InviteMember(memberId, email, inviteId, now, by)` + looked up: `emailHolder`, `invitedTo` |
 | Events | `MemberInvited` (owned by AddMember) |
 | Also writes | `Invite` — plain document binding the slot to the address |
 | Code | `src/SplitIt/Slices/InviteMember/` |
-| Endpoint | none yet — its screen is not built, so nothing reaches it (spec §3). The slice's logic and specs stand |
+| Endpoints | `GET /groups/{group}/members/{member}/invite` — the form; `POST` to the same path — its submit; sign-in required. A non-member, a missing group, an unknown slot and one already joined are the same 404. Success goes back to Add member's list; a rejection re-renders the form (200); a conflicting save is 409. The email goes after the commit, best-effort. Inviting again replaces the slot's `Invite` document and sends again: the resend for an email that never arrived (spec §14) |
 
 Invites an email address to one member slot (spec §4: the invite binds the slot).
 Whoever signs in with that address — proving they control it, with a code sent to

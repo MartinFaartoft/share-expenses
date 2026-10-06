@@ -131,8 +131,8 @@ chose for the new member; scenario 17 passes the same one twice.
   a status — **You** (the signed-in user's slot), **Joined** (claimed by someone
   else), **Invited** (an invite in force), **Invite expired**, or **Not invited**.
   It makes a duplicate name visible before it is rejected (scenario 7), is the
-  confirmation after adding, and is where InviteMember's screen will hang its
-  **Invite** button for the *Not invited* rows, once built.
+  confirmation after adding, and is where InviteMember's screen hangs its
+  **Invite** link — on *Not invited* and *Invite expired* rows, and **Re-invite** on *Invited* ones.
 - **Two fields:**
   - **Name** — `required`, `maxlength` 50 (a hint: the decider counts visible
     characters, `maxlength` UTF-16 units), autofocus. Hint: "What the others in the
