@@ -91,7 +91,7 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 
 - **Everyone's standing,** in member-added order: name, "(you)" for the caller,
   status where not joined, and "owes £45.00", "is owed £60.00" or "settled up".
-- **Settle up** (to `/groups/{group}/settle-up` — not yet built), as on the group
+- **Settle up** (to `/groups/{group}/settle-up`), as on the group
   page, and a link back to the group.
 - **Not a member, no such group, malformed id:** the same "not found" page, 404.
 

@@ -30,11 +30,15 @@ internal sealed record Slot(MemberId MemberId, string Name, UserId? ClaimedBy, l
 /// </summary>
 [DocumentAlias("view_settlement_plan_state")]
 internal sealed record State(
+    string GroupName,
     string Currency,
     ImmutableList<Slot> Slots,
     ImmutableDictionary<(MemberId, MemberId), int> SharedHistory)
 {
-    public static State Create(GroupCreated e) => new(e.Currency, [], ImmutableDictionary<(MemberId, MemberId), int>.Empty);
+    /// <summary>The group's stream id.</summary>
+    public Guid Id { get; init; }
+
+    public static State Create(GroupCreated e) => new(e.Name, e.Currency, [], ImmutableDictionary<(MemberId, MemberId), int>.Empty);
 
     public State Apply(MemberAdded e) => this with { Slots = Slots.Add(new Slot(e.MemberId, e.DisplayName, null, 0)) };
 

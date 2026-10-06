@@ -1,0 +1,105 @@
+@* The Settle up screen (slice-10-view-settlement-plan.md): the plan, and a form for any payment. Both post to Record settlement. *@
+@using SplitIt.Shared
+@using SplitIt.Web
+<Page Title="Settle up" BackHref="@($"/groups/{Model.GroupId}")">
+    @if (Error is not null)
+    {
+        <p class="error" role="alert">@Error</p>
+    }
+
+    <section aria-labelledby="plan">
+        <h2 id="plan">To settle up</h2>
+        @if (Model.Transfers.Count == 0)
+        {
+            <p class="hint">You're all settled up.</p>
+        }
+        else
+        {
+            <ul class="cards">
+                @foreach (var transfer in InOrder())
+                {
+                    <li>
+                        <p>
+                            <strong>@Who(transfer.FromMemberId, transfer.FromName)</strong> @(transfer.FromMemberId == Model.You ? "pay" : "pays")
+                            <strong>@Who(transfer.ToMemberId, transfer.ToName)</strong>
+                            <span class="amount">@Money.Format(transfer.AmountMinor, Model.Currency)</span>
+                        </p>
+                        <form method="post" action="/groups/@Model.GroupId/settlements">
+                            <AntiforgeryToken />
+                            <input type="hidden" name="settlementId" value="@SettlementId.New()" />
+                            <input type="hidden" name="from" value="@transfer.FromMemberId" />
+                            <input type="hidden" name="to" value="@transfer.ToMemberId" />
+                            <input type="hidden" name="amount" value="@Typed(transfer.AmountMinor)" />
+                            <input type="hidden" name="paidOn" value="@Day(Today)" />
+                            <button type="submit">Paid</button>
+                        </form>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
+    <section aria-labelledby="any">
+        <h2 id="any">Or record any payment</h2>
+        <form method="post" action="/groups/@Model.GroupId/settlements">
+            <AntiforgeryToken />
+            <input type="hidden" name="settlementId" value="@SettlementId.New()" />
+            <label>
+                From
+                <select name="from">
+                    @foreach (var member in Model.Members)
+                    {
+                        <option value="@member.MemberId" selected="@member.IsYou">@member.Name@(member.IsYou ? " (you)" : "")</option>
+                    }
+                </select>
+            </label>
+            <label>
+                To
+                <select name="to">
+                    @foreach (var member in Model.Members)
+                    {
+                        <option value="@member.MemberId">@member.Name@(member.IsYou ? " (you)" : "")</option>
+                    }
+                </select>
+            </label>
+            <label>
+                Amount (@Money.Label(Model.Currency))
+                <input name="amount" inputmode="decimal" autocomplete="off" placeholder="@Placeholder" required />
+            </label>
+            <label>
+                Date
+                <input type="date" name="paidOn" value="@Day(Today)" max="@Day(Today.AddDays(1))" required />
+            </label>
+            <button type="submit">Record</button>
+        </form>
+    </section>
+</Page>
+
+@code {
+    [Parameter] public SplitIt.Slices.ViewSettlementPlan.SettlementPlanReadModel Model { get; set; } = default!;
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    /// <summary>The caller's own lines first; otherwise the plan's order.</summary>
+    private IEnumerable<PlannedTransfer> InOrder() =>
+        Model.Transfers.OrderBy(t => t.FromMemberId == Model.You || t.ToMemberId == Model.You ? 0 : 1);
+
+    private string Who(MemberId member, string name) => member == Model.You ? "You" : name;
+
+    private string Typed(long minor)
+    {
+        var places = Currency.MinorUnitsOf(Model.Currency);
+        return (minor / (decimal)Math.Pow(10, places)).ToString("F" + places, System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static string Day(DateOnly day) => day.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+    private string Placeholder
+    {
+        get
+        {
+            var places = Currency.MinorUnitsOf(Model.Currency);
+            return places == 0 ? "0" : "0." + new string('0', places);
+        }
+    }
+}

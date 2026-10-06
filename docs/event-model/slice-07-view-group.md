@@ -88,8 +88,7 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 ## The screen
 
 - **Your standing, beside Settle up:** "You owe £70.00", "You are owed £45.00", or
-  "You're settled up" — and **Settle up** always, to `/groups/{group}/settle-up` (not
-  yet built): someone owed can see who will pay them, and record it when they do.
+  "You're settled up" — and **Settle up** always, to `/groups/{group}/settle-up`: someone owed can see who will pay them, and record it when they do.
 - **Balances** opens `/groups/{group}/balances` — everyone's standing (View balances).
 - **The history, chat style:** a scrollable list, newest at the bottom and scrolled
   into view on arrival. What *you paid* sits on the left — an expense whose payer is

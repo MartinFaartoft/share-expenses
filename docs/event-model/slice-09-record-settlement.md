@@ -8,7 +8,7 @@ Type: **State Change**. Screen → command → events.
 | Command | `RecordSettlement(settlementId, fromMemberId, toMemberId, amountMinor, paidOn, now, by)` |
 | Events | `SettlementRecorded` |
 | Code | `src/SplitIt/Slices/RecordSettlement/` |
-| Endpoint | none yet — its screen is not built, so nothing reaches it (spec §3). The slice's logic and specs stand |
+| Endpoint | `POST /groups/{group}/settlements` — the submit of Settle up's forms; goes back to `GET /groups/{group}/settle-up`, with `?error=` when rejected; sign-in required |
 
 Records that one member paid another, outside the app (spec §1: the app produces
 instructions; people use their own bank). A settlement is a transaction in the
@@ -91,6 +91,11 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 14 - a date is required
     WHEN   RecordSettlement(m2, m1, 3000, paidOn none, bob)
     THEN   rejected - date is required
+
+15 - a settlement id already recorded is not recorded twice
+    GIVEN  ... AND SettlementRecorded(s1, m2, m1, 3000, 2026-10-01, bob)
+    WHEN   RecordSettlement(m2, m1, 3000, bob)
+    THEN   rejected (already recorded) - settlement already recorded
 ```
 
 ## Notes

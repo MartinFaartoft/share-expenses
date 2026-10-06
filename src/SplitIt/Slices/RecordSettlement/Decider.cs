@@ -30,6 +30,10 @@ internal static class Decider
         if (state is null || !state.Members.Contains(command.By))
             return Decision.NotFound(GroupNotFound);
 
+        // The same form submitted twice: recorded once, and the second is not an error.
+        if (state.Settlements.Contains(command.SettlementId))
+            return Decision.AlreadyRecorded("settlement already recorded");
+
         if (command.FromMemberId is not { } from || !state.Slots.Contains(from))
             return Decision.Reject("payer is not a member of the group");
         if (command.ToMemberId is not { } to || !state.Slots.Contains(to))

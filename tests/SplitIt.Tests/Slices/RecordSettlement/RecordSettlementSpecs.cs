@@ -146,6 +146,12 @@ public class RecordSettlementSpecs
             .ThenRejected("date is required");
 
     [Fact]
+    public void S15_a_settlement_id_already_recorded_is_not_recorded_twice() =>
+        Spec.Given([.. Lisbon, new SettlementRecorded(S1, M2, M1, 3000, Oct1, Bob)])
+            .When(RecordSettlement(M2, M1, 3000, Bob))
+            .ThenAlreadyRecorded("settlement already recorded");
+
+    [Fact]
     public void A_non_member_learns_nothing_from_validation() =>
         Spec.Given(Lisbon)
             .When(RecordSettlement(M9, M9, -5, Mallory))

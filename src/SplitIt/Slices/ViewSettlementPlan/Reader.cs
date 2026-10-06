@@ -8,10 +8,21 @@ internal sealed record Query(UserId UserId);
 /// <summary>The read model, as in <c>event-model.yaml</c>: what the Settle up screen shows.</summary>
 /// <param name="Currency">ISO 4217; amounts are in its minor unit.</param>
 /// <param name="You">The caller's own slot, so the screen can put their lines first.</param>
-internal sealed record SettlementPlanReadModel(string Currency, MemberId You, IReadOnlyList<PlannedTransfer> Transfers);
+/// <param name="Members">Everyone, for the pickers of a hand-entered payment.</param>
+/// <remarks>Public: the screen takes it as a component parameter (spec §3).</remarks>
+public sealed record SettlementPlanReadModel(
+    string Currency,
+    MemberId You,
+    IReadOnlyList<PlannedTransfer> Transfers,
+    GroupId GroupId,
+    string GroupName,
+    IReadOnlyList<PlanMember> Members);
+
+/// <summary>A member as the hand-entered payment offers them.</summary>
+public sealed record PlanMember(MemberId MemberId, string Name, bool IsYou);
 
 /// <summary>One line of the plan, with both names, so the screen needs nothing else.</summary>
-internal sealed record PlannedTransfer(MemberId FromMemberId, string FromName, MemberId ToMemberId, string ToName, long AmountMinor);
+public sealed record PlannedTransfer(MemberId FromMemberId, string FromName, MemberId ToMemberId, string ToName, long AmountMinor);
 
 /// <summary>Specs: <c>docs/event-model/slice-10-view-settlement-plan.md</c>.</summary>
 internal static class Reader
@@ -29,6 +40,9 @@ internal static class Reader
         return new SettlementPlanReadModel(
             state.Currency,
             you.MemberId,
-            [.. plan.Select(t => new PlannedTransfer(t.From, names[t.From], t.To, names[t.To], t.AmountMinor))]);
+            [.. plan.Select(t => new PlannedTransfer(t.From, names[t.From], t.To, names[t.To], t.AmountMinor))],
+            new GroupId(state.Id),
+            state.GroupName,
+            [.. state.Slots.Select(s => new PlanMember(s.MemberId, s.Name, s.MemberId == you.MemberId))]);
     }
 }

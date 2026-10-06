@@ -16,19 +16,26 @@ namespace SplitIt.Slices.RecordSettlement;
 ///   MemberRemoved       → drop the slot              (cannot pay or be paid)
 ///   GroupArchived / GroupUnarchived → track Archived (no changes to an archived group)
 ///
-/// Internal until the slice has a screen: Wolverine will fetch it for the endpoint,
-/// putting it in the endpoint's signature, so public (spec §12). The alias is
-/// required: every slice has a State.
+/// Public: Wolverine fetches it for the endpoint, so it is in the endpoint's signature
+/// (spec §12). The alias is required: every slice has a State.
 /// </summary>
+/// <param name="Currency">To read the amount a form posts, in the currency's decimals.</param>
+/// <param name="Settlements">Those recorded, so one form submitted twice records one.</param>
 [DocumentAlias("record_settlement_state")]
-internal sealed record State(ImmutableHashSet<UserId> Members, ImmutableHashSet<MemberId> Slots)
+public sealed record State(
+    ImmutableHashSet<UserId> Members,
+    ImmutableHashSet<MemberId> Slots,
+    string Currency,
+    ImmutableHashSet<SettlementId> Settlements)
 {
     /// <summary>The stream id, set by Marten; Wolverine needs it to type the aggregate's identity.</summary>
     public GroupId Id { get; init; }
 
-    public static State Create(GroupCreated _) => new([], []);
+    public static State Create(GroupCreated e) => new([], [], e.Currency, []);
 
     public State Apply(MemberAdded e) => this with { Slots = Slots.Add(e.MemberId) };
 
     public State Apply(MemberClaimed e) => this with { Members = Members.Add(e.UserId) };
+
+    public State Apply(SettlementRecorded e) => this with { Settlements = Settlements.Add(e.SettlementId) };
 }
