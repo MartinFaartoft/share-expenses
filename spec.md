@@ -170,6 +170,30 @@ only its own slice's screen, so no test depends on another slice's screen.
   headroom are ours to watch. At this data volume none of it should bite, but
   nobody else is watching either.
 
+### Deployment: the codex platform
+
+**Live at `https://splitit.ftft.dk` since 2026-10-05.** The VPS is run by the `codex` and
+`codex-actions` repositories (Ansible, a restricted SSH deploy key, Caddy); this repository
+only declares what the app needs. A push to `main` builds the image (`Dockerfile`), pushes it
+to GHCR and sends a payload to the VPS, which swaps the site in, waits for the container's
+health check, reloads Caddy and rolls back on failure. Logs: `/var/log/codex-deploy/splitit/last.log`
+on the VPS, and `docker logs splitit`.
+
+- **`codex.yml` is the contract.** Service `splitit`, port 8080, a Postgres 16 sidecar, plain
+  values under `env:` (`App__PublicOrigin`, `Email__From`) and GitHub secrets under `secrets:`
+  (`Email__Resend__ApiKey: ${secrets.RESEND_API_KEY}`). Secrets travel in the deploy payload only
+  and are written to `/srv/sites/_secrets/splitit.env`; rotate one by updating the GitHub secret
+  and re-running the deploy. The workflow needs `secrets: inherit` to find them.
+- **What the platform dictates to the app.** The connection string arrives as
+  `ConnectionStrings__Default` (not `Postgres`); the health check calls `GET /healthz` with `curl`
+  inside the container (so the runtime image installs `curl`); the container listens on 8080 as
+  the non-root `app` user; TLS ends at Caddy, hence the forwarded-headers rule above.
+- **Checking an image before pushing.** `just image` builds it; running it with the same
+  environment and `codegen test` catches what the test suite cannot (it found Wolverine refusing
+  the Resend sender, §12).
+- **Database.** Created empty on the first deploy; the app migrates itself on start (above). Its
+  password is generated once by the platform and never rotated. Backups remain ours (above).
+
 ### What is event-sourced, and what is not
 
 **Event-sourced (the domain):** groups, members, expenses, settlements.
@@ -426,6 +450,23 @@ The production key and the VPS environment are what remain.
 4. Create the sending-only API key and put it in the VPS environment.
 5. Send one real sign-in to an address at a mail provider you use (Gmail, iCloud), and
    look at its headers for `spf=pass`, `dkim=pass`, `dmarc=pass`.
+
+**A wildcard covers every name — until the name has records of its own.** `ftft.dk` has
+`*.ftft.dk` pointing at the VPS, which is why new sites "just resolve". Adding the Resend records
+under `splitit.ftft.dk` made that name exist in the zone, and a wildcard does not answer for a
+name that exists (RFC 4592): `splitit.ftft.dk` then resolved to nothing, Let's Encrypt refused
+("no valid A records") and Caddy served no certificate — while the app was healthy. **Any name
+that gets mail records needs its own explicit A record.** Then: Caddy's certificate attempts back
+off, and a reload does not restart one that is stuck — `docker restart caddy-caddy-1` does (a few
+seconds' blip for every site; certificates are on disk). Keep **no AAAA record** until IPv6 is
+checked from outside on ports 80 and 443: Let's Encrypt prefers IPv6 when one exists and does not
+fall back.
+
+**Checking DNS:** ask the authoritative servers or use DNS-over-HTTPS (`curl -H 'accept:
+application/dns-json' 'https://cloudflare-dns.com/dns-query?name=…&type=A'`). A router caches a
+negative answer for the zone's 3600 seconds, and a VPN's resolver can answer for servers you
+address directly, so `dig` and `nslookup` from a laptop may disagree with each other and with the
+truth. Tell-tale: an "authoritative" answer whose TTL counts down.
 
 **When DNS moves from Netlify to Hetzner, the mail records move with it.** They are
 part of the zone, not of Resend: the DKIM, SPF, return-path and DMARC entries under
@@ -1930,10 +1971,9 @@ a documentation tool, not application code.
 - **OPEN** `/healthz` checks that both databases answer, not that the schema is there.
   With the startup migration it only answers once the schema is applied, which makes
   it true; whether it should also check the schema is left until it is seen to lie.
-- **OPEN** Production will not start until the mail relay (§4) and `App:PublicOrigin`
-  are configured, both by design. The first boot of an empty database also logs
-  one `fail:` from EF, probing the migrations table it is about to create; it is not a
-  failure.
+- **Answered** Production starts: the mail relay (§4) and `App:PublicOrigin` are supplied by
+  `codex.yml` (§3, Deployment). The first boot of an empty database still logs one `fail:` from
+  EF, probing the migrations table it is about to create; it is not a failure.
 - **DEFERRED** Frozen settle-up plan, unless a shifting plan bites in practice.
 - **DEFERRED** Marten-backed `IUserStore`, if EF Core and Marten genuinely chafe.
 - **DEFERRED** `MemberMergedInto` for duplicate slots — out of scope for v1.
