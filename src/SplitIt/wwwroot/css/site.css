@@ -172,6 +172,9 @@ header.topbar {
   padding: 0.25rem 0.5rem;
   background: var(--surface);
 }
+/* With the logo there is no back chevron to inset: match the page gutter (1rem) on top and left. */
+header.topbar:has(.logo) { padding: 1rem 1rem 0; gap: 0.75rem; }
+header.topbar .logo { border-radius: 22%; }
 header.topbar h1 { flex: 1; margin: 0; font-size: 1.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 header.topbar .up, header.topbar summary {
   display: flex;

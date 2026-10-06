@@ -1,6 +1,6 @@
 @* The balances page (slice-08-view-balances.md): everyone in the group and where they stand. *@
 @using SplitIt.Slices.ViewBalances
-<Page Title="Balances" BackHref="/groups/@Model.GroupId">
+<Page Title="Balances" BackHref="@($"/groups/{Model.GroupId}")">
     <ul class="members">
         @foreach (var member in Model.Members)
         {

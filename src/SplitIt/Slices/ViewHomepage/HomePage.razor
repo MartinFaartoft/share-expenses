@@ -1,4 +1,9 @@
 <Page Title="SplitIt">
+    <TopBar>
+        <img class="logo" src="/favicon-180x180.png" alt="" width="36" height="36" />
+        <h1>SplitIt</h1>
+    </TopBar>
+    <ChildContent>
     @if (Model.Invites.Count > 0)
     {
         <section aria-labelledby="invites">
@@ -36,6 +41,7 @@
     </section>
 
     <a class="fab" href="/groups/new" aria-label="New group">+</a>
+    </ChildContent>
 </Page>
 
 @code {
