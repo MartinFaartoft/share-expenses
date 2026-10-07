@@ -1,6 +1,10 @@
 using JasperFx;
 using Marten;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using SplitIt.Infrastructure;
 using SplitIt.Infrastructure.Identity;
 using SplitIt.Infrastructure.Marten;
@@ -22,6 +26,30 @@ builder.Services.AddWeb();
 
 // The clock, injected so time-dependent decisions (invite deadlines) stay testable.
 builder.Services.TryAddSingleton(TimeProvider.System);
+
+// Metrics, traces and logs to OTLP; the endpoint comes from OTEL_EXPORTER_OTLP_*.
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r => r.AddService(
+        serviceName: builder.Environment.ApplicationName,
+        serviceVersion: typeof(Program).Assembly.GetName().Version?.ToString()))
+    .WithMetrics(m => m
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddRuntimeInstrumentation()
+        .AddMeter("Npgsql", "Wolverine", "Marten")
+        .AddOtlpExporter())
+    .WithTracing(t => t
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddSource("Npgsql", "Wolverine", "Marten")
+        .AddOtlpExporter());
+
+builder.Logging.AddOpenTelemetry(o =>
+{
+    o.IncludeFormattedMessage = true;
+    o.IncludeScopes = true;
+    o.AddOtlpExporter();
+});
 
 var app = builder.Build();
 
