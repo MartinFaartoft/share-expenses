@@ -1887,6 +1887,19 @@ a documentation tool, not application code.
   member, Accept invite, Rename, Change default split), and makes the group page and the
   expense sheet read-only; the default split is folded by Record expense, whose form opens
   with it. Archive warns, never blocks, and is one-way until `UnarchiveGroup` (deferred).
+- **Dark mode and Settings** are built, and are not a slice: nothing in them is a fact about
+  a group, so there is no event or state to fold. **The colour theme is a cookie on the
+  device** (`theme`: `light` or `dark`; absent means the device decides), rendered as
+  `data-theme` on `<html>` by the page shell, so there is no flash and no script, and it
+  works signed out and on the sign-in page. Chosen over browser storage (needs a script and
+  can flash) and over the account (needs a preference store that does not exist, and a
+  phone at night and a laptop by day rarely want the same). `site.css` takes every colour from
+  a variable, with a dark set used when the device asks for dark and nothing says light, or
+  when dark is chosen; the cookie's value is checked before it is rendered. **`/settings`**,
+  from `⋯` on the home page, offers Device / Light / Dark. **Sign out** is its own item in
+  the same menu, under Settings (`POST /sign-out`, a form with antiforgery: a link cannot
+  sign anyone out; it ends the application cookie and keeps the theme). Plain forms,
+  signed in only (`Web/Settings`, `Web/Theme.cs`).
 - **OPEN** Default currency from the browser's locale. The New group form
   preselects DKK for everyone. Better: guess from the request — the
   `Accept-Language` header's first region (`da-DK` → DKK, `en-GB` → GBP), mapped

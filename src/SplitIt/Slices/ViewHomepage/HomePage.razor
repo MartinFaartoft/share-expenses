@@ -2,6 +2,16 @@
     <TopBar>
         <img class="logo" src="/favicon-180x180.png" alt="" width="36" height="36" />
         <h1>SplitIt</h1>
+        <details class="menu">
+            <summary aria-label="More">⋯</summary>
+            <div class="menu-items">
+                <a href="/settings">Settings</a>
+                <form method="post" action="/sign-out">
+                    <AntiforgeryToken />
+                    <button type="submit">Sign out</button>
+                </form>
+            </div>
+        </details>
     </TopBar>
     <ChildContent>
     @if (Model.Invites.Count > 0)

@@ -3,11 +3,66 @@
   --ink: #1d2433;
   --muted: #5d6677;
   --accent: #2f6fdf;
+  --accent-text: #2f6fdf;   /* the accent as text on the page: links, never a button's fill */
+  --on-accent: #fff;
   --error: #b42318;
-  --surface: #f6f7f9;
+  --surface: #f6f7f9;       /* the page */
+  --card: #fff;             /* what sits on it: cards, inputs, sheets */
+  --sunken: #eef0f4;        /* wells and quiet fills */
+  --hover: #f1f3f7;
+  --line: #e1e4ea;
+  --line-strong: #c7ccd6;
+  --mine: #d9efe0;          /* chat bubbles */
+  --theirs: #dce8fc;
+  --warn-bg: #fff4e0;
+  --warn-line: #f0c987;
   --radius: 0.6rem;
-  color-scheme: light;
+  accent-color: var(--accent);
+  color-scheme: light dark;
 }
+
+/* Dark: when the device asks for it and the user has not chosen light, or when they chose it.
+   The same values twice, because a media query and an attribute cannot share a block. The
+   choice is the `theme` cookie, rendered as data-theme on <html> (Settings); no cookie, no
+   attribute, and the device decides. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #e8ebf2;
+    --muted: #a3abbb;
+    --accent: #3b74d9;
+    --accent-text: #86adff;
+    --error: #ff8a80;
+    --surface: #12151c;
+    --card: #1e232e;
+    --sunken: #191d26;
+    --hover: #283040;
+    --line: #2c3340;
+    --line-strong: #46506a;
+    --mine: #1d4a33;
+    --theirs: #213d6b;
+    --warn-bg: #3a2f17;
+    --warn-line: #8a6a25;
+  }
+}
+:root[data-theme="dark"] {
+  --ink: #e8ebf2;
+  --muted: #a3abbb;
+  --accent: #3b74d9;
+  --accent-text: #86adff;
+  --error: #ff8a80;
+  --surface: #12151c;
+  --card: #1e232e;
+  --sunken: #191d26;
+  --hover: #283040;
+  --line: #2c3340;
+  --line-strong: #46506a;
+  --mine: #1d4a33;
+  --theirs: #213d6b;
+  --warn-bg: #3a2f17;
+  --warn-line: #8a6a25;
+  color-scheme: dark;
+}
+:root[data-theme="light"] { color-scheme: light; }
 
 * { box-sizing: border-box; }
 
@@ -48,9 +103,10 @@ input, select {
   max-width: 100%;
   padding: 0.75rem;
   font: inherit;
-  border: 1px solid #c7ccd6;
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  background: #fff;
+  background: var(--card);
 }
 
 /* iOS draws a date input at its own width and height, and centres its text. */
@@ -74,7 +130,7 @@ button {
   padding: 0.75rem 1rem;
   font: inherit;
   font-weight: 600;
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border: 0;
   border-radius: var(--radius);
@@ -83,7 +139,7 @@ button {
 button.link {
   min-height: auto;
   padding: 0;
-  color: var(--accent);
+  color: var(--accent-text);
   background: none;
   font-weight: normal;
   text-decoration: underline;
@@ -100,8 +156,8 @@ ul.cards, ul.links { list-style: none; margin: 0; padding: 0; display: grid; gap
 
 ul.cards li {
   padding: 1rem;
-  background: #fff;
-  border: 1px solid #e1e4ea;
+  background: var(--card);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
 }
 
@@ -113,8 +169,8 @@ ul.links a {
   color: var(--ink);
   text-decoration: none;
   font-weight: 600;
-  background: #fff;
-  border: 1px solid #e1e4ea;
+  background: var(--card);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
 }
 
@@ -126,7 +182,7 @@ a.button {
   min-height: 3rem;
   padding: 0.75rem 1rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border-radius: var(--radius);
   text-decoration: none;
@@ -143,11 +199,11 @@ a.fab {
   align-items: center;
   justify-content: center;
   line-height: 1;
-  color: #fff;
+  color: var(--on-accent);
   font-size: 0; /* hide the text, keep it for layout */
   background:
-    linear-gradient(#fff, #fff) center / 1.5rem 0.2rem no-repeat,
-    linear-gradient(#fff, #fff) center / 0.2rem 1.5rem no-repeat,
+    linear-gradient(var(--on-accent), var(--on-accent)) center / 1.5rem 0.2rem no-repeat,
+    linear-gradient(var(--on-accent), var(--on-accent)) center / 0.2rem 1.5rem no-repeat,
     var(--accent);
   border-radius: 50%;
   text-decoration: none;
@@ -160,8 +216,8 @@ section.summary {
   justify-content: space-between;
   gap: 1rem;
   padding: 1rem;
-  background: #fff;
-  border: 1px solid #e1e4ea;
+  background: var(--card);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
 }
 section.summary a.balance {
@@ -203,7 +259,7 @@ header.topbar .up, header.topbar summary {
   height: 3rem;
   font-size: 1.75rem;
   line-height: 1;
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: none;
   list-style: none;
   cursor: pointer;
@@ -214,12 +270,26 @@ details.menu .menu-items {
   position: absolute;
   right: 0;
   min-width: 11rem;
-  background: #fff;
-  border: 1px solid #e1e4ea;
+  background: var(--card);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 details.menu .menu-items a { display: block; padding: 0.875rem 1rem; color: var(--ink); text-decoration: none; }
+/* An action that must be a POST (Sign out) looks like the links around it, set apart by a rule. */
+details.menu .menu-items form { display: block; border-top: 1px solid var(--line); }
+details.menu .menu-items button {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  padding: 0.875rem 1rem;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
 
 /* Chat style: newest at the bottom, already scrolled into view (column-reverse). */
 ol.history {
@@ -231,7 +301,7 @@ ol.history {
   gap: 0.5rem;
   max-height: 60vh;
   overflow-y: auto;
-  background: #eef0f4;
+  background: var(--sunken);
   border-radius: var(--radius);
 }
 
@@ -242,10 +312,10 @@ ol.history li {
   max-width: 80%;
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius);
-  background: #fff;
+  background: var(--card);
 }
-ol.history li.mine { align-self: flex-start; background: #d9efe0; border-bottom-left-radius: 0.15rem; }
-ol.history li.theirs { align-self: flex-end; background: #dce8fc; border-bottom-right-radius: 0.15rem; }
+ol.history li.mine { align-self: flex-start; background: var(--mine); border-bottom-left-radius: 0.15rem; }
+ol.history li.theirs { align-self: flex-end; background: var(--theirs); border-bottom-right-radius: 0.15rem; }
 ol.history li.settlement { font-style: italic; }
 ol.history .what { font-weight: 600; }
 ol.history .meta { grid-column: 1 / -1; color: var(--muted); font-size: 0.8125rem; }
@@ -259,7 +329,7 @@ ul.members li {
   display: flex;
   justify-content: space-between;
   padding: 0.375rem 0;
-  border-bottom: 1px solid #e1e4ea;
+  border-bottom: 1px solid var(--line);
 }
 
 /* ── Forms with choices ─────────────────────────────────────────────────────── */
@@ -289,8 +359,8 @@ label.mode {
   padding: 0.25rem 0.5rem;
   text-align: center;
   font-size: 0.9375rem;
-  background: #fff;
-  border: 1px solid #c7ccd6;
+  background: var(--card);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   cursor: pointer;
 }
@@ -320,13 +390,13 @@ ul.people li {
   justify-content: space-between;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  background: #fff;
-  border: 1px solid #e1e4ea;
+  background: var(--card);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
 }
 ul.people .status { color: var(--muted); font-size: 0.9375rem; }
 ul.people .status { margin-left: auto; }
-ul.people a { color: var(--accent); text-decoration: none; font-weight: 600; min-width: 4.5rem; text-align: right; }
+ul.people a { color: var(--accent-text); text-decoration: none; font-weight: 600; min-width: 4.5rem; text-align: right; }
 
 /* ── An expense's card, and its sheet ───────────────────────────────────────── */
 
@@ -341,8 +411,8 @@ ol.history a.card {
   cursor: pointer;
   border-radius: inherit;
 }
-ol.history a.card:hover { background: rgba(0, 0, 0, 0.04); }
-ol.history a.card:active { background: rgba(0, 0, 0, 0.08); }
+ol.history a.card:hover { background: rgba(128, 128, 128, 0.14); }
+ol.history a.card:active { background: rgba(128, 128, 128, 0.26); }
 
 /* A bottom sheet on a phone, centred on anything wider. Opened as a modal by sheet.js;
    without it, open and fixed to the bottom (or the middle). */
@@ -354,7 +424,7 @@ dialog.sheet {
   border: 0;
   border-radius: 1rem 1rem 0 0;
   color: var(--ink);
-  background: #fff;
+  background: var(--card);
 }
 dialog.sheet:not(:modal) { position: fixed; inset: auto 0 0 0; margin: 0 auto; }
 @media (min-width: 37.5rem) {
@@ -381,13 +451,13 @@ form.sheet-close button {
   background: none;
   border-radius: 50%;
 }
-form.sheet-close button:hover { background: #eef0f4; }
+form.sheet-close button:hover { background: var(--sunken); }
 .expense-head h2 { margin: 0; font-size: 1.25rem; }
 dialog.sheet p { margin: 0; }
 h3 { margin: 0; font-size: 1rem; }
 
 ul.shares { list-style: none; margin: 0; padding: 0; }
-ul.shares li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.375rem 0; border-bottom: 1px solid #e1e4ea; }
+ul.shares li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.375rem 0; border-bottom: 1px solid var(--line); }
 
 .sheet-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
 a.icon-button {
@@ -397,12 +467,12 @@ a.icon-button {
   width: 3rem;
   height: 3rem;
   color: var(--ink);
-  background: #fff;
-  border: 1px solid #c7ccd6;
+  background: var(--card);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
 }
 a.icon-button.danger { color: var(--error); }
-a.icon-button:hover { background: #f1f3f7; }
+a.icon-button:hover { background: var(--hover); }
 a.icon-button svg {
   width: 1.5rem;
   height: 1.5rem;
@@ -415,11 +485,11 @@ a.icon-button svg {
 
 /* ── Archive group, and an archived group ──────────────────────────────────── */
 
-.warning { padding: 0.75rem 1rem; margin: 0 0 1rem; background: #fff4e0; border: 1px solid #f0c987; border-radius: var(--radius); }
+.warning { padding: 0.75rem 1rem; margin: 0 0 1rem; background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: var(--radius); }
 .warning p { margin: 0 0 0.5rem; }
 .warning p:last-child { margin: 0; }
 ul.owing { margin: 0 0 0.5rem; padding-left: 1.25rem; }
 a.cancel { justify-self: center; padding: 0.5rem; color: var(--muted); }
-.banner { margin: 0 0 1rem; padding: 0.75rem 1rem; color: var(--muted); background: #eef0f4; border-radius: var(--radius); text-align: center; }
+.banner { margin: 0 0 1rem; padding: 0.75rem 1rem; color: var(--muted); background: var(--sunken); border-radius: var(--radius); text-align: center; }
 details.archived { margin: 0 0 1rem; }
 details.archived summary { padding: 0.75rem 0; color: var(--muted); font-weight: 600; cursor: pointer; }
