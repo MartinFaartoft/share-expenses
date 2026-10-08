@@ -7,6 +7,7 @@ using SplitIt.Tests.Specs;
 using GroupCreated = SplitIt.Slices.CreateGroup.GroupCreated;
 using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
+using GroupRenamed = SplitIt.Slices.RenameGroup.GroupRenamed;
 
 namespace SplitIt.Tests.Slices.InviteMember;
 
@@ -170,4 +171,8 @@ public class InviteMemberSpecs
         Spec.Given(Lisbon)
             .When(InviteMember(M2, "bob@example.com", Alice, invitedTo: M9))
             .Then(new MemberInvited(M2, I1, T30, Alice));
+
+    [Fact]
+    public void A_renamed_group_is_folded_under_its_new_name() =>
+        Assert.Equal("Porto trip", Fold.Of<State>([.. Lisbon, new GroupRenamed("Porto trip", Bob)], ignoring: typeof(MemberInvited))!.GroupName);
 }

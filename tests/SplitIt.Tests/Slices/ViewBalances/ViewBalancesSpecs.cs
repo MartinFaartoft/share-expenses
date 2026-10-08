@@ -14,6 +14,7 @@ using RecordExpenseState = SplitIt.Slices.RecordExpense.State;
 using ExpenseEdited = SplitIt.Slices.EditExpense.ExpenseEdited;
 using ExpenseRemoved = SplitIt.Slices.RemoveExpense.ExpenseRemoved;
 using SettlementRecorded = SplitIt.Slices.RecordSettlement.SettlementRecorded;
+using GroupRenamed = SplitIt.Slices.RenameGroup.GroupRenamed;
 
 namespace SplitIt.Tests.Slices.ViewBalances;
 
@@ -373,4 +374,8 @@ public class ViewBalancesSpecs
             Assert.Equal(balances[M1], group!.BalanceMinor);
         }
     }
+
+    [Fact]
+    public void S12_a_renamed_group_shows_its_current_name() =>
+        Assert.Equal("Porto trip", View([.. Lisbon, new GroupRenamed("Porto trip", Bob)]).GroupName);
 }

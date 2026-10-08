@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using Marten.Schema;
 using SplitIt.Shared;
 using SplitIt.Slices.CreateGroup;
+using SplitIt.Slices.RenameGroup;
 
 namespace SplitIt.Slices.AddMember;
 
@@ -21,7 +22,6 @@ public sealed record Slot(string Name, bool Claimed, DateTimeOffset? InviteExpir
 ///   MemberClaimReleased → un-claim the slot, drop the user from Members (invitable again)
 ///   MemberRemoved       → drop the slot from Order and Slots (its name is reusable)
 ///   MemberRenamed       → rename the slot                    (old name free, new name taken)
-///   GroupRenamed        → rename GroupName
 ///   GroupArchived / GroupUnarchived → track Archived         (no changes to an archived group)
 ///
 /// Public: Wolverine fetches it for the endpoint (spec §12). The alias is required:
@@ -39,6 +39,8 @@ public sealed record State(
 
     public static State Create(GroupCreated e) =>
         new(e.Name, ImmutableDictionary<UserId, MemberId>.Empty, [], ImmutableDictionary<MemberId, Slot>.Empty);
+
+    public State Apply(GroupRenamed e) => this with { GroupName = e.Name };
 
     public State Apply(MemberAdded e) => this with
     {

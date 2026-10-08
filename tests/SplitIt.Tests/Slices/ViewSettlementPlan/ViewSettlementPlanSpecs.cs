@@ -12,6 +12,7 @@ using MemberInvited = SplitIt.Slices.AddMember.MemberInvited;
 using ExpenseEdited = SplitIt.Slices.EditExpense.ExpenseEdited;
 using ExpenseRemoved = SplitIt.Slices.RemoveExpense.ExpenseRemoved;
 using SettlementRecorded = SplitIt.Slices.RecordSettlement.SettlementRecorded;
+using GroupRenamed = SplitIt.Slices.RenameGroup.GroupRenamed;
 
 namespace SplitIt.Tests.Slices.ViewSettlementPlan;
 
@@ -197,4 +198,8 @@ public class ViewSettlementPlanSpecs
             Fold.Of<LedgerState>(history)!.Slots.Select(s => (s.MemberId, s.BalanceMinor)),
             Fold.Of<State>(history)!.Slots.Select(s => (s.MemberId, s.BalanceMinor)));
     }
+
+    [Fact]
+    public void A_renamed_group_is_carried_under_its_new_name() =>
+        Assert.Equal("Porto trip", Read([.. Lisbon, new GroupRenamed("Porto trip", Bob)], Alice)!.GroupName);
 }

@@ -31,6 +31,20 @@ public class ViewHomepageIntegrationTests(AppFixture app)
     }
 
     [Fact]
+    public async Task S10_an_invite_names_the_group_by_its_current_name()
+    {
+        var bobEmail = Unique("bob");
+        var bob = await app.AccountFor(bobEmail);
+        var (group, _) = await InvitedBobIn(bobEmail);
+        await group.Rename("Porto trip");
+
+        var html = await HomeOf(bob);
+
+        Assert.Contains("<strong>Alice</strong> invited you to <strong>Porto trip</strong> as Bob.", html);
+        Assert.DoesNotContain("Lisbon trip", html);
+    }
+
+    [Fact]
     public async Task The_address_matches_case_insensitively()
     {
         var bobEmail = Unique("Bob");

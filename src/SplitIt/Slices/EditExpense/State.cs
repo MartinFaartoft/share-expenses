@@ -4,6 +4,7 @@ using SplitIt.Shared;
 using SplitIt.Slices.CreateGroup;
 using SplitIt.Slices.RecordExpense;
 using SplitIt.Slices.RemoveExpense;
+using SplitIt.Slices.RenameGroup;
 
 namespace SplitIt.Slices.EditExpense;
 
@@ -30,7 +31,6 @@ public sealed record CurrentExpense(
 ///   MemberClaimReleased → remove from Members        (a released claim ends membership)
 ///   MemberRemoved       → drop the slot              (cannot become payer or participant)
 ///   MemberRenamed       → rename in Names
-///   GroupRenamed        → rename GroupName
 ///   GroupArchived / GroupUnarchived → track Archived (no changes to an archived group)
 ///
 /// Public: Wolverine fetches it for the endpoint (spec §12). The alias is required:
@@ -51,6 +51,8 @@ public sealed record State(
     public static State Create(GroupCreated e) =>
         new(e.Name, e.Currency, [], ImmutableDictionary<MemberId, string>.Empty,
             ImmutableDictionary<UserId, MemberId>.Empty, ImmutableDictionary<ExpenseId, CurrentExpense>.Empty);
+
+    public State Apply(GroupRenamed e) => this with { GroupName = e.Name };
 
     public State Apply(MemberAdded e) =>
         this with { Slots = Slots.Add(e.MemberId), Names = Names.SetItem(e.MemberId, e.DisplayName) };

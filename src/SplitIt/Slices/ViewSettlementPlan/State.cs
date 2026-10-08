@@ -6,6 +6,7 @@ using SplitIt.Slices.EditExpense;
 using SplitIt.Slices.RecordExpense;
 using SplitIt.Slices.RecordSettlement;
 using SplitIt.Slices.RemoveExpense;
+using SplitIt.Slices.RenameGroup;
 
 namespace SplitIt.Slices.ViewSettlementPlan;
 
@@ -44,6 +45,8 @@ internal sealed record State(
     public Guid Id { get; init; }
 
     public static State Create(GroupCreated e) => new(e.Name, e.Currency, [], ImmutableDictionary<(MemberId, MemberId), int>.Empty, ImmutableDictionary<ExpenseId, Booked>.Empty);
+
+    public State Apply(GroupRenamed e) => this with { GroupName = e.Name };
 
     public State Apply(MemberAdded e) => this with { Slots = Slots.Add(new Slot(e.MemberId, e.DisplayName, null, 0)) };
 

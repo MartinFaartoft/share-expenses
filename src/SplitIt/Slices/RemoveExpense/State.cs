@@ -4,6 +4,7 @@ using SplitIt.Shared;
 using SplitIt.Slices.CreateGroup;
 using SplitIt.Slices.EditExpense;
 using SplitIt.Slices.RecordExpense;
+using SplitIt.Slices.RenameGroup;
 
 namespace SplitIt.Slices.RemoveExpense;
 
@@ -34,6 +35,8 @@ public sealed record State(
     public static State Create(GroupCreated e) =>
         new(e.Name, e.Currency, ImmutableDictionary<MemberId, string>.Empty,
             ImmutableDictionary<UserId, MemberId>.Empty, ImmutableDictionary<ExpenseId, RecordedExpense>.Empty, []);
+
+    public State Apply(GroupRenamed e) => this with { GroupName = e.Name };
 
     public State Apply(MemberAdded e) => this with { Names = Names.SetItem(e.MemberId, e.DisplayName) };
 

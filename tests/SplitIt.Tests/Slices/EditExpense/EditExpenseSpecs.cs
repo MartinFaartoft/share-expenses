@@ -7,6 +7,7 @@ using GroupCreated = SplitIt.Slices.CreateGroup.GroupCreated;
 using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
 using SettlementRecorded = SplitIt.Slices.RecordSettlement.SettlementRecorded;
+using GroupRenamed = SplitIt.Slices.RenameGroup.GroupRenamed;
 
 namespace SplitIt.Tests.Slices.EditExpense;
 
@@ -365,6 +366,10 @@ public class EditExpenseSpecs
 
     private static ExpenseEdited Edited(long amount, long each, UserId by) =>
         new(E1, "Dinner", amount, M1, Equal(M1, M2, M3), Splits((M1, each), (M2, each), (M3, each)), Oct1, by);
+
+    [Fact]
+    public void A_renamed_group_is_folded_under_its_new_name() =>
+        Assert.Equal("Porto trip", Fold.Of<State>([.. Lisbon, new GroupRenamed("Porto trip", Bob)], ignoring: typeof(SettlementRecorded))!.GroupName);
 }
 
 internal static class EditAssertions

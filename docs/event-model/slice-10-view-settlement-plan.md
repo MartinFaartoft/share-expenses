@@ -160,8 +160,8 @@ And over many random balance sets, always:
 
 ## Renamed and archived groups
 
-- **A renamed group** shows its current name where the screen names it (the back link): the
-  fold takes `GroupRenamed`, as View balances does (slice-08, scenario 12).
+- **A renamed group** is carried in the read model under its current name: the fold takes
+  `GroupRenamed`, as View balances does (slice-08, scenario 12). The screen does not print it.
 - **An archived group** still shows its plan; Paid on a line is rejected by Record
   settlement (`group is archived`, back on this screen with the reason).
 

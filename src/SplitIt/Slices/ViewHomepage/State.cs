@@ -3,6 +3,7 @@ using Marten.Schema;
 using SplitIt.Shared;
 using SplitIt.Slices.CreateGroup;
 using SplitIt.Slices.AddMember;
+using SplitIt.Slices.RenameGroup;
 
 namespace SplitIt.Slices.ViewHomepage;
 
@@ -26,7 +27,6 @@ internal sealed record OpenInvite(InviteId InviteId, DateTimeOffset ExpiresAt, M
 /// deferred specs in slice-04-view-homepage.md:
 ///   MemberRemoved       → close the slot's invite
 ///   MemberRenamed       → rename the slot           (names shown as they are now)
-///   GroupRenamed        → rename the group
 ///   GroupArchived       → decide whether invites stay shown
 ///   MemberClaimReleased → (old invites stay dead; a new invite reopens the slot)
 ///
@@ -40,6 +40,8 @@ internal sealed record State(
     ImmutableDictionary<MemberId, OpenInvite> OpenInvites)
 {
     public static State Create(GroupCreated e) => new(e.Name, [], [], []);
+
+    public State Apply(GroupRenamed e) => this with { GroupName = e.Name };
 
     public State Apply(MemberAdded e) => this with { SlotNames = SlotNames.SetItem(e.MemberId, e.DisplayName) };
 

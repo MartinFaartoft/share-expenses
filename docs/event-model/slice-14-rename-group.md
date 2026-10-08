@@ -69,7 +69,7 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
     WHEN   RenameGroup("Porto trip", mallory)
     THEN   rejected (not found) - group not found
 
-10 - an archived group cannot be renamed
+10 - an archived group cannot be renamed (built with Archive group, slice-15)
     GIVEN  ... AND GroupArchived(alice)
     WHEN   RenameGroup("Porto trip", alice)
     THEN   rejected - group is archived
@@ -120,15 +120,16 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 
 ## Read by (folding `GroupRenamed`)
 
-Every slice that holds or shows the group's name: View group (its title), View balances,
-View settlement plan, View homepage (the stored `UserGroups` document, and the live
+Every slice that holds or shows the group's name: View group (its title), View balances
+and View settlement plan (their read models carry it), View homepage (the stored `UserGroups` document, and the live
 invites, which name the group), and the states of Add expense, Edit expense, Remove
 expense, Add member, Invite member and Accept invite, where the name is the back
 link, or goes into an email. Each states a scenario in its own doc.
 
-**The stored documents must be rebuilt** (`just rebuild-projections`): `GroupActivity`
-and `UserGroups` are projected from the events, and the events from before this slice
-do not change, only what folds them.
+**No rebuild is needed** for this slice: no `GroupRenamed` exists before it, so the stored
+`GroupActivity` and `UserGroups` documents are already right, and fold each new rename as
+it is appended (inline for the group page, by the daemon for the home page). Archive group
+(slice-15) is the change that needs one.
 
 ## Deferred
 

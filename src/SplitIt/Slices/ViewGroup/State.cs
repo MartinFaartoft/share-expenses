@@ -6,6 +6,7 @@ using SplitIt.Slices.EditExpense;
 using SplitIt.Slices.RecordExpense;
 using SplitIt.Slices.RecordSettlement;
 using SplitIt.Slices.RemoveExpense;
+using SplitIt.Slices.RenameGroup;
 
 namespace SplitIt.Slices.ViewGroup;
 
@@ -52,7 +53,7 @@ internal sealed record Settlement(
 /// FOLD CHECKLIST — when these slices are built, fold their events here and add the
 /// deferred specs in slice-07-view-group.md:
 ///   SettlementRemoved                      → undo the entry's effect
-///   MemberRenamed / GroupRenamed           → rename
+///   MemberRenamed               → rename
 ///   MemberClaimReleased                    → clear ClaimedBy
 ///   MemberRemoved, GroupArchived           → decide how they show
 ///
@@ -72,6 +73,8 @@ internal sealed record State(
     public Guid Id { get; init; }
 
     public static State Create(GroupCreated e) => new(e.Name, e.Currency, [], [], []);
+
+    public State Apply(GroupRenamed e) => this with { GroupName = e.Name };
 
     public State Apply(MemberAdded e) =>
         this with { Slots = Slots.Add(new Slot(e.MemberId, e.DisplayName, null, 0)) };

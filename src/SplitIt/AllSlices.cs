@@ -4,6 +4,7 @@ using SplitIt.Slices.CreateGroup;
 using SplitIt.Slices.EditExpense;
 using SplitIt.Slices.RecordExpense;
 using SplitIt.Slices.RecordSettlement;
+using SplitIt.Slices.RenameGroup;
 using SplitIt.Slices.RemoveExpense;
 using SplitIt.Slices.ViewGroup;
 using SplitIt.Slices.ViewHomepage;
@@ -27,6 +28,7 @@ public static class AllSlices
         EditExpenseSlice.Register(opts);
         RecordSettlementSlice.Register(opts);
         RemoveExpenseSlice.Register(opts);
+        RenameGroupSlice.Register(opts);
         ViewGroupSlice.Register(opts);
         ViewHomepageSlice.Register(opts);
     }

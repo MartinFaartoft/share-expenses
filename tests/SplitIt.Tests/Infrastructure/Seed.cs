@@ -8,6 +8,7 @@ using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
 using MemberInvited = SplitIt.Slices.AddMember.MemberInvited;
 using ExpenseRemoved = SplitIt.Slices.RemoveExpense.ExpenseRemoved;
+using GroupRenamed = SplitIt.Slices.RenameGroup.GroupRenamed;
 using SettlementRecorded = SplitIt.Slices.RecordSettlement.SettlementRecorded;
 
 namespace SplitIt.Tests.Infrastructure;
@@ -103,6 +104,8 @@ public sealed record SeededGroup(Seed Seed, GroupId Id, UserId By, MemberId You)
             Splits.SplitEqually(amountMinor, payer, sharers), paidOn ?? new DateOnly(2026, 10, 1), By));
         return expenseId;
     }
+
+    public Task Rename(string name, UserId? by = null) => Seed.Append(Id, new GroupRenamed(name, by ?? By));
 
     public Task RemoveExpense(ExpenseId expenseId) => Seed.Append(Id, new ExpenseRemoved(expenseId, By));
 

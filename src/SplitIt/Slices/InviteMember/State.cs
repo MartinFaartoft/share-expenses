@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using Marten.Schema;
 using SplitIt.Shared;
 using SplitIt.Slices.CreateGroup;
+using SplitIt.Slices.RenameGroup;
 
 namespace SplitIt.Slices.InviteMember;
 
@@ -36,6 +37,8 @@ public sealed record State(
     public GroupId Id { get; init; }
 
     public static State Create(GroupCreated e) => new(e.Name, [], []);
+
+    public State Apply(GroupRenamed e) => this with { GroupName = e.Name };
 
     public State Apply(MemberAdded e) =>
         this with { Slots = Slots.SetItem(e.MemberId, new Slot(e.DisplayName, Claimed: false)) };

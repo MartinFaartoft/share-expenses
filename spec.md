@@ -1869,10 +1869,11 @@ a documentation tool, not application code.
   above hold (one address, `request.IsHtmx()`, works without script), plus
   `Vary: HX-Request`, and a `404` swapped in as a sheet (`htmx-config` in the page
   shell) so a tap on a card whose expense was removed elsewhere is not silent.
-  **Group changes are designed, not built** (slice-14, slice-15, slice-16): **Rename
-  group**, **Archive group** and **Change default split**, each its own slice with a small
-  screen in the group page's `⋯` menu. Rename is folded by every slice that shows the
-  name; archive adds `group is archived` right after membership in the deciders of every
+  **Rename group** is built (slice-14-rename-group.md): `/groups/{group}/rename`, from
+  **Rename group** in the group page's `⋯` menu, beside Add member; every slice that holds
+  the name folds `GroupRenamed`. **Archive group** and **Change default split** are designed,
+  not built (slice-15, slice-16), each its own slice with a small screen in the same menu.
+  Rename is folded by every slice that shows the name; archive adds `group is archived` right after membership in the deciders of every
   command slice (Record, Edit and Remove expense, Record settlement, Add member, Invite
   member, Accept invite, Rename, Change default split), and makes the group page and the
   expense sheet read-only; the default split is folded by Record expense, whose form opens

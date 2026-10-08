@@ -10,6 +10,7 @@ using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
 using ExpenseEdited = SplitIt.Slices.EditExpense.ExpenseEdited;
 using ExpenseRemoved = SplitIt.Slices.RemoveExpense.ExpenseRemoved;
 using SettlementRecorded = SplitIt.Slices.RecordSettlement.SettlementRecorded;
+using GroupRenamed = SplitIt.Slices.RenameGroup.GroupRenamed;
 
 namespace SplitIt.Tests.Slices.ViewGroup;
 
@@ -262,4 +263,8 @@ public class ViewGroupSpecs
             View([.. Lisbon, Expense(E1, "Dinner", 9000, M1, Dinner)]),
             View([.. Lisbon, Expense(E1, "Dinner", 9000, M1, Dinner), Edit(E2, "Taxi", 3000, M1, [(M1, 3000)])]),
             new ReadModelComparer());
+
+    [Fact]
+    public void S10_a_renamed_group_shows_its_current_name() =>
+        Assert.Equal("Porto trip", View([.. Lisbon, new GroupRenamed("Porto trip", Bob)]).GroupName);
 }

@@ -6,6 +6,7 @@ using SplitIt.Tests.Specs;
 using GroupCreated = SplitIt.Slices.CreateGroup.GroupCreated;
 using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
+using GroupRenamed = SplitIt.Slices.RenameGroup.GroupRenamed;
 
 namespace SplitIt.Tests.Slices.RecordExpense;
 
@@ -306,4 +307,8 @@ public class RecordExpenseSpecs
         Spec.Given(Lisbon)
             .When(RecordExpense("", -5, M9, null, Mallory))
             .ThenNotFound("group not found");
+
+    [Fact]
+    public void A_renamed_group_is_folded_under_its_new_name() =>
+        Assert.Equal("Porto trip", Fold.Of<State>([.. Lisbon, new GroupRenamed("Porto trip", Bob)])!.GroupName);
 }

@@ -1,6 +1,7 @@
 using Marten.Schema;
 using SplitIt.Shared;
 using SplitIt.Slices.CreateGroup;
+using SplitIt.Slices.RenameGroup;
 
 namespace SplitIt.Slices.ViewHomepage;
 
@@ -21,7 +22,6 @@ namespace SplitIt.Slices.ViewHomepage;
 /// FOLD CHECKLIST — when these slices are built, fold their events here and add the
 /// deferred specs in slice-04-view-homepage.md:
 ///   MemberClaimReleased → remove the user
-///   GroupRenamed        → rename
 ///   GroupArchived / GroupUnarchived → track Archived (out of the main list, spec §8)
 ///
 /// Changing the fold changes stored documents: rebuild with
@@ -34,6 +34,8 @@ internal sealed record Membership(string GroupName, UserId[] Members)
     public Guid Id { get; init; }
 
     public static Membership Create(GroupCreated e) => new(e.Name, []);
+
+    public Membership Apply(GroupRenamed e) => this with { GroupName = e.Name };
 
     public Membership Apply(MemberClaimed e) => this with { Members = [.. Members, e.UserId] };
 }

@@ -7,6 +7,7 @@ using GroupCreated = SplitIt.Slices.CreateGroup.GroupCreated;
 using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
 using SettlementRecorded = SplitIt.Slices.RecordSettlement.SettlementRecorded;
+using GroupRenamed = SplitIt.Slices.RenameGroup.GroupRenamed;
 
 namespace SplitIt.Tests.Slices.RemoveExpense;
 
@@ -111,4 +112,8 @@ public class RemoveExpenseSpecs
         Spec.Given([.. Lisbon, new ExpenseRemoved(E1, Bob)])
             .When(new Command(E1, Alice))
             .ThenAlreadyRemoved("expense already removed");
+
+    [Fact]
+    public void A_renamed_group_is_folded_under_its_new_name() =>
+        Assert.Equal("Porto trip", Fold.Of<State>([.. Lisbon, new GroupRenamed("Porto trip", Bob)], ignoring: typeof(SettlementRecorded))!.GroupName);
 }
