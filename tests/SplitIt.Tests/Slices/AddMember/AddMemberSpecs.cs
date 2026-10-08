@@ -7,6 +7,7 @@ using GroupCreated = SplitIt.Slices.CreateGroup.GroupCreated;
 using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
 using GroupRenamed = SplitIt.Slices.RenameGroup.GroupRenamed;
+using GroupArchived = SplitIt.Slices.ArchiveGroup.GroupArchived;
 
 namespace SplitIt.Tests.Slices.AddMember;
 
@@ -187,4 +188,10 @@ public class AddMemberSpecs
     [Fact]
     public void A_renamed_group_is_folded_under_its_new_name() =>
         Assert.Equal("Porto trip", Fold.Of<State>([.. Lisbon, new GroupRenamed("Porto trip", Bob)])!.GroupName);
+
+    [Fact]
+    public void S18_an_archived_group_takes_no_new_members() =>
+        Spec.Given([.. Lisbon, new GroupArchived(Alice)])
+            .When(AddMember("Dave", Alice))
+            .ThenRejected("group is archived");
 }

@@ -461,4 +461,21 @@ public partial class AddMemberIntegrationTests(AppFixture app)
 
     [GeneratedRegex("""<input type="hidden" name="memberId" value="([^"]+)" />""")]
     private static partial Regex HiddenMemberId();
+
+    [Fact]
+    public async Task An_archived_group_adds_no_one_and_the_form_says_why()
+    {
+        var group = await Lisbon();
+        var browser = app.BrowserFor(_alice);
+        var form = await ScreenPage(browser, group.Id);
+        await group.Archive();
+
+        var response = await Submit(browser, form, group, "Bob", "");
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("group is archived", html);
+        Assert.Contains("""name="displayName" value="Bob" """, html);
+        Assert.Equal(4, (await StreamOf(group.Id)).Count);
+    }
 }

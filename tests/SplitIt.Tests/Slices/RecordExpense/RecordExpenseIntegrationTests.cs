@@ -826,4 +826,21 @@ public partial class RecordExpenseIntegrationTests(AppFixture app)
 
     [GeneratedRegex("""<input type="hidden" name="expenseId" value="([^"]+)" />""")]
     private static partial Regex HiddenExpenseId();
+
+    [Fact]
+    public async Task An_archived_group_records_nothing_and_the_form_says_why()
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+        var form = await FormPage(browser, l.Group.Id);
+        await l.Group.Archive();
+
+        var response = await Submit(browser, form, l, description: "Dinner", amount: "90");
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("""<p class="error" role="alert">group is archived</p>""", html);
+        Assert.Contains("""name="description" value="Dinner" """, html);
+        Assert.Empty(await ExpensesOf(l.Group.Id));
+    }
 }

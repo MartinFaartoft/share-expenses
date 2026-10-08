@@ -7,6 +7,7 @@ using GroupCreated = SplitIt.Slices.CreateGroup.GroupCreated;
 using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
 using MemberInvited = SplitIt.Slices.AddMember.MemberInvited;
+using GroupArchived = SplitIt.Slices.ArchiveGroup.GroupArchived;
 
 namespace SplitIt.Tests.Slices.AcceptInvite;
 
@@ -117,4 +118,16 @@ public class AcceptInviteSpecs
         Spec.Given(Lisbon)
             .When(AcceptInvite(Alice, at: Day(60)))
             .ThenAlreadyMember("you're already in this group as Alice");
+
+    [Fact]
+    public void S10_an_invite_into_an_archived_group_is_dead() =>
+        Spec.Given([.. Lisbon, new GroupArchived(Alice)])
+            .When(AcceptInvite(Bob, Day(1), I1))
+            .ThenNotFound("invite not found");
+
+    [Fact]
+    public void An_archived_group_is_dead_to_a_member_already_in_it() =>
+        Spec.Given([.. Lisbon, new GroupArchived(Alice)])
+            .When(AcceptInvite(Alice, Day(1), I1))
+            .ThenNotFound("invite not found");
 }

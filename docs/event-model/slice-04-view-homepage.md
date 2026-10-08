@@ -204,8 +204,9 @@ G9 - archiving moves a group for everyone in it
   (scenario G9). No Unarchive is offered (slice-15).
 - **An invite into an archived group** is not shown (scenario 11): Accept invite treats
   it as dead.
-- **Rebuild the projection** after this change (`just rebuild-projections`): `UserGroups`
-  is stored, and now folds two more events.
+- **No rebuild is needed:** `UserGroups` is stored and now folds two more events, but a
+  stored document without the flag reads as not archived, and the daemon folds each
+  `GroupArchived` as it is appended. `just rebuild-projections` would give the same result.
 
 ## Deferred to the slices that introduce the events
 

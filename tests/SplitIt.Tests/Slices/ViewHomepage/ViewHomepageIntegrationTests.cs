@@ -113,6 +113,96 @@ public class ViewHomepageIntegrationTests(AppFixture app)
     }
 
     [Fact]
+    public async Task G8_an_archived_group_leaves_the_main_list_and_is_listed_as_archived()
+    {
+        var bob = await app.AccountFor(Unique("bob"));
+        var lisbon = await new Seed(app).Group(bob, "Lisbon trip", "GBP", "Bob");
+        var porto = await new Seed(app).Group(bob, "Porto", "EUR", "Bob");
+        await lisbon.Archive();
+
+        await app.ProjectionsCaughtUp();
+        var html = await HomeOf(bob);
+
+        var main = html[..html.IndexOf("<details class=\"archived\">", StringComparison.Ordinal)];
+        Assert.Contains($"""<a href="/groups/{porto.Id}">Porto</a>""", main);
+        Assert.DoesNotContain("Lisbon trip", main);
+        Assert.Contains("<summary>Archived (1)</summary>", html);
+        Assert.Contains($"""<a href="/groups/{lisbon.Id}">Lisbon trip</a>""", html[html.IndexOf("<details class=\"archived\">", StringComparison.Ordinal)..]);
+    }
+
+    [Fact]
+    public async Task G9_archiving_moves_a_group_for_everyone_in_it()
+    {
+        var bob = await app.AccountFor(Unique("bob"));
+        var lisbon = await new Seed(app).Group(_alice);
+        await lisbon.Joined("Bob", bob);
+        await lisbon.Archive(_alice);
+
+        await app.ProjectionsCaughtUp();
+        var html = await HomeOf(bob);
+
+        Assert.Contains("You're not in any groups yet.", html);
+        Assert.Contains("<summary>Archived (1)</summary>", html);
+        Assert.Contains($"""<a href="/groups/{lisbon.Id}">Lisbon trip</a>""", html);
+    }
+
+    [Fact]
+    public async Task Several_archived_groups_are_counted_and_listed_by_name()
+    {
+        var bob = await app.AccountFor(Unique("bob"));
+        var zagreb = await new Seed(app).Group(bob, "Zagreb", "EUR", "Bob");
+        var athens = await new Seed(app).Group(bob, "Athens", "EUR", "Bob");
+        await zagreb.Archive();
+        await athens.Archive();
+
+        await app.ProjectionsCaughtUp();
+        var html = await HomeOf(bob);
+
+        Assert.Contains("<summary>Archived (2)</summary>", html);
+        Assert.True(html.IndexOf("Athens", StringComparison.Ordinal) < html.IndexOf("Zagreb", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_renamed_archived_group_is_listed_under_its_new_name()
+    {
+        var bob = await app.AccountFor(Unique("bob"));
+        var lisbon = await new Seed(app).Group(bob, "Lisbon trip", "GBP", "Bob");
+        await lisbon.Rename("Porto trip");
+        await lisbon.Archive();
+
+        await app.ProjectionsCaughtUp();
+        var html = await HomeOf(bob);
+
+        Assert.Contains($"""<a href="/groups/{lisbon.Id}">Porto trip</a>""", html);
+        Assert.DoesNotContain("Lisbon trip", html);
+    }
+
+    [Fact]
+    public async Task No_archived_section_without_an_archived_group()
+    {
+        var bob = await app.AccountFor(Unique("bob"));
+        await new Seed(app).Group(bob, "Porto", "EUR", "Bob");
+
+        await app.ProjectionsCaughtUp();
+
+        Assert.DoesNotContain("Archived", await HomeOf(bob));
+    }
+
+    [Fact]
+    public async Task S11_an_invite_into_an_archived_group_is_not_shown()
+    {
+        var bobEmail = Unique("bob");
+        var bob = await app.AccountFor(bobEmail);
+        var (group, _) = await InvitedBobIn(bobEmail);
+        await group.Archive();
+
+        var html = await HomeOf(bob);
+
+        Assert.DoesNotContain("invited you", html);
+        Assert.DoesNotContain("/join", html);
+    }
+
+    [Fact]
     public async Task A_brand_new_user_is_told_where_groups_will_appear_and_offered_a_new_one()
     {
         var html = await HomeOf(await app.AccountFor(Unique("dave")));

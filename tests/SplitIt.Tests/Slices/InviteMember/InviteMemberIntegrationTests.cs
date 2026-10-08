@@ -331,4 +331,20 @@ public class InviteMemberIntegrationTests(AppFixture app)
         Assert.Contains(email, body);
         Assert.Contains("Alice invited you to Lisbon trip on SplitIt", body);
     }
+
+    [Fact]
+    public async Task An_archived_group_sends_no_invite_and_the_form_says_why()
+    {
+        var (group, bob) = await Lisbon();
+        var browser = app.BrowserFor(_alice);
+        var form = await FormPage(browser, group.Id, bob);
+        await group.Archive();
+
+        var response = await Submit(browser, form, group.Id, bob, UniqueEmail("bob"));
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("group is archived", html);
+        Assert.Empty(await InvitesOf(group.Id, bob));
+    }
 }

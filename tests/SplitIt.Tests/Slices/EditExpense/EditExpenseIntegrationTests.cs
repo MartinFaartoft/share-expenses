@@ -782,6 +782,23 @@ public class EditExpenseIntegrationTests(AppFixture app)
         await using var session = Store.QuerySession();
         return (await session.Events.FetchStreamAsync(group.Value)).Select(e => e.Data).OfType<ExpenseEdited>().ToList();
     }
+
+    [Fact]
+    public async Task An_archived_group_edits_nothing_and_the_form_says_why()
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+        var form = await FormPage(browser, l);
+        await l.Group.Archive();
+
+        var response = await Post(browser, l, form, Fields(l, amount: "120"));
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("""<p class="error" role="alert">group is archived</p>""", html);
+        Assert.Contains("""name="amount" value="120" """, html);
+        Assert.Empty(await EditsOf(l.Group.Id));
+    }
 }
 
 internal static class FieldExtensions

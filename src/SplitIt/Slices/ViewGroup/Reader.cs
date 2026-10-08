@@ -14,6 +14,7 @@ internal sealed record Query(UserId UserId);
 /// </summary>
 /// <param name="You">The caller's own slot.</param>
 /// <param name="Currency">ISO 4217; amounts are in its minor unit.</param>
+/// <param name="Archived">Read-only: a banner, and no actions (slice-15-archive-group.md).</param>
 /// <param name="BalanceMinor">The caller's balance: positive is owed, negative owes (spec §9).</param>
 public sealed record GroupActivityReadModel(
     GroupId GroupId,
@@ -21,7 +22,8 @@ public sealed record GroupActivityReadModel(
     string Currency,
     MemberId You,
     long BalanceMinor,
-    IReadOnlyList<ActivityEntry> History);
+    IReadOnlyList<ActivityEntry> History,
+    bool Archived);
 
 /// <summary>
 /// One entry in the money history, marked by <c>kind</c>: <c>expense</c> or <c>settlement</c>.
@@ -76,6 +78,6 @@ internal static class Reader
             .ToList();
 
         return new GroupActivityReadModel(
-            GroupId.From(state.Id), state.GroupName, state.Currency, you.MemberId, you.BalanceMinor, history);
+            GroupId.From(state.Id), state.GroupName, state.Currency, you.MemberId, you.BalanceMinor, history, state.Archived);
     }
 }

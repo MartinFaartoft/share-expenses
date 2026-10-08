@@ -6,6 +6,7 @@ using SplitIt.Tests.Specs;
 using GroupCreated = SplitIt.Slices.CreateGroup.GroupCreated;
 using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
+using GroupArchived = SplitIt.Slices.ArchiveGroup.GroupArchived;
 
 namespace SplitIt.Tests.Slices.ChangeDefaultSplit;
 
@@ -210,6 +211,12 @@ public class ChangeDefaultSplitSpecs
             .When(ChangeDefaultSplit("shares", Shares((M1, 1), (M2, 3)), Alice))
             .ThenChanged(Changed("shares", Shares((M2, 3)), Alice));
     }
+
+    [Fact]
+    public void S13_an_archived_group_cannot_change_its_default() =>
+        Spec.Given([.. Lisbon, new GroupArchived(Alice)])
+            .When(ChangeDefaultSplit("equal", Shares((M3, 0)), Alice))
+            .ThenRejected("group is archived");
 }
 
 internal static class DefaultSplitAssertions

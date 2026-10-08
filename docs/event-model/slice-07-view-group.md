@@ -130,8 +130,9 @@ The `⋯` menu of a group that is not archived offers **Add member** (slice-02),
 **Rename group** (slice-14), **Default split** (slice-16) and **Archive group** (slice-15):
 addresses, not dependencies on those slices.
 
-The read model gains `archived`, from `GroupArchived`; the stored `GroupActivity`
-must be rebuilt (`just rebuild-projections`).
+The read model gains `archived`, from `GroupArchived`. No rebuild of the stored
+`GroupActivity` is needed: a document without the flag reads as not archived, and the
+inline projection folds each `GroupArchived` as it is appended.
 
 ## Notes
 

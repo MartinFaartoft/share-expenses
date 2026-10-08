@@ -58,6 +58,8 @@ public static class Endpoint
         {
             Decision.Accepted accepted => (back, [.. accepted.Events]),
             Decision.Rejected { Kind: Rejection.AlreadyRemoved } => (back, []),
+            // An archived group: the group page says so, in a banner (slice-15-archive-group.md).
+            Decision.Rejected { Kind: Rejection.Invalid } => (back, []),
             Decision.Rejected => (NotFound(), []),
             var other => throw new InvalidOperationException($"Unhandled decision {other}"),
         };

@@ -4,6 +4,7 @@ using SplitIt.Shared;
 using SplitIt.Slices.ChangeDefaultSplit;
 using SplitIt.Slices.CreateGroup;
 using SplitIt.Slices.RenameGroup;
+using SplitIt.Slices.ArchiveGroup;
 
 namespace SplitIt.Slices.RecordExpense;
 
@@ -21,7 +22,7 @@ namespace SplitIt.Slices.RecordExpense;
 ///   MemberClaimReleased → remove from Members        (a released claim ends membership)
 ///   MemberRemoved       → drop the slot              (cannot pay or share)
 ///   MemberRenamed       → rename in Names
-///   GroupArchived / GroupUnarchived → track Archived (no changes to an archived group)
+///   GroupUnarchived     → clear Archived (deferred, spec §11)
 ///
 /// Public: Wolverine fetches it for the endpoint (spec §12). The alias is required:
 /// every slice has a State.
@@ -44,9 +45,14 @@ public sealed record State(
     /// <summary>The stream id, set by Marten; Wolverine needs it to type the aggregate's identity.</summary>
     public GroupId Id { get; init; }
 
+    /// <summary>Whether the group is archived: it takes no command (slice-15-archive-group.md).</summary>
+    public bool Archived { get; init; }
+
     public static State Create(GroupCreated e) =>
         new(e.Name, e.Currency, [], ImmutableDictionary<MemberId, string>.Empty,
             ImmutableDictionary<UserId, MemberId>.Empty, [], ExpenseForm.EqualMode, ImmutableDictionary<MemberId, int>.Empty);
+
+    public State Apply(GroupArchived e) => this with { Archived = true };
 
     public State Apply(GroupDefaultSplitChanged e) =>
         this with { DefaultMode = e.Mode, DefaultShares = e.Shares.ToImmutableDictionary(s => s.MemberId, s => s.Shares) };

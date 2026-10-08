@@ -103,6 +103,8 @@ S3 - an edited and a removed expense count as they stand
 - **One button,** **Archive group**, in a plain form with antiforgery; **Cancel** goes
   back to the group. Saved, or already archived (a double tap, or two phones): back to the
   group page, where the archived banner is the answer.
+- **The page of an archived group** is not shown: the address goes to the group page, where
+  the banner is the answer.
 - **A non-member, a missing group and a malformed id** get the one not-found page (404).
   A group already archived, posted again, is answered as saved.
 
@@ -125,7 +127,7 @@ S3 - an edited and a removed expense count as they stand
 
 ## The archived rule, in the other slices
 
-Added right after membership in the decider of **Record expense, Edit expense, Remove
+Built, and added right after membership in the decider of **Record expense, Edit expense, Remove
 expense, Record settlement, Add member, Invite member, Rename group** and **Change default
 split**: `rejected - group is archived`, with one scenario each in their own docs.
 **Accept invite** treats an invite into an archived group as dead (`invite not found`,

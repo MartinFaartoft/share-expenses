@@ -11,6 +11,7 @@ using ExpenseEdited = SplitIt.Slices.EditExpense.ExpenseEdited;
 using ExpenseRemoved = SplitIt.Slices.RemoveExpense.ExpenseRemoved;
 using SettlementRecorded = SplitIt.Slices.RecordSettlement.SettlementRecorded;
 using GroupRenamed = SplitIt.Slices.RenameGroup.GroupRenamed;
+using GroupArchived = SplitIt.Slices.ArchiveGroup.GroupArchived;
 
 namespace SplitIt.Tests.Slices.ViewGroup;
 
@@ -267,4 +268,18 @@ public class ViewGroupSpecs
     [Fact]
     public void S10_a_renamed_group_shows_its_current_name() =>
         Assert.Equal("Porto trip", View([.. Lisbon, new GroupRenamed("Porto trip", Bob)]).GroupName);
+
+    [Fact]
+    public void S11_an_archived_group_is_shown_as_archived_with_its_history_and_standing_as_before()
+    {
+        var group = View([.. Lisbon, Expense(E1, "Dinner", 9000, M1, Dinner), new GroupArchived(Bob)]);
+
+        Assert.True(group.Archived);
+        Assert.Equal(6000, group.BalanceMinor);
+        Assert.Equal(["Dinner"], group.History.Select(h => ((ActivityExpense)h).Description));
+    }
+
+    [Fact]
+    public void S12_a_group_is_not_archived_until_it_is() =>
+        Assert.False(View(Lisbon).Archived);
 }

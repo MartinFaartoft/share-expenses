@@ -204,4 +204,17 @@ public class AcceptInviteIntegrationTests(AppFixture app)
         await using var session = Store.QuerySession();
         return (await session.Events.FetchStreamAsync(groupId.Value)).Select(e => e.Data).ToList();
     }
+
+    [Fact]
+    public async Task An_invite_into_an_archived_group_claims_nothing_and_goes_back_home()
+    {
+        var (bob, bobEmail) = await Account("bob");
+        var (groupId, _) = await InvitedBob(bobEmail);
+        await new Seed(app).Append(groupId, new SplitIt.Slices.ArchiveGroup.GroupArchived(_alice));
+
+        var response = await Join(bob, groupId);
+
+        Assert.Equal("/", response.Headers.Location?.OriginalString);
+        Assert.DoesNotContain(await StreamOf(groupId), e => e is MemberClaimed c && c.UserId == bob);
+    }
 }

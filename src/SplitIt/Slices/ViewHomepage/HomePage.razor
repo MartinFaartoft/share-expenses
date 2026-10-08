@@ -40,6 +40,19 @@
         }
     </section>
 
+    @if (Model.Archived.Count > 0)
+    {
+        <details class="archived">
+            <summary>Archived (@Model.Archived.Count)</summary>
+            <ul class="links">
+                @foreach (var group in Model.Archived)
+                {
+                    <li><a href="/groups/@group.GroupId">@group.Name</a></li>
+                }
+            </ul>
+        </details>
+    }
+
     <a class="fab" href="/groups/new" aria-label="New group">+</a>
     </ChildContent>
 </Page>

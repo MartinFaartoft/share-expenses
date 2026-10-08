@@ -4,6 +4,7 @@ using SplitIt.Shared;
 using SplitIt.Slices.CreateGroup;
 using SplitIt.Slices.AddMember;
 using SplitIt.Slices.RenameGroup;
+using SplitIt.Slices.ArchiveGroup;
 
 namespace SplitIt.Slices.ViewHomepage;
 
@@ -27,7 +28,7 @@ internal sealed record OpenInvite(InviteId InviteId, DateTimeOffset ExpiresAt, M
 /// deferred specs in slice-04-view-homepage.md:
 ///   MemberRemoved       → close the slot's invite
 ///   MemberRenamed       → rename the slot           (names shown as they are now)
-///   GroupArchived       → decide whether invites stay shown
+///   GroupUnarchived     → clear Archived (deferred, spec §11)
 ///   MemberClaimReleased → (old invites stay dead; a new invite reopens the slot)
 ///
 /// The alias is required: every slice has a State (spec §12).
@@ -39,7 +40,12 @@ internal sealed record State(
     ImmutableDictionary<UserId, MemberId> Members,
     ImmutableDictionary<MemberId, OpenInvite> OpenInvites)
 {
+    /// <summary>Archived: an invite into it is dead (slice-15-archive-group.md).</summary>
+    public bool Archived { get; init; }
+
     public static State Create(GroupCreated e) => new(e.Name, [], [], []);
+
+    public State Apply(GroupArchived e) => this with { Archived = true };
 
     public State Apply(GroupRenamed e) => this with { GroupName = e.Name };
 

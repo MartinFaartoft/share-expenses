@@ -8,6 +8,7 @@ using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
 using GroupRenamed = SplitIt.Slices.RenameGroup.GroupRenamed;
 using GroupDefaultSplitChanged = SplitIt.Slices.ChangeDefaultSplit.GroupDefaultSplitChanged;
+using GroupArchived = SplitIt.Slices.ArchiveGroup.GroupArchived;
 
 namespace SplitIt.Tests.Slices.RecordExpense;
 
@@ -325,4 +326,16 @@ public class RecordExpenseSpecs
         Assert.Equal(2, state.DefaultShares[M1]);
         Assert.Equal(0, state.DefaultShares[M3]);
     }
+
+    [Fact]
+    public void S33_an_archived_group_records_no_expense() =>
+        Spec.Given([.. Lisbon, new GroupArchived(Alice)])
+            .When(RecordExpense("Dinner", 9000, M1, Equal(M1, M2, M3), Alice))
+            .ThenRejected("group is archived");
+
+    [Fact]
+    public void An_archived_group_tells_a_non_member_nothing() =>
+        Spec.Given([.. Lisbon, new GroupArchived(Alice)])
+            .When(RecordExpense("Dinner", 9000, M1, Equal(M1, M2, M3), Mallory))
+            .ThenNotFound("group not found");
 }

@@ -2,6 +2,7 @@ using Marten.Schema;
 using SplitIt.Shared;
 using SplitIt.Slices.CreateGroup;
 using SplitIt.Slices.RenameGroup;
+using SplitIt.Slices.ArchiveGroup;
 
 namespace SplitIt.Slices.ViewHomepage;
 
@@ -22,7 +23,7 @@ namespace SplitIt.Slices.ViewHomepage;
 /// FOLD CHECKLIST — when these slices are built, fold their events here and add the
 /// deferred specs in slice-04-view-homepage.md:
 ///   MemberClaimReleased → remove the user
-///   GroupArchived / GroupUnarchived → track Archived (out of the main list, spec §8)
+///   GroupUnarchived     → clear Archived (deferred, spec §11)
 ///
 /// Changing the fold changes stored documents: rebuild with
 /// <c>dotnet run -- projections rebuild</c>.
@@ -33,7 +34,12 @@ internal sealed record Membership(string GroupName, UserId[] Members)
     /// <summary>The group's stream id: Marten keys the document by it.</summary>
     public Guid Id { get; init; }
 
+    /// <summary>Archived: out of the main list, listed apart (slice-15-archive-group.md).</summary>
+    public bool Archived { get; init; }
+
     public static Membership Create(GroupCreated e) => new(e.Name, []);
+
+    public Membership Apply(GroupArchived e) => this with { Archived = true };
 
     public Membership Apply(GroupRenamed e) => this with { GroupName = e.Name };
 

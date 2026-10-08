@@ -8,6 +8,7 @@ using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
 using SettlementRecorded = SplitIt.Slices.RecordSettlement.SettlementRecorded;
 using GroupRenamed = SplitIt.Slices.RenameGroup.GroupRenamed;
+using GroupArchived = SplitIt.Slices.ArchiveGroup.GroupArchived;
 
 namespace SplitIt.Tests.Slices.RemoveExpense;
 
@@ -116,4 +117,10 @@ public class RemoveExpenseSpecs
     [Fact]
     public void A_renamed_group_is_folded_under_its_new_name() =>
         Assert.Equal("Porto trip", Fold.Of<State>([.. Lisbon, new GroupRenamed("Porto trip", Bob)], ignoring: typeof(SettlementRecorded))!.GroupName);
+
+    [Fact]
+    public void S9_an_archived_group_removes_no_expense() =>
+        Spec.Given([.. Lisbon, new GroupArchived(Alice)])
+            .When(new Command(E1, Alice))
+            .ThenRejected("group is archived");
 }

@@ -5,6 +5,7 @@ using SplitIt.Slices.CreateGroup;
 using SplitIt.Slices.EditExpense;
 using SplitIt.Slices.RecordExpense;
 using SplitIt.Slices.RemoveExpense;
+using SplitIt.Slices.ArchiveGroup;
 
 namespace SplitIt.Slices.ViewExpense;
 
@@ -31,7 +32,7 @@ internal sealed record Expense(
 /// deferred specs in slice-13-view-expense.md:
 ///   MemberRenamed                  → rename
 ///   MemberClaimReleased            → clear ClaimedBy
-///   GroupArchived / GroupUnarchived → track Archived
+///   GroupUnarchived                → clear Archived (deferred, spec §11)
 ///
 /// The alias is required: every slice has a State (spec §12).
 /// </summary>
@@ -44,7 +45,12 @@ internal sealed record State(
     /// <summary>The group's stream id.</summary>
     public Guid Id { get; init; }
 
+    /// <summary>Archived: the sheet shows the expense without its actions (slice-15-archive-group.md).</summary>
+    public bool Archived { get; init; }
+
     public static State Create(GroupCreated e) => new(e.Currency, [], ImmutableDictionary<ExpenseId, Expense>.Empty);
+
+    public State Apply(GroupArchived e) => this with { Archived = true };
 
     public State Apply(MemberAdded e) => this with { Slots = Slots.Add(new Slot(e.MemberId, e.DisplayName, null)) };
 

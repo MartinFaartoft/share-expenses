@@ -10,6 +10,7 @@ using GroupCreated = SplitIt.Slices.CreateGroup.GroupCreated;
 using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
 using SettlementRecorded = SplitIt.Slices.RecordSettlement.SettlementRecorded;
+using GroupArchived = SplitIt.Slices.ArchiveGroup.GroupArchived;
 
 namespace SplitIt.Tests.Slices.ViewExpense;
 
@@ -161,4 +162,17 @@ public class ViewExpenseSpecs
     public void A_settlement_changes_nothing_on_an_expense() =>
         Assert.Equal(["Alice 3000", "Bob 3000", "Carol 3000"],
             Lines(View([.. Lisbon, new SettlementRecorded(S1, M2, M1, 3000, Oct1, Bob)], E1, Alice)));
+
+    [Fact]
+    public void S12_an_archived_groups_expense_is_shown_marked_archived()
+    {
+        var expense = View([.. Lisbon, new GroupArchived(Bob)], E1, Alice);
+
+        Assert.True(expense.Archived);
+        Assert.Equal("Dinner", expense.Description);
+    }
+
+    [Fact]
+    public void An_expense_is_not_archived_until_its_group_is() =>
+        Assert.False(View(Lisbon, E1, Alice).Archived);
 }

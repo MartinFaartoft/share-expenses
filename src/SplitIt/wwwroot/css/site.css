@@ -412,3 +412,14 @@ a.icon-button svg {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* ── Archive group, and an archived group ──────────────────────────────────── */
+
+.warning { padding: 0.75rem 1rem; margin: 0 0 1rem; background: #fff4e0; border: 1px solid #f0c987; border-radius: var(--radius); }
+.warning p { margin: 0 0 0.5rem; }
+.warning p:last-child { margin: 0; }
+ul.owing { margin: 0 0 0.5rem; padding-left: 1.25rem; }
+a.cancel { justify-self: center; padding: 0.5rem; color: var(--muted); }
+.banner { margin: 0 0 1rem; padding: 0.75rem 1rem; color: var(--muted); background: #eef0f4; border-radius: var(--radius); text-align: center; }
+details.archived { margin: 0 0 1rem; }
+details.archived summary { padding: 0.75rem 0; color: var(--muted); font-weight: 600; cursor: pointer; }

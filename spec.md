@@ -1871,8 +1871,14 @@ a documentation tool, not application code.
   shell) so a tap on a card whose expense was removed elsewhere is not silent.
   **Rename group** is built (slice-14-rename-group.md): `/groups/{group}/rename`, from
   **Rename group** in the group page's `⋯` menu, beside Add member; every slice that holds
-  the name folds `GroupRenamed`. **Archive group** and **Change default split** are designed,
-  not built (slice-15), with a small screen in the same menu.
+  the name folds `GroupRenamed`.
+  **Archive group** is built (slice-15-archive-group.md): `/groups/{group}/archive`, from
+  **Archive group** in the same menu, last. A confirm page that warns, with who owes and who is
+  owed, and never blocks; it says "This can't be undone yet", because `UnarchiveGroup` is
+  deferred. `GroupArchived` is folded by every command slice, which rejects with `group is
+  archived` right after membership (Accept invite treats the invite as dead); the group page
+  becomes read-only with a banner, the home page lists the group under **Archived**, and the
+  expense sheet loses Edit and Remove.
   **Change default split** is built (slice-16-change-default-split.md): `/groups/{group}/default-split`,
   from **Default split** in the same menu. `GroupDefaultSplitChanged` records the mode and only the
   shares that are not 1 (0 left out); Add expense folds it and its form opens with it.

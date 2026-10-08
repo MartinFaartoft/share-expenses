@@ -1,0 +1,34 @@
+@* The Archive group screen (slice-15-archive-group.md): a confirm page that warns, and does not block, when the group is not settled up. *@
+@using SplitIt.Web
+<Page Title="Archive group" BackHref="@($"/groups/{Model.GroupId}")">
+    <p><strong>@Model.GroupName</strong></p>
+    <p>
+        Nobody will be able to add expenses, settle up or change the group. It moves to your
+        archived groups, and you can still open it.
+    </p>
+    <p><strong>This can't be undone yet.</strong></p>
+    @if (Model.Owing.Count > 0)
+    {
+        <div class="warning" role="note">
+            <p><strong>Not everyone is settled up:</strong></p>
+            <ul class="owing">
+                @foreach (var line in Model.Owing)
+                {
+                    <li>@Who(line) @(line.BalanceMinor > 0 ? "is owed" : "owes") @Money.Format(line.BalanceMinor, Model.Currency)</li>
+                }
+            </ul>
+            <p>You can archive it anyway.</p>
+        </div>
+    }
+    <form method="post" action="/groups/@Model.GroupId/archive">
+        <AntiforgeryToken />
+        <button type="submit">Archive group</button>
+        <a class="cancel" href="/groups/@Model.GroupId">Cancel</a>
+    </form>
+</Page>
+
+@code {
+    [Parameter] public ArchiveView Model { get; set; } = default!;
+
+    private static string Who(Owing line) => line.IsYou ? $"{line.Name} (you)" : line.Name;
+}

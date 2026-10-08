@@ -6,6 +6,7 @@ using SplitIt.Tests.Specs;
 using GroupCreated = SplitIt.Slices.CreateGroup.GroupCreated;
 using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
+using GroupArchived = SplitIt.Slices.ArchiveGroup.GroupArchived;
 
 namespace SplitIt.Tests.Slices.RenameGroup;
 
@@ -148,4 +149,16 @@ public class RenameGroupSpecs
         Spec.Given(Lisbon)
             .When(new Command(new string('x', 101), Alice))
             .ThenRejected("name must be at most 100 characters");
+
+    [Fact]
+    public void S10_an_archived_group_cannot_be_renamed() =>
+        Spec.Given([.. Lisbon, new GroupArchived(Alice)])
+            .When(new Command("Porto trip", Alice))
+            .ThenRejected("group is archived");
+
+    [Fact]
+    public void An_archived_group_tells_a_non_member_nothing() =>
+        Spec.Given([.. Lisbon, new GroupArchived(Alice)])
+            .When(new Command("Porto trip", Mallory))
+            .ThenNotFound("group not found");
 }

@@ -7,6 +7,7 @@ using ExpenseRecorded = SplitIt.Slices.RecordExpense.ExpenseRecorded;
 using GroupCreated = SplitIt.Slices.CreateGroup.GroupCreated;
 using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
+using GroupArchived = SplitIt.Slices.ArchiveGroup.GroupArchived;
 
 namespace SplitIt.Tests.Slices.RecordSettlement;
 
@@ -155,5 +156,17 @@ public class RecordSettlementSpecs
     public void A_non_member_learns_nothing_from_validation() =>
         Spec.Given(Lisbon)
             .When(RecordSettlement(M9, M9, -5, Mallory))
+            .ThenNotFound("group not found");
+
+    [Fact]
+    public void S16_an_archived_group_records_no_settlement() =>
+        Spec.Given([.. Lisbon, new GroupArchived(Alice)])
+            .When(RecordSettlement(M2, M1, 3000, Bob))
+            .ThenRejected("group is archived");
+
+    [Fact]
+    public void An_archived_group_tells_a_non_member_nothing() =>
+        Spec.Given([.. Lisbon, new GroupArchived(Alice)])
+            .When(RecordSettlement(M2, M1, 3000, Mallory))
             .ThenNotFound("group not found");
 }

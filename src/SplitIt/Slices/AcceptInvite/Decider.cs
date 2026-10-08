@@ -25,6 +25,10 @@ internal static class Decider
         if (state is null)
             return Decision.NotFound(InviteNotFound);
 
+        // An archived group takes no members: its invites are dead (slice-15-archive-group.md).
+        if (state.Archived)
+            return Decision.NotFound(InviteNotFound);
+
         // The invariant — one user, one slot per group — before any invite, so no
         // invite can ever give a member a second slot. Telling them is safe: they're in.
         if (state.Members.TryGetValue(command.UserId, out var held))

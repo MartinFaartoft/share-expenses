@@ -3,6 +3,7 @@ using Marten.Schema;
 using SplitIt.Shared;
 using SplitIt.Slices.CreateGroup;
 using SplitIt.Slices.AddMember;
+using SplitIt.Slices.ArchiveGroup;
 
 namespace SplitIt.Slices.AcceptInvite;
 
@@ -23,7 +24,7 @@ public sealed record OpenInvite(InviteId InviteId, DateTimeOffset ExpiresAt, int
 ///                         once re-invited (the old invite stays closed)
 ///   MemberRemoved       → close the slot's invite
 ///   MemberRenamed       → rename the slot              (rejections name it)
-///   GroupArchived / GroupUnarchived → track Archived   (no claiming into an archived group)
+///   GroupUnarchived     → clear Archived (deferred, spec §11)
 ///
 /// Public, as is <see cref="OpenInvite"/>: Wolverine fetches it for the endpoint, so it
 /// is in the endpoint's signature. The alias is required: every slice has a State
@@ -39,7 +40,12 @@ public sealed record State(
     /// <summary>The stream id, set by Marten; Wolverine needs it to type the aggregate's identity.</summary>
     public GroupId Id { get; init; }
 
+    /// <summary>Whether the group is archived: it takes no command (slice-15-archive-group.md).</summary>
+    public bool Archived { get; init; }
+
     public static State Create(GroupCreated _) => new([], [], [], 0);
+
+    public State Apply(GroupArchived e) => this with { Archived = true };
 
     public State Apply(MemberAdded e) => this with { SlotNames = SlotNames.SetItem(e.MemberId, e.DisplayName) };
 

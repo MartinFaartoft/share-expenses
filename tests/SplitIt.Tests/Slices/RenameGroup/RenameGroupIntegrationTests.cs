@@ -402,4 +402,21 @@ public class RenameGroupIntegrationTests(AppFixture app)
         await using var session = Store.QuerySession();
         return (await session.Events.FetchStreamAsync(group.Value)).Select(e => e.Data).OfType<GroupRenamed>().ToList();
     }
+
+    [Fact]
+    public async Task S10_an_archived_group_is_not_renamed_and_the_form_says_why()
+    {
+        var group = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+        var form = await FormPage(browser, group);
+        await group.Archive();
+
+        var response = await Post(browser, group, form, "Porto trip");
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("""<p class="error" role="alert">group is archived</p>""", html);
+        Assert.Contains("""name="name" value="Porto trip" """, html);
+        Assert.Empty(await RenamesOf(group.Id));
+    }
 }

@@ -21,6 +21,9 @@ internal static class Decider
     /// <summary>The single answer for "no such group" and "not a member".</summary>
     public const string GroupNotFound = "group not found";
 
+    /// <summary>An archived group takes no command (slice-15-archive-group.md).</summary>
+    public const string GroupArchived = "group is archived";
+
     /// <summary>As for an expense (spec §6).</summary>
     public const long MaxAmountMinor = 1_000_000_000_000;
 
@@ -29,6 +32,9 @@ internal static class Decider
         // Membership first: a non-member learns nothing, not even from validation.
         if (state is null || !state.Members.Contains(command.By))
             return Decision.NotFound(GroupNotFound);
+
+        if (state.Archived)
+            return Decision.Reject(GroupArchived);
 
         // The same form submitted twice: recorded once, and the second is not an error.
         if (state.Settlements.Contains(command.SettlementId))

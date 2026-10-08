@@ -5,6 +5,7 @@ using SplitIt.Slices.CreateGroup;
 using SplitIt.Slices.EditExpense;
 using SplitIt.Slices.RecordExpense;
 using SplitIt.Slices.RenameGroup;
+using SplitIt.Slices.ArchiveGroup;
 
 namespace SplitIt.Slices.RemoveExpense;
 
@@ -19,7 +20,7 @@ public sealed record RecordedExpense(string Description, long AmountMinor, Membe
 /// deferred specs in slice-11-remove-expense.md:
 ///   MemberClaimReleased → drop from Members
 ///   MemberRenamed       → rename in Names
-///   GroupArchived / GroupUnarchived → track Archived
+///   GroupUnarchived     → clear Archived (deferred, spec §11)
 /// </summary>
 [DocumentAlias("remove_expense_state")]
 public sealed record State(
@@ -32,9 +33,14 @@ public sealed record State(
 {
     public GroupId Id { get; init; }
 
+    /// <summary>Whether the group is archived: it takes no command (slice-15-archive-group.md).</summary>
+    public bool Archived { get; init; }
+
     public static State Create(GroupCreated e) =>
         new(e.Name, e.Currency, ImmutableDictionary<MemberId, string>.Empty,
             ImmutableDictionary<UserId, MemberId>.Empty, ImmutableDictionary<ExpenseId, RecordedExpense>.Empty, []);
+
+    public State Apply(GroupArchived e) => this with { Archived = true };
 
     public State Apply(GroupRenamed e) => this with { GroupName = e.Name };
 

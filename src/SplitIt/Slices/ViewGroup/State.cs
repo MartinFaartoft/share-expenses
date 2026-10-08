@@ -7,6 +7,7 @@ using SplitIt.Slices.RecordExpense;
 using SplitIt.Slices.RecordSettlement;
 using SplitIt.Slices.RemoveExpense;
 using SplitIt.Slices.RenameGroup;
+using SplitIt.Slices.ArchiveGroup;
 
 namespace SplitIt.Slices.ViewGroup;
 
@@ -55,7 +56,8 @@ internal sealed record Settlement(
 ///   SettlementRemoved                      → undo the entry's effect
 ///   MemberRenamed               → rename
 ///   MemberClaimReleased                    → clear ClaimedBy
-///   MemberRemoved, GroupArchived           → decide how they show
+///   MemberRemoved                          → decide how it shows
+///   GroupUnarchived                        → clear Archived (deferred, spec §11)
 ///
 /// A change here changes stored documents: they must be rebuilt from the events
 /// (<c>dotnet run -- projections rebuild</c>), which is always possible — the events are
@@ -72,7 +74,12 @@ internal sealed record State(
     /// <summary>The group's stream id: Marten keys the stored snapshot by it.</summary>
     public Guid Id { get; init; }
 
+    /// <summary>Archived: the page is read-only (slice-15-archive-group.md).</summary>
+    public bool Archived { get; init; }
+
     public static State Create(GroupCreated e) => new(e.Name, e.Currency, [], [], []);
+
+    public State Apply(GroupArchived e) => this with { Archived = true };
 
     public State Apply(GroupRenamed e) => this with { GroupName = e.Name };
 

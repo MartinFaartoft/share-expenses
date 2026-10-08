@@ -9,10 +9,16 @@ internal static class Decider
 {
     public const string GroupNotFound = "group not found";
 
+    /// <summary>An archived group takes no command (slice-15-archive-group.md).</summary>
+    public const string GroupArchived = "group is archived";
+
     public static Decision Decide(State? state, Command command)
     {
         if (state is null || !state.Members.ContainsKey(command.By))
             return Decision.NotFound(GroupNotFound);
+
+        if (state.Archived)
+            return Decision.Reject(GroupArchived);
 
         if (!state.Expenses.ContainsKey(command.ExpenseId))
             return Decision.NotFound("expense not found");

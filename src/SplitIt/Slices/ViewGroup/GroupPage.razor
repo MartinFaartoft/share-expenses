@@ -2,16 +2,24 @@
     <TopBar>
         <a class="up" href="/" aria-label="Home">‹</a>
         <h1>@ReadModel.GroupName</h1>
-        <details class="menu">
-            <summary aria-label="More">⋯</summary>
-            <div class="menu-items">
-                <a href="/groups/@ReadModel.GroupId/members/new">Add member</a>
-                <a href="/groups/@ReadModel.GroupId/rename">Rename group</a>
-                <a href="/groups/@ReadModel.GroupId/default-split">Default split</a>
-            </div>
-        </details>
+        @if (!ReadModel.Archived)
+        {
+            <details class="menu">
+                <summary aria-label="More">⋯</summary>
+                <div class="menu-items">
+                    <a href="/groups/@ReadModel.GroupId/members/new">Add member</a>
+                    <a href="/groups/@ReadModel.GroupId/rename">Rename group</a>
+                    <a href="/groups/@ReadModel.GroupId/default-split">Default split</a>
+                    <a href="/groups/@ReadModel.GroupId/archive">Archive group</a>
+                </div>
+            </details>
+        }
     </TopBar>
     <ChildContent>
+    @if (ReadModel.Archived)
+    {
+        <p class="banner" role="status">This group is archived.</p>
+    }
     <section class="summary" aria-label="Your balance">
         <a class="balance" href="/groups/@ReadModel.GroupId/balances">
             @if (ReadModel.BalanceMinor < 0)
@@ -28,7 +36,7 @@
             }
             <span class="chevron" aria-hidden="true">›</span>
         </a>
-        @if (ReadModel.BalanceMinor != 0)
+        @if (ReadModel.BalanceMinor != 0 && !ReadModel.Archived)
         {
             <a class="button" href="/groups/@ReadModel.GroupId/settle-up">Settle up</a>
         }
@@ -38,7 +46,7 @@
         <h2 id="history">History</h2>
         @if (ReadModel.History.Count == 0)
         {
-            <p class="hint">Nothing yet. Add the first expense.</p>
+            <p class="hint">@(ReadModel.Archived ? "Nothing was ever recorded." : "Nothing yet. Add the first expense.")</p>
         }
         else
         {
@@ -74,7 +82,10 @@
     @* Where an expense's sheet is swapped in (View expense): this slice knows its address and this id. *@
     <div id="sheet"></div>
 
-    <a class="fab" href="/groups/@ReadModel.GroupId/expenses/new" aria-label="Add expense">+</a>
+    @if (!ReadModel.Archived)
+    {
+        <a class="fab" href="/groups/@ReadModel.GroupId/expenses/new" aria-label="Add expense">+</a>
+    }
     </ChildContent>
 </Page>
 

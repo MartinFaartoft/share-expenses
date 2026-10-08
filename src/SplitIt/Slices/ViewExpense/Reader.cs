@@ -13,6 +13,7 @@ internal sealed record Query(ExpenseId ExpenseId, UserId UserId);
 /// <param name="You">The caller's own slot.</param>
 /// <param name="Currency">ISO 4217; amounts are in its minor unit.</param>
 /// <param name="Mode">How it is split, as stored: <c>equal</c>, <c>shares</c> or <c>exact</c>.</param>
+/// <param name="Archived">The group is archived: no Edit, no Remove (slice-15-archive-group.md).</param>
 /// <param name="Shares">Who shares it, in member-added order, with what each owes.</param>
 public sealed record ExpenseReadModel(
     GroupId GroupId,
@@ -25,7 +26,8 @@ public sealed record ExpenseReadModel(
     string PayerName,
     DateOnly PaidOn,
     string Mode,
-    IReadOnlyList<ExpenseShare> Shares);
+    IReadOnlyList<ExpenseShare> Shares,
+    bool Archived);
 
 /// <param name="AmountMinor">What this member owes: the recorded amount, never re-derived (spec §6).</param>
 /// <param name="Weight">Their share, for a shares split; otherwise null.</param>
@@ -61,6 +63,7 @@ internal static class Reader
                 ExactSplit => "exact",
                 _ => throw new InvalidOperationException($"Unknown split {expense.Split.GetType().Name}"),
             },
-            shares);
+            shares,
+            state.Archived);
     }
 }

@@ -278,4 +278,23 @@ public class ViewExpenseIntegrationTests(AppFixture app)
         Assert.Equal(HttpStatusCode.OK, script.StatusCode);
         Assert.Contains("showModal", await script.Content.ReadAsStringAsync());
     }
+
+    [Fact]
+    public async Task An_archived_groups_expense_is_shown_without_edit_and_remove()
+    {
+        var l = await SeedLisbon();
+        await l.Group.Archive();
+
+        var sheet = await Html(await Get(app.BrowserFor(_alice), Path(l), htmx: true));
+        var page = await Html(await Get(app.BrowserFor(_alice), Path(l), htmx: false));
+
+        foreach (var html in new[] { sheet, page })
+        {
+            Assert.Contains("<h2 id=\"expense-title\">Dinner</h2>", html);
+            Assert.Contains("Shared equally", html);
+            Assert.DoesNotContain("/edit", html);
+            Assert.DoesNotContain("/remove", html);
+            Assert.DoesNotContain("icon-button", html);
+        }
+    }
 }

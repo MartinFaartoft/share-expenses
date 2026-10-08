@@ -13,11 +13,17 @@ internal static class Decider
     /// <summary>The single answer for "no such group" and "not a member".</summary>
     public const string GroupNotFound = "group not found";
 
+    /// <summary>An archived group takes no command (slice-15-archive-group.md).</summary>
+    public const string GroupArchived = "group is archived";
+
     public static Decision Decide(State? state, Command command)
     {
         // Membership first: a non-member learns nothing, not even from validation.
         if (state is null || !state.Members.ContainsKey(command.By))
             return Decision.NotFound(GroupNotFound);
+
+        if (state.Archived)
+            return Decision.Reject(GroupArchived);
 
         if (command.Mode is not (DefaultSplit.Equal or DefaultSplit.SharesMode))
             return Decision.Reject("default split must be equal or shares");

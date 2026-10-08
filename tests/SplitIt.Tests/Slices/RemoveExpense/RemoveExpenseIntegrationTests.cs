@@ -213,4 +213,20 @@ public class RemoveExpenseIntegrationTests(AppFixture app)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Empty(await RemovalsOf(group.Id));
     }
+
+    [Fact]
+    public async Task An_archived_group_removes_nothing_and_goes_back_to_the_group_where_the_banner_says_why()
+    {
+        var (group, _, dinner) = await Lisbon();
+        var browser = app.BrowserFor(_alice);
+        var token = Forms.TokenIn(await ConfirmPage(browser, group.Id, dinner))!;
+        await group.Archive();
+
+        var response = await Forms.Post(browser, Path(group.Id, dinner), token);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal($"/groups/{group.Id}", response.Headers.Location?.OriginalString);
+        Assert.Empty(await RemovalsOf(group.Id));
+        Assert.Contains("This group is archived.", await GroupPage(group.Id, _alice));
+    }
 }

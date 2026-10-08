@@ -39,6 +39,9 @@ internal static class Decider
     /// </summary>
     public const string GroupNotFound = "group not found";
 
+    /// <summary>An archived group takes no command (slice-15-archive-group.md).</summary>
+    public const string GroupArchived = "group is archived";
+
     public const string MemberNotFound = "member not found";
 
     /// <param name="state">The group's state, or null if its stream does not exist.</param>
@@ -47,6 +50,9 @@ internal static class Decider
         // Membership first: a non-member learns nothing, not even from validation.
         if (state is null || !state.Members.ContainsKey(command.By))
             return Decision.NotFound(GroupNotFound);
+
+        if (state.Archived)
+            return Decision.Reject(GroupArchived);
 
         if (!state.Slots.TryGetValue(command.MemberId, out var slot))
             return Decision.NotFound(MemberNotFound);

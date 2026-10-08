@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using Marten.Schema;
 using SplitIt.Shared;
 using SplitIt.Slices.CreateGroup;
+using SplitIt.Slices.ArchiveGroup;
 
 namespace SplitIt.Slices.RenameGroup;
 
@@ -13,7 +14,7 @@ namespace SplitIt.Slices.RenameGroup;
 /// FOLD CHECKLIST — when these slices are built, fold their events here and add the
 /// deferred specs in slice-14-rename-group.md:
 ///   MemberClaimReleased → remove from Members        (a released claim ends membership)
-///   GroupArchived       → track Archived             (an archived group cannot be renamed)
+///   GroupUnarchived     → clear Archived (deferred, spec §11)
 ///
 /// Public: Wolverine fetches it for the endpoint (spec §12). The alias is required:
 /// every slice has a State.
@@ -24,7 +25,12 @@ public sealed record State(string GroupName, ImmutableDictionary<UserId, MemberI
     /// <summary>The stream id, set by Marten; Wolverine needs it to type the aggregate's identity.</summary>
     public GroupId Id { get; init; }
 
+    /// <summary>Whether the group is archived: it takes no command (slice-15-archive-group.md).</summary>
+    public bool Archived { get; init; }
+
     public static State Create(GroupCreated e) => new(e.Name, ImmutableDictionary<UserId, MemberId>.Empty);
+
+    public State Apply(GroupArchived e) => this with { Archived = true };
 
     public State Apply(MemberClaimed e) => this with { Members = Members.SetItem(e.UserId, e.MemberId) };
 

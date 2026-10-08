@@ -147,4 +147,18 @@ public class RecordSettlementIntegrationTests(AppFixture app)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Empty(await SettlementsOf(group.Id));
     }
+
+    [Fact]
+    public async Task An_archived_group_records_nothing_and_settle_up_says_why()
+    {
+        var (group, bob) = await Lisbon();
+        var (browser, token) = await Page(group.Id);
+        await group.Archive();
+
+        var response = await Submit(browser, token, group.Id, bob, group.You, "30.00");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains("error=group%20is%20archived", response.Headers.Location?.OriginalString);
+        Assert.Empty(await SettlementsOf(group.Id));
+    }
 }

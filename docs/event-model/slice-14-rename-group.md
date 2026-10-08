@@ -128,8 +128,7 @@ link, or goes into an email. Each states a scenario in its own doc.
 
 **No rebuild is needed** for this slice: no `GroupRenamed` exists before it, so the stored
 `GroupActivity` and `UserGroups` documents are already right, and fold each new rename as
-it is appended (inline for the group page, by the daemon for the home page). Archive group
-(slice-15) is the change that needs one.
+it is appended (inline for the group page, by the daemon for the home page).
 
 ## Deferred
 
