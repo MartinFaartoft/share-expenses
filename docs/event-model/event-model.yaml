@@ -250,7 +250,7 @@ slices:
         amountMinor: long                                  # typed in the currency's units ("120.50"); the endpoint converts
         payerMemberId: MemberId
         # one of: equal (participants) | shares (a share each) | exact (an amount each)
-        # the first screen offers equal only; the form already carries its mode
+        # the form offers all three, as radio buttons; the mode's fields are shown by CSS
         split: ExpenseSplit
         paidOn: DateOnly
       wireframe:
@@ -258,7 +258,8 @@ slices:
         - "What for          [ Dinner   ]"
         - "Amount (GBP £)    [ 120.00   ]"
         - "Paid by           [ Alice v  ]"
-        - "Shared equally between"
+        - "Split  (o) Equally ( ) Shares ( ) Exact"
+        - "Shared between"
         - "  [x] Alice  [x] Bob  [ ] Carol"
         - "Date              [ 2 Oct    ]"
         - ""
@@ -476,7 +477,8 @@ slices:
         - "What for          [ Dinner   ]"
         - "Amount (GBP £)    [ 120.00   ]"
         - "Paid by           [ Alice v  ]"
-        - "Shared equally between"
+        - "Split  (o) Equally ( ) Shares ( ) Exact"
+        - "Shared between"
         - "  [x] Alice  [x] Bob  [ ] Carol"
         - "Date              [ 2 Oct    ]"
         - ""

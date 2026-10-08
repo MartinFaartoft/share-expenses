@@ -12,32 +12,32 @@ vertical-gap: 22
 
 classes: {
   lanelabel: {
-    width: 170; height: 219
+    width: 170; height: 236
     style: { fill: transparent; stroke-width: 0; font-color: "#6b7280"; bold: true }
   }
   slicename: {
-    width: 322; height: 50
+    width: 367; height: 50
     style: { fill: transparent; stroke-width: 0; font-color: "#374151"; bold: true }
   }
   lgapN: { width: 170;    height: 50;  style: { opacity: 0 } }
-  gapN:  { width: 322; height: 50;  style: { opacity: 0 } }
+  gapN:  { width: 367; height: 50;  style: { opacity: 0 } }
   divN:  { width: 2;      height: 50;  style: { fill: "#c9ced8"; stroke-width: 0 } }
-  div:   { width: 2;      height: 219; style: { fill: "#c9ced8"; stroke-width: 0 } }
-  gap:   { width: 322; height: 219; style: { opacity: 0 } }
+  div:   { width: 2;      height: 236; style: { fill: "#c9ced8"; stroke-width: 0 } }
+  gap:   { width: 367; height: 236; style: { opacity: 0 } }
   screen: {
-    width: 322; height: 219
+    width: 367; height: 236
     style: { font: mono; font-size: 15; fill: "#fbfbfd"; stroke: "#8c93a0"; stroke-width: 2; border-radius: 6 }
   }
   command: {
-    width: 322; height: 219
+    width: 367; height: 236
     style: { font: mono; font-size: 15; fill: "#4a90d9"; stroke: "#2b6cb0"; font-color: "#ffffff"; border-radius: 6 }
   }
   event: {
-    width: 322; height: 219
+    width: 367; height: 236
     style: { font: mono; font-size: 15; fill: "#f5a623"; stroke: "#c07d12"; font-color: "#1f1f1f"; border-radius: 6 }
   }
   view: {
-    width: 322; height: 219
+    width: 367; height: 236
     style: { font: mono; font-size: 15; fill: "#54b054"; stroke: "#357935"; font-color: "#ffffff"; border-radius: 6 }
   }
 }
@@ -75,34 +75,34 @@ n12: "13 - View expense                       " { class: slicename }
 
 # ===== row 2: screens =====
 l2: "SCREENS" { class: lanelabel }
-s0: "New group                         \n                                  \n< Home        New group           \nGroup name        [........]      \nCurrency          [ DKK   v ]     \nYour name in it   [........]      \n                                  \n        [ Create group ]          " { class: screen }
+s0: "New group                              \n                                       \n< Home        New group                \nGroup name        [........]           \nCurrency          [ DKK   v ]          \nYour name in it   [........]           \n                                       \n        [ Create group ]               " { class: screen }
 gp2_0_1: "" { class: gap }
 gp2_0_2: "" { class: gap }
 dv2_1: "" { class: div }
-s1: "Add member                        \n                                  \n< Lisbon trip     Add member      \nIn this group                     \n  Alice (you)                     \n  Bob      Invited                \nName              [........]      \nEmail (optional)  [........]      \n                                  \n        [ Add member ]            " { class: screen }
+s1: "Add member                             \n                                       \n< Lisbon trip     Add member           \nIn this group                          \n  Alice (you)                          \n  Bob      Invited                     \nName              [........]           \nEmail (optional)  [........]           \n                                       \n        [ Add member ]                 " { class: screen }
 gp2_1_1: "" { class: gap }
 dv2_2: "" { class: div }
-s2: "Invite member                     \n                                  \n- groupId: GroupId                \n- memberId: MemberId              \n- email: string                   \n                                  " { class: screen }
+s2: "Invite member                          \n                                       \n- groupId: GroupId                     \n- memberId: MemberId                   \n- email: string                        \n                                       " { class: screen }
 dv2_3: "" { class: div }
-s3: "Home                              \n                                  \nAlice invited you to              \nLisbon trip as Bob  [Join]        \n                                  \nYour groups                       \n  Lisbon trip                     \n  Porto                           \n[New group]                       " { class: screen }
+s3: "Home                                   \n                                       \nAlice invited you to                   \nLisbon trip as Bob  [Join]             \n                                       \nYour groups                            \n  Lisbon trip                          \n  Porto                                \n[New group]                            " { class: screen }
 dv2_4: "" { class: div }
-s4: "Home                              \n                                  \nAlice invited you to              \nLisbon trip as Bob  [Join]        \n                                  \nYour groups                       \n  Lisbon trip                     \n  Porto                           \n[New group]                       " { class: screen }
+s4: "Home                                   \n                                       \nAlice invited you to                   \nLisbon trip as Bob  [Join]             \n                                       \nYour groups                            \n  Lisbon trip                          \n  Porto                                \n[New group]                            " { class: screen }
 dv2_5: "" { class: div }
-s5: "Add expense                       \n                                  \n< Lisbon trip     Add expense     \nWhat for          [ Dinner   ]    \nAmount (GBP £)    [ 120.00   ]    \nPaid by           [ Alice v  ]    \nShared equally between            \n  [x] Alice  [x] Bob  [ ] Carol   \nDate              [ 2 Oct    ]    \n                                  \n         [ Add expense ]          " { class: screen }
+s5: "Add expense                            \n                                       \n< Lisbon trip     Add expense          \nWhat for          [ Dinner   ]         \nAmount (GBP £)    [ 120.00   ]         \nPaid by           [ Alice v  ]         \nSplit  (o) Equally ( ) Shares ( ) Exact\nShared between                         \n  [x] Alice  [x] Bob  [ ] Carol        \nDate              [ 2 Oct    ]         \n                                       \n         [ Add expense ]               " { class: screen }
 dv2_6: "" { class: div }
-s6: "Group                             \n                                  \n< Home       Lisbon trip          \nYou owe £70.00 [Settle up]        \nDinner £90.00                     \n  You paid                        \n             Taxi £140.00         \n                Bob paid          \n[Add expense]  [Balances]         " { class: screen }
+s6: "Group                                  \n                                       \n< Home       Lisbon trip               \nYou owe £70.00 [Settle up]             \nDinner £90.00                          \n  You paid                             \n             Taxi £140.00              \n                Bob paid               \n[Add expense]  [Balances]              " { class: screen }
 dv2_7: "" { class: div }
-s7: "Balances                          \n                                  \n< Lisbon trip   Balances          \nAlice (you)  is owed £60.00       \nBob                owes £30.00    \nCarol (invited)  owes £30.00      \n                                  \n              [Settle up]         " { class: screen }
+s7: "Balances                               \n                                       \n< Lisbon trip   Balances               \nAlice (you)  is owed £60.00            \nBob                owes £30.00         \nCarol (invited)  owes £30.00           \n                                       \n              [Settle up]              " { class: screen }
 dv2_8: "" { class: div }
-s8: "Settle up                         \n                                  \nBob pays Alice  30.00 [Paid]      \n                                  \nor record any payment:            \n[ Bob v ] -> [ Alice v ]          \n[ 30.00 ]  on [ 2 Oct ]           \n             [ Record ]           " { class: screen }
+s8: "Settle up                              \n                                       \nBob pays Alice  30.00 [Paid]           \n                                       \nor record any payment:                 \n[ Bob v ] -> [ Alice v ]               \n[ 30.00 ]  on [ 2 Oct ]                \n             [ Record ]                " { class: screen }
 dv2_9: "" { class: div }
-s9: "Settle up                         \n                                  \nBob pays Alice  30.00 [Paid]      \n                                  \nor record any payment:            \n[ Bob v ] -> [ Alice v ]          \n[ 30.00 ]  on [ 2 Oct ]           \n             [ Record ]           " { class: screen }
+s9: "Settle up                              \n                                       \nBob pays Alice  30.00 [Paid]           \n                                       \nor record any payment:                 \n[ Bob v ] -> [ Alice v ]               \n[ 30.00 ]  on [ 2 Oct ]                \n             [ Record ]                " { class: screen }
 dv2_10: "" { class: div }
-s10: "Remove expense                    \n                                  \n< Lisbon trip     Remove expense  \nDinner            £90.00          \nAlice paid · 2 Oct                \n                                  \nBalances will update.             \n       [ Remove expense ]         " { class: screen }
+s10: "Remove expense                         \n                                       \n< Lisbon trip     Remove expense       \nDinner            £90.00               \nAlice paid · 2 Oct                     \n                                       \nBalances will update.                  \n       [ Remove expense ]              " { class: screen }
 dv2_11: "" { class: div }
-s11: "Edit expense                      \n                                  \n< Lisbon trip     Edit expense    \nWhat for          [ Dinner   ]    \nAmount (GBP £)    [ 120.00   ]    \nPaid by           [ Alice v  ]    \nShared equally between            \n  [x] Alice  [x] Bob  [ ] Carol   \nDate              [ 2 Oct    ]    \n                                  \n         [ Save changes ]         " { class: screen }
+s11: "Edit expense                           \n                                       \n< Lisbon trip     Edit expense         \nWhat for          [ Dinner   ]         \nAmount (GBP £)    [ 120.00   ]         \nPaid by           [ Alice v  ]         \nSplit  (o) Equally ( ) Shares ( ) Exact\nShared between                         \n  [x] Alice  [x] Bob  [ ] Carol        \nDate              [ 2 Oct    ]         \n                                       \n         [ Save changes ]              " { class: screen }
 dv2_12: "" { class: div }
-s12: "Expense                           \n                                  \nDinner            £90.00  [x]     \nYou paid · 1 Oct 2026             \nShared equally                    \n  Alice (you)    £30.00           \n  Bob            £30.00           \n  Carol          £30.00           \n                                  \n           [pencil] [bin]         " { class: screen }
+s12: "Expense                                \n                                       \nDinner            £90.00  [x]          \nYou paid · 1 Oct 2026                  \nShared equally                         \n  Alice (you)    £30.00                \n  Bob            £30.00                \n  Carol          £30.00                \n                                       \n           [pencil] [bin]              " { class: screen }
 
 # ===== row 3: read models =====
 l3: "READ MODELS" { class: lanelabel }
@@ -115,85 +115,85 @@ gp3_1_1: "" { class: gap }
 dv3_2: "" { class: div }
 gp3_2: "" { class: gap }
 dv3_3: "" { class: div }
-rm3: "HomepageReadModel                 \n                                  \n- userId: UserId (sys)            \n- invitedAs: InviteId[] (lku)     \n- now: DateTimeOffset (sys)       \n- invites: PendingInvite[]        \n- groups: GroupSummary[]          " { class: view }
+rm3: "HomepageReadModel                      \n                                       \n- userId: UserId (sys)                 \n- invitedAs: InviteId[] (lku)          \n- now: DateTimeOffset (sys)            \n- invites: PendingInvite[]             \n- groups: GroupSummary[]               " { class: view }
 dv3_4: "" { class: div }
 gp3_4: "" { class: gap }
 dv3_5: "" { class: div }
 gp3_5: "" { class: gap }
 dv3_6: "" { class: div }
-rm6: "GroupActivityReadModel            \n                                  \n- userId: UserId (sys)            \n- groupId: GroupId                \n- groupName: string               \n- currency: string                \n- you: MemberId                   \n- balance: long                   \n- history: ActivityEntry[]        " { class: view }
+rm6: "GroupActivityReadModel                 \n                                       \n- userId: UserId (sys)                 \n- groupId: GroupId                     \n- groupName: string                    \n- currency: string                     \n- you: MemberId                        \n- balance: long                        \n- history: ActivityEntry[]             " { class: view }
 dv3_7: "" { class: div }
-rm7: "GroupBalancesReadModel            \n                                  \n- userId: UserId (sys)            \n- now: DateTimeOffset (sys)       \n- groupId: GroupId                \n- groupName: string               \n- currency: string                \n- you: MemberId                   \n- members: MemberBalance[]        " { class: view }
+rm7: "GroupBalancesReadModel                 \n                                       \n- userId: UserId (sys)                 \n- now: DateTimeOffset (sys)            \n- groupId: GroupId                     \n- groupName: string                    \n- currency: string                     \n- you: MemberId                        \n- members: MemberBalance[]             " { class: view }
 dv3_8: "" { class: div }
 gp3_8: "" { class: gap }
 dv3_9: "" { class: div }
-rm9: "SettlementPlanReadModel           \n                                  \n- userId: UserId (sys)            \n- currency: string                \n- you: MemberId                   \n- transfers: Transfer[]           " { class: view }
+rm9: "SettlementPlanReadModel                \n                                       \n- userId: UserId (sys)                 \n- currency: string                     \n- you: MemberId                        \n- transfers: Transfer[]                " { class: view }
 dv3_10: "" { class: div }
 gp3_10: "" { class: gap }
 dv3_11: "" { class: div }
 gp3_11: "" { class: gap }
 dv3_12: "" { class: div }
-rm12: "ExpenseReadModel                  \n                                  \n- userId: UserId (sys)            \n- groupId: GroupId                \n- expenseId: ExpenseId            \n- currency: string                \n- you: MemberId                   \n- expense: Expense                \n- shares: ExpenseShare[]          " { class: view }
+rm12: "ExpenseReadModel                       \n                                       \n- userId: UserId (sys)                 \n- groupId: GroupId                     \n- expenseId: ExpenseId                 \n- currency: string                     \n- you: MemberId                        \n- expense: Expense                     \n- shares: ExpenseShare[]               " { class: view }
 
 # ===== row 4: commands =====
 l4: "COMMANDS" { class: lanelabel }
-c0: "CreateGroup                       \n                                  \n- groupName: string               \n- currency: string                \n- memberName: string              \n- createdBy: UserId (sys)         \n- groupId: GroupId (sys)          \n- memberId: MemberId (sys)        " { class: command }
+c0: "CreateGroup                            \n                                       \n- groupName: string                    \n- currency: string                     \n- memberName: string                   \n- createdBy: UserId (sys)              \n- groupId: GroupId (sys)               \n- memberId: MemberId (sys)             " { class: command }
 gp4_0_1: "" { class: gap }
 gp4_0_2: "" { class: gap }
 dv4_1: "" { class: div }
-c1: "AddMember                         \n                                  \n- displayName: string             \n- email: string                   \n- by: UserId (sys)                \n- memberId: MemberId (sys)        \n- inviteId: InviteId (sys)        \n- now: DateTimeOffset (sys)       \n- emailHolder: UserId? (lku)      \n- invitedTo: MemberId[] (lku)     " { class: command }
+c1: "AddMember                              \n                                       \n- displayName: string                  \n- email: string                        \n- by: UserId (sys)                     \n- memberId: MemberId (sys)             \n- inviteId: InviteId (sys)             \n- now: DateTimeOffset (sys)            \n- emailHolder: UserId? (lku)           \n- invitedTo: MemberId[] (lku)          " { class: command }
 gp4_1_1: "" { class: gap }
 dv4_2: "" { class: div }
-c2: "InviteMember                      \n                                  \n- memberId: MemberId              \n- email: string                   \n- inviteId: InviteId (sys)        \n- now: DateTimeOffset (sys)       \n- by: UserId (sys)                \n- emailHolder: UserId? (lku)      \n- invitedTo: MemberId[] (lku)     " { class: command }
+c2: "InviteMember                           \n                                       \n- memberId: MemberId                   \n- email: string                        \n- inviteId: InviteId (sys)             \n- now: DateTimeOffset (sys)            \n- by: UserId (sys)                     \n- emailHolder: UserId? (lku)           \n- invitedTo: MemberId[] (lku)          " { class: command }
 dv4_3: "" { class: div }
 gp4_3: "" { class: gap }
 dv4_4: "" { class: div }
-c4: "AcceptInvite                      \n                                  \n- now: DateTimeOffset (sys)       \n- userId: UserId (sys)            \n- invitedAs: InviteId[] (lku)     \n- memberId: MemberId (str)        " { class: command }
+c4: "AcceptInvite                           \n                                       \n- now: DateTimeOffset (sys)            \n- userId: UserId (sys)                 \n- invitedAs: InviteId[] (lku)          \n- memberId: MemberId (str)             " { class: command }
 dv4_5: "" { class: div }
-c5: "RecordExpense                     \n                                  \n- expenseId: ExpenseId (sys)      \n- description: string             \n- amountMinor: long               \n- payerMemberId: MemberId         \n- split: ExpenseSplit             \n- paidOn: DateOnly                \n- now: DateTimeOffset (sys)       \n- by: UserId (sys)                \n- splits: Split[] (str)           " { class: command }
+c5: "RecordExpense                          \n                                       \n- expenseId: ExpenseId (sys)           \n- description: string                  \n- amountMinor: long                    \n- payerMemberId: MemberId              \n- split: ExpenseSplit                  \n- paidOn: DateOnly                     \n- now: DateTimeOffset (sys)            \n- by: UserId (sys)                     \n- splits: Split[] (str)                " { class: command }
 dv4_6: "" { class: div }
 gp4_6: "" { class: gap }
 dv4_7: "" { class: div }
 gp4_7: "" { class: gap }
 dv4_8: "" { class: div }
-c8: "RecordSettlement                  \n                                  \n- settlementId: SettlementId (sys)\n- fromMemberId: MemberId          \n- toMemberId: MemberId            \n- amountMinor: long               \n- paidOn: DateOnly                \n- now: DateTimeOffset (sys)       \n- by: UserId (sys)                " { class: command }
+c8: "RecordSettlement                       \n                                       \n- settlementId: SettlementId (sys)     \n- fromMemberId: MemberId               \n- toMemberId: MemberId                 \n- amountMinor: long                    \n- paidOn: DateOnly                     \n- now: DateTimeOffset (sys)            \n- by: UserId (sys)                     " { class: command }
 dv4_9: "" { class: div }
 gp4_9: "" { class: gap }
 dv4_10: "" { class: div }
-c10: "RemoveExpense                     \n                                  \n- expenseId: ExpenseId            \n- by: UserId (sys)                \n                                  \n                                  " { class: command }
+c10: "RemoveExpense                          \n                                       \n- expenseId: ExpenseId                 \n- by: UserId (sys)                     \n                                       \n                                       " { class: command }
 dv4_11: "" { class: div }
-c11: "EditExpense                       \n                                  \n- expenseId: ExpenseId            \n- description: string             \n- amountMinor: long               \n- payerMemberId: MemberId         \n- split: ExpenseSplit             \n- paidOn: DateOnly                \n- now: DateTimeOffset (sys)       \n- by: UserId (sys)                \n- splits: Split[] (str)           " { class: command }
+c11: "EditExpense                            \n                                       \n- expenseId: ExpenseId                 \n- description: string                  \n- amountMinor: long                    \n- payerMemberId: MemberId              \n- split: ExpenseSplit                  \n- paidOn: DateOnly                     \n- now: DateTimeOffset (sys)            \n- by: UserId (sys)                     \n- splits: Split[] (str)                " { class: command }
 dv4_12: "" { class: div }
 gp4_12: "" { class: gap }
 
 # ===== row 5: event stream =====
 l5: "EVENT STREAM" { class: lanelabel }
-e0_0: "GroupCreated                      \n                                  \n- groupId: GroupId                \n- name: string                    \n- currency: string                \n- createdBy: UserId               " { class: event }
-e0_1: "MemberAdded                       \n                                  \n- memberId: MemberId              \n- displayName: string             \n- by: UserId                      \n                                  " { class: event }
-e0_2: "MemberClaimed                     \n                                  \n- memberId: MemberId              \n- userId: UserId                  \n                                  \n                                  " { class: event }
+e0_0: "GroupCreated                           \n                                       \n- groupId: GroupId                     \n- name: string                         \n- currency: string                     \n- createdBy: UserId                    " { class: event }
+e0_1: "MemberAdded                            \n                                       \n- memberId: MemberId                   \n- displayName: string                  \n- by: UserId                           \n                                       " { class: event }
+e0_2: "MemberClaimed                          \n                                       \n- memberId: MemberId                   \n- userId: UserId                       \n                                       \n                                       " { class: event }
 dv5_1: "" { class: div }
-e1_0: "MemberAdded                       \n                                  \n- memberId: MemberId              \n- displayName: string             \n- by: UserId                      \n                                  " { class: event }
-e1_1: "MemberInvited                     \n                                  \n- memberId: MemberId              \n- inviteId: InviteId              \n- expiresAt: DateTimeOffset       \n- by: UserId                      " { class: event }
+e1_0: "MemberAdded                            \n                                       \n- memberId: MemberId                   \n- displayName: string                  \n- by: UserId                           \n                                       " { class: event }
+e1_1: "MemberInvited                          \n                                       \n- memberId: MemberId                   \n- inviteId: InviteId                   \n- expiresAt: DateTimeOffset            \n- by: UserId                           " { class: event }
 dv5_2: "" { class: div }
-e2_0: "MemberInvited                     \n                                  \n- memberId: MemberId              \n- inviteId: InviteId              \n- expiresAt: DateTimeOffset       \n- by: UserId                      " { class: event }
+e2_0: "MemberInvited                          \n                                       \n- memberId: MemberId                   \n- inviteId: InviteId                   \n- expiresAt: DateTimeOffset            \n- by: UserId                           " { class: event }
 dv5_3: "" { class: div }
 gp5_3: "" { class: gap }
 dv5_4: "" { class: div }
-e4_0: "MemberClaimed                     \n                                  \n- memberId: MemberId              \n- userId: UserId                  \n                                  \n                                  " { class: event }
+e4_0: "MemberClaimed                          \n                                       \n- memberId: MemberId                   \n- userId: UserId                       \n                                       \n                                       " { class: event }
 dv5_5: "" { class: div }
-e5_0: "ExpenseRecorded                   \n                                  \n- expenseId: ExpenseId            \n- description: string             \n- amountMinor: long               \n- payerMemberId: MemberId         \n- split: ExpenseSplit             \n- splits: Split[]                 \n- paidOn: DateOnly                \n- by: UserId                      " { class: event }
+e5_0: "ExpenseRecorded                        \n                                       \n- expenseId: ExpenseId                 \n- description: string                  \n- amountMinor: long                    \n- payerMemberId: MemberId              \n- split: ExpenseSplit                  \n- splits: Split[]                      \n- paidOn: DateOnly                     \n- by: UserId                           " { class: event }
 dv5_6: "" { class: div }
 gp5_6: "" { class: gap }
 dv5_7: "" { class: div }
 gp5_7: "" { class: gap }
 dv5_8: "" { class: div }
-e8_0: "SettlementRecorded                \n                                  \n- settlementId: SettlementId      \n- fromMemberId: MemberId          \n- toMemberId: MemberId            \n- amountMinor: long               \n- paidOn: DateOnly                \n- by: UserId                      " { class: event }
+e8_0: "SettlementRecorded                     \n                                       \n- settlementId: SettlementId           \n- fromMemberId: MemberId               \n- toMemberId: MemberId                 \n- amountMinor: long                    \n- paidOn: DateOnly                     \n- by: UserId                           " { class: event }
 dv5_9: "" { class: div }
 gp5_9: "" { class: gap }
 dv5_10: "" { class: div }
-e10_0: "ExpenseRemoved                    \n                                  \n- expenseId: ExpenseId            \n- by: UserId                      \n                                  \n                                  " { class: event }
+e10_0: "ExpenseRemoved                         \n                                       \n- expenseId: ExpenseId                 \n- by: UserId                           \n                                       \n                                       " { class: event }
 dv5_11: "" { class: div }
-e11_0: "ExpenseEdited                     \n                                  \n- expenseId: ExpenseId            \n- description: string             \n- amountMinor: long               \n- payerMemberId: MemberId         \n- split: ExpenseSplit             \n- splits: Split[]                 \n- paidOn: DateOnly                \n- by: UserId                      " { class: event }
+e11_0: "ExpenseEdited                          \n                                       \n- expenseId: ExpenseId                 \n- description: string                  \n- amountMinor: long                    \n- payerMemberId: MemberId              \n- split: ExpenseSplit                  \n- splits: Split[]                      \n- paidOn: DateOnly                     \n- by: UserId                           " { class: event }
 dv5_12: "" { class: div }
 gp5_12: "" { class: gap }
 

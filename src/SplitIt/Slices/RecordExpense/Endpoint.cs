@@ -57,7 +57,8 @@ public static class Endpoint
 
         var expenseId = ExpenseId.TryParse(posted["expenseId"], out var parsedId) ? parsedId : ExpenseId.New();
         var mode = posted["mode"].ToString();
-        var split = SplitFrom(mode, posted);
+        var read = state is null ? new SplitRead(null, null) : SplitFrom(mode, posted, state.Currency);
+        var split = read.Split;
         var amount = state is not null && Money.TryParse(posted["amount"], state.Currency, out var minor) ? minor : (long?)null;
         var payer = MemberId.TryParse(posted["payer"], out var payerId) ? payerId : (MemberId?)null;
         var paidOn = DateOnly.TryParseExact(posted["paidOn"], ExpenseForm.DateFormat, CultureInfo.InvariantCulture,
@@ -75,14 +76,16 @@ public static class Endpoint
             case Decision.Rejected rejected:
                 var entered = ExpenseForm.Blank(state!, groupId, expenseId, userId, Today(clock)) with
                 {
-                    Mode = split is null ? ExpenseForm.EqualMode : mode,
+                    Mode = ExpenseForm.IsMode(mode) ? mode : ExpenseForm.EqualMode,
                     Description = posted["description"].ToString(),
                     Amount = posted["amount"].ToString(),
                     Payer = payer,
                     Participants = ParticipantsOf(posted),
+                    Shares = state!.Slots.ToDictionary(slot => slot, slot => posted[$"shares-{slot}"].ToString()),
+                    Amounts = state.Slots.ToDictionary(slot => slot, slot => posted[$"amount-{slot}"].ToString()),
                     PaidOn = posted["paidOn"].ToString(),
                 };
-                return (Page(entered.Rejected(split is null ? "split mode not supported" : rejected.Reason)), []);
+                return (Page(entered.Rejected(read.Error ?? rejected.Reason)), []);
             case var other:
                 throw new InvalidOperationException($"Unhandled decision {other}");
         }
@@ -95,15 +98,45 @@ public static class Endpoint
         Detail = "the group changed while you were saving; please try again",
     };
 
+    /// <summary>A split read from the form, or why it could not be: an unknown mode, or a field that is not a number.</summary>
+    private sealed record SplitRead(ExpenseSplit? Split, string? Error);
+
     /// <summary>
-    /// The split a mode's fields describe; null for a mode this form does not build. One
-    /// place to add shares and exact: a <c>case</c>, reading its fields by name.
+    /// The split a mode's fields describe, for the members checked. A field that cannot be
+    /// read is a shape error, answered before deciding (slice-06-record-expense.md): a
+    /// share that is not a whole number, an amount that is not an amount. Zero and negative
+    /// shares are read as they are; deciding rejects them.
     /// </summary>
-    private static ExpenseSplit? SplitFrom(string mode, IFormCollection posted) => mode switch
+    private static SplitRead SplitFrom(string mode, IFormCollection posted, string currency)
     {
-        ExpenseForm.EqualMode => new EqualSplit([.. ParticipantsOf(posted)]),
-        _ => null,
-    };
+        var members = ParticipantsOf(posted);
+        switch (mode)
+        {
+            case ExpenseForm.EqualMode:
+                return new SplitRead(new EqualSplit([.. members]), null);
+            case ExpenseForm.SharesMode:
+                var shares = new List<MemberShares>();
+                foreach (var member in members)
+                {
+                    if (!int.TryParse(posted[$"shares-{member}"].ToString().Trim(), NumberStyles.AllowLeadingSign,
+                            CultureInfo.InvariantCulture, out var count))
+                        return new SplitRead(null, "every share must be a whole number");
+                    shares.Add(new MemberShares(member, count));
+                }
+                return new SplitRead(new SharesSplit(shares), null);
+            case ExpenseForm.ExactMode:
+                var amounts = new List<MemberAmount>();
+                foreach (var member in members)
+                {
+                    if (!Money.TryParse(posted[$"amount-{member}"], currency, out var minor))
+                        return new SplitRead(null, "every exact amount must be a number");
+                    amounts.Add(new MemberAmount(member, minor));
+                }
+                return new SplitRead(new ExactSplit(amounts), null);
+            default:
+                return new SplitRead(null, "split mode not supported");
+        }
+    }
 
     private static HashSet<MemberId> ParticipantsOf(IFormCollection posted) =>
     [

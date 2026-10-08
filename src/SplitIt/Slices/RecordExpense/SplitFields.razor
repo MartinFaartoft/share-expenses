@@ -1,0 +1,39 @@
+@* The split section (slice-06-record-expense.md, "The split modes on the form"): the mode, and one row per member with the mode's field. Every mode's fields are in the page; CSS shows the selected mode's. *@
+@using SplitIt.Shared
+@using SplitIt.Web
+<fieldset>
+    <legend>Split</legend>
+    <div class="modes">
+        <label class="mode"><input type="radio" name="mode" value="equal" checked="@(Form.Mode == ExpenseForm.EqualMode)" /> Equally</label>
+        <label class="mode"><input type="radio" name="mode" value="shares" checked="@(Form.Mode == ExpenseForm.SharesMode)" /> By shares</label>
+        <label class="mode"><input type="radio" name="mode" value="exact" checked="@(Form.Mode == ExpenseForm.ExactMode)" /> Exact amounts</label>
+    </div>
+</fieldset>
+<fieldset>
+    <legend>Shared between</legend>
+    @foreach (var member in Form.Members)
+    {
+        var name = member.Name + (member.IsYou ? " (you)" : "");
+        <div class="split-row">
+            <label class="check">
+                <input type="checkbox" name="participants" value="@member.MemberId" checked="@Form.Participants.Contains(member.MemberId)" />
+                @name
+            </label>
+            <input class="only-shares" name="shares-@member.MemberId" value="@Form.Shares.GetValueOrDefault(member.MemberId, "")"
+                   inputmode="numeric" autocomplete="off" aria-label="Shares for @member.Name" />
+            <input class="only-exact" name="amount-@member.MemberId" value="@Form.Amounts.GetValueOrDefault(member.MemberId, "")"
+                   inputmode="decimal" autocomplete="off" placeholder="@Placeholder" aria-label="Amount for @member.Name" />
+        </div>
+    }
+    <p class="hint only-shares">A couple counts as 2 shares.</p>
+    <p class="hint only-exact" data-exact-total data-places="@Places" data-prefix="@Money.Prefix(Form.Currency)" aria-live="polite"></p>
+    <p class="hint">Someone missing? <a href="/groups/@Form.GroupId/members/new">Add a member</a></p>
+</fieldset>
+
+@code {
+    [Parameter] public ExpenseForm Form { get; set; } = default!;
+
+    private int Places => Currency.MinorUnitsOf(Form.Currency);
+
+    private string Placeholder => Places == 0 ? "0" : "0." + new string('0', Places);
+}

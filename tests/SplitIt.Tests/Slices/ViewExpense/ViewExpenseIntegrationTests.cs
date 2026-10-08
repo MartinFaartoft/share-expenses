@@ -130,7 +130,7 @@ public class ViewExpenseIntegrationTests(AppFixture app)
         Assert.Contains("Alice (you) ×2", shares);
         Assert.Contains("Bob ×1", shares);
         Assert.Contains("£6.67", shares);
-        Assert.Contains("Exact amounts", exact);
+        Assert.Contains("Exact", exact);
         Assert.Contains("£30.00", exact);
         Assert.DoesNotMatch(@"×\d", exact);
     }

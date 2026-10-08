@@ -1824,9 +1824,11 @@ a documentation tool, not application code.
   idempotency by settlement id.
   **New group** (Create group) is built: `/groups/new`, from Home. **Add expense**
   (Record expense) is built: `/groups/{group}/expenses/new`, from the group
-  page, equal split first; shares and exact follow as a second and third pass over
-  the same screen (slice-06-record-expense.md, "Prepared for the other split
-  modes"). **Add member** (Add member, with an optional invite) is built:
+  page. All three split modes are built, on this screen and on Edit expense's
+  (slice-06-record-expense.md, "The split modes on the form"): one list of members, each
+  row with the mode's field; the mode a radio button whose fields CSS shows (no round
+  trip); a field that cannot be read answered by the form as a shape error; and a running
+  total for exact from a few lines of script (`wwwroot/js/exact-total.js`). **Add member** (Add member, with an optional invite) is built:
   `/groups/{group}/members/new`, from the group page and the Add expense form
   (slice-02-add-member.md).
   **Remove expense** is built (slice-11-remove-expense.md): a confirm

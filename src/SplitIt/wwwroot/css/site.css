@@ -276,6 +276,41 @@ label.check {
 }
 label.check input { width: 1.5rem; height: 1.5rem; flex: none; }
 
+/* ── The split: the mode, and one row per member (slice-06) ─────────────────── */
+
+.modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+label.mode {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding: 0.25rem 0.5rem;
+  text-align: center;
+  font-size: 0.9375rem;
+  background: #fff;
+  border: 1px solid #c7ccd6;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+label.mode input { width: 1.125rem; height: 1.125rem; padding: 0; flex: none; }
+label.mode:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+.split-row { display: flex; align-items: center; gap: 0.75rem; }
+.split-row label.check { flex: 1; min-width: 0; }
+.split-row input.only-shares, .split-row input.only-exact { width: 6.5rem; flex: none; }
+.split-row input.only-shares { text-align: right; }
+/* A member who is not checked is not in the split: their field is ignored, and looks it. */
+.split-row:has(input[name="participants"]:not(:checked)) input:not([type="checkbox"]) { opacity: 0.45; }
+
+/* Every mode's fields are in the page; the selected mode's are shown. */
+.only-shares, .only-exact { display: none; }
+form:has(input[name="mode"][value="shares"]:checked) .only-shares,
+form:has(input[name="mode"][value="exact"]:checked) .only-exact { display: revert; }
+form:has(input[name="mode"][value="shares"]:checked) .split-row input.only-shares,
+form:has(input[name="mode"][value="exact"]:checked) .split-row input.only-exact { display: block; }
+.hint[data-exact-total]:empty { display: none; }
+
 /* ── The people in a group ──────────────────────────────────────────────────── */
 
 ul.people { list-style: none; margin: 0 0 1.5rem; padding: 0; display: grid; gap: 0.5rem; }

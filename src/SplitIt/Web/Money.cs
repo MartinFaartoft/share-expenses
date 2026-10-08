@@ -22,8 +22,12 @@ public static partial class Money
         var places = Currency.MinorUnitsOf(currency);
         var amount = Math.Abs((decimal)minor) / (decimal)Math.Pow(10, places);
         var number = amount.ToString("N" + places, CultureInfo.InvariantCulture);
-        return Symbols.TryGetValue(currency, out var symbol) ? symbol + number : currency + " " + number;
+        return Prefix(currency) + number;
     }
+
+    /// <summary>What goes before an amount: the symbol where it reads cleanly (£), otherwise the code and a space (CHF ).</summary>
+    public static string Prefix(string currency) =>
+        Symbols.TryGetValue(currency, out var symbol) ? symbol : currency + " ";
 
     /// <summary>
     /// An amount as typed, in the currency's units ("120.50"), to minor units. Digits with

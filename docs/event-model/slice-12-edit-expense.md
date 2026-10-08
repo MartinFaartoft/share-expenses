@@ -4,7 +4,7 @@ Type: **State Change**. Screen → command → events.
 
 | | |
 |---|---|
-| Screen | Edit expense — the Add expense form, filled in with one expense, reached from the expense's sheet (View expense). Equal split only for now, as Add expense |
+| Screen | Edit expense — the Add expense form, filled in with one expense, reached from the expense's sheet (View expense). Equal, shares and exact splits, as Add expense |
 | Command | `EditExpense(expenseId, description, amountMinor, payerMemberId, split, paidOn, now, by)`; `splits` computed by deciding |
 | Events | `ExpenseEdited` |
 | Code | `src/SplitIt/Slices/EditExpense/` |
@@ -263,8 +263,8 @@ is `("Dinner", 12000, m1, equal [m1, m2, m3], paidOn 2026-10-01)`.
   for leftovers (scenario 5). They are carried in the event whether or not they
   moved: an event is a whole fact, and a fold never has to merge (spec §6).
 - **An exact split cannot be re-split** (spec §7): the form submits the amounts it
-  shows, and they must add up to the new total (scenario 33). Only equal is offered
-  until the other modes are.
+  shows, and they must add up to the new total (scenario 33): editing only the
+  amount of an exact expense is rejected, and the running total (below) shows why.
 - **No old values in the event** (spec §11). The activity feed, when built, diffs
   the edit against the expense it holds.
 - **Edit is not remove + record:** the expense keeps its id, and its place in the
@@ -278,9 +278,12 @@ is `("Dinner", 12000, m1, equal [m1, m2, m3], paidOn 2026-10-01)`.
 
 - **Reached from the expense's sheet** (View expense): an **Edit** button beside
   **Remove**, an address, not a dependency on this slice.
-- **The form is Add expense's:** What for, Amount, Paid by, Shared between, Date; a
-  hidden `mode` field; the same names. It differs in being filled in from the
-  expense as it stands, in the title (**Edit expense**), the button (**Save
+- **The form is Add expense's:** What for, Amount, Paid by, Split (the mode),
+  Shared between, Date; the same names, the three modes and the running total for
+  exact (slice-06, "The split modes on the form"), copied, not shared. It differs in being filled in from the
+  expense as it stands — its mode selected, its members checked, its shares or amounts
+  in; the other modes' fields start from shares `1` and the recorded amounts, so an
+  equal expense can become an exact one from what each person owes now — in the title (**Edit expense**), the button (**Save
   changes**), and in having no id field: the expense is named by the address, so
   there is no id to forge or replace.
 - **The amount is shown as typed would be,** in the currency's units with its
@@ -321,6 +324,5 @@ plan (balances, and the shared-history score), Remove expense (its confirm page)
 - **Archived group** rejects the command — with `GroupArchived`.
 - **A removed member** cannot become payer or participant; an existing expense that
   has one can still be edited if they are taken out — with `MemberRemoved`.
-- **Shares and exact** on the form — with those modes on Add expense.
 - **The activity feed's wording** ("Bob changed Dinner: £140 → £120") — with
   `ActivityFeed`.

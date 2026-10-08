@@ -86,7 +86,7 @@ internal static class Decider
         if (paidOn > DateOnly.FromDateTime(command.Now.UtcDateTime).AddDays(1))
             return Decision.Reject("date cannot be in the future");
 
-        if (current == new CurrentExpense(description, total, payer, split, paidOn))
+        if (current.Is(description, total, payer, split, paidOn))
             return Decision.Unchanged("nothing changed");
 
         IReadOnlyList<Split> splits = split switch

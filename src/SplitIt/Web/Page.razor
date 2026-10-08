@@ -1,4 +1,4 @@
-@* The shell every screen renders inside: one stylesheet, htmx and the sheet script, a phone-first viewport. *@
+@* The shell every screen renders inside: one stylesheet, htmx and the two small scripts, a phone-first viewport. *@
 <!doctype html>
 <html lang="en">
 <head>
@@ -16,6 +16,7 @@
     <meta name="htmx-config" content="@HtmxConfig" />
     <script src="/js/htmx-2.0.4.min.js" defer></script>
     <script src="/js/sheet.js" defer></script>
+    <script src="/js/exact-total.js" defer></script>
 </head>
 <body>
     @if (TopBar is not null)

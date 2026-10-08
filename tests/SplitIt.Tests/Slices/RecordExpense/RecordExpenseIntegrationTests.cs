@@ -44,7 +44,7 @@ public partial class RecordExpenseIntegrationTests(AppFixture app)
         Assert.Contains("<title>Add expense · SplitIt</title>", html);
         Assert.Contains($"""<a class="up" href="/groups/{l.Group.Id}" aria-label="Back">‹</a>""", html);
         Assert.Contains($"""<form method="post" action="/groups/{l.Group.Id}/expenses">""", html);
-        Assert.Contains("""<input type="hidden" name="mode" value="equal" />""", html);
+        Assert.Contains("""<input type="radio" name="mode" value="equal" checked />""", html);
         Assert.Contains("""<input name="description" value="" maxlength="100" required autofocus />""", html);
         Assert.Contains("Amount (GBP £)", html);
         Assert.Contains("""inputmode="decimal" """, html);
@@ -257,20 +257,352 @@ public partial class RecordExpenseIntegrationTests(AppFixture app)
         Assert.Empty(await ExpensesOf(l.Group.Id));
     }
 
-    [Fact]
-    public async Task A_mode_the_form_does_not_build_is_a_rejection_not_a_server_error()
+    [Theory]
+    [InlineData("nonsense")]
+    [InlineData("")]
+    public async Task A_mode_the_form_does_not_know_is_a_rejection_not_a_server_error(string mode)
     {
         var l = await SeedLisbon();
         var browser = app.BrowserFor(_alice);
         var form = await FormPage(browser, l.Group.Id);
 
-        var response = await Submit(browser, form, l, description: "Dinner", amount: "90", mode: "shares");
+        var response = await Submit(browser, form, l, description: "Dinner", amount: "90", mode: mode);
         var html = await response.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("split mode not supported", html);
-        Assert.Contains("""<input type="hidden" name="mode" value="equal" />""", html);
+        Assert.Contains("""<input type="radio" name="mode" value="equal" checked />""", html);
         Assert.Empty(await ExpensesOf(l.Group.Id));
+    }
+
+    // ── Shares and exact ──────────────────────────────────────────────────────────
+
+    private static (string Name, string Value) Shares(MemberId member, string value) => ($"shares-{member}", value);
+
+    private static (string Name, string Value) Owes(MemberId member, string value) => ($"amount-{member}", value);
+
+    [Fact]
+    public async Task The_form_has_every_modes_fields_for_every_member_with_equally_selected()
+    {
+        var l = await SeedLisbon();
+
+        var html = await FormPage(app.BrowserFor(_alice), l.Group.Id);
+
+        Assert.Contains("""<input type="radio" name="mode" value="equal" checked />""", html);
+        Assert.Contains("""<input type="radio" name="mode" value="shares" />""", html);
+        Assert.Contains("""<input type="radio" name="mode" value="exact" />""", html);
+        foreach (var member in new[] { l.Alice, l.Bob, l.Carol })
+        {
+            Assert.Contains($"""name="shares-{member}" value="1" """, html);
+            Assert.Contains($"""name="amount-{member}" value="" """, html);
+        }
+        Assert.Contains("""data-places="2" data-prefix="£" """, html);
+    }
+
+    [Fact]
+    public async Task S7_records_a_shares_split()
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+        var form = await FormPage(browser, l.Group.Id);
+
+        var response = await Submit(browser, form, l, description: "Flat", amount: "10.00", mode: "shares",
+            extra: [Shares(l.Alice, "2"), Shares(l.Bob, "1"), Shares(l.Carol, "1")]);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var recorded = Assert.Single(await ExpensesOf(l.Group.Id));
+        Assert.Equal(new SharesSplit([new MemberShares(l.Alice, 2), new MemberShares(l.Bob, 1), new MemberShares(l.Carol, 1)]), recorded.Split);
+        Assert.Equal([new Split(l.Alice, 500), new Split(l.Bob, 250), new Split(l.Carol, 250)], recorded.Splits);
+    }
+
+    [Fact]
+    public async Task S8_a_shares_split_gives_the_leftover_by_largest_remainder()
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+
+        await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Flat", amount: "1.00", mode: "shares",
+            participants: [l.Alice, l.Bob], extra: [Shares(l.Alice, "1"), Shares(l.Bob, "2")]);
+
+        Assert.Equal([new Split(l.Alice, 33), new Split(l.Bob, 67)], Assert.Single(await ExpensesOf(l.Group.Id)).Splits);
+    }
+
+    [Fact]
+    public async Task The_shares_of_a_member_who_is_not_checked_are_ignored_even_when_unreadable()
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+
+        var response = await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Flat", amount: "9.00", mode: "shares",
+            participants: [l.Alice, l.Bob], extra: [Shares(l.Alice, "1"), Shares(l.Bob, "2"), Shares(l.Carol, "abc")]);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var recorded = Assert.Single(await ExpensesOf(l.Group.Id));
+        Assert.Equal(new SharesSplit([new MemberShares(l.Alice, 1), new MemberShares(l.Bob, 2)]), recorded.Split);
+        Assert.Equal([new Split(l.Alice, 300), new Split(l.Bob, 600)], recorded.Splits);
+    }
+
+    [Theory]
+    [InlineData("equal")]
+    [InlineData("shares")]
+    [InlineData("exact")]
+    public async Task The_fields_of_the_modes_not_selected_are_ignored_even_when_unreadable(string mode)
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+        (string, string)[] own = mode switch
+        {
+            "shares" => [Shares(l.Alice, "1"), Shares(l.Bob, "1"), Shares(l.Carol, "1")],
+            "exact" => [Owes(l.Alice, "30"), Owes(l.Bob, "30"), Owes(l.Carol, "30")],
+            _ => [],
+        };
+        (string, string)[] others =
+        [
+            .. mode == "shares" ? [] : new[] { Shares(l.Alice, "x"), Shares(l.Bob, "-2"), Shares(l.Carol, "") },
+            .. mode == "exact" ? [] : new[] { Owes(l.Alice, "x"), Owes(l.Bob, "1.234"), Owes(l.Carol, "") },
+        ];
+
+        var response = await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Dinner", amount: "90", mode: mode,
+            extra: [.. own, .. others]);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal(9000, Assert.Single(await ExpensesOf(l.Group.Id)).AmountMinor);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData("abc")]
+    [InlineData("1.5")]
+    [InlineData("1,5")]
+    [InlineData("2 shares")]
+    [InlineData("99999999999")]
+    public async Task A_share_that_is_not_a_whole_number_is_shown_back_as_typed_and_nothing_is_recorded(string typed)
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+
+        var response = await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Flat", amount: "10", mode: "shares",
+            extra: [Shares(l.Alice, "2"), Shares(l.Bob, typed), Shares(l.Carol, "1")]);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("""<p class="error" role="alert">every share must be a whole number</p>""", html);
+        Assert.Contains("""<input type="radio" name="mode" value="shares" checked />""", html);
+        Assert.Contains($"""name="shares-{l.Alice}" value="2" """, html);
+        Assert.Contains($"""name="shares-{l.Bob}" value="{typed}" """, html);
+        Assert.Empty(await ExpensesOf(l.Group.Id));
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    public async Task S25_a_share_that_is_not_positive_is_rejected_by_deciding(string typed)
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+
+        var response = await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Flat", amount: "10", mode: "shares",
+            extra: [Shares(l.Alice, "2"), Shares(l.Bob, typed), Shares(l.Carol, "1")]);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("every share must be a positive whole number", html);
+        Assert.Contains($"""name="shares-{l.Bob}" value="{typed}" """, html);
+        Assert.Empty(await ExpensesOf(l.Group.Id));
+    }
+
+    [Fact]
+    public async Task A_checked_member_with_no_shares_field_at_all_is_a_shape_error()
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+
+        var response = await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Flat", amount: "10", mode: "shares",
+            extra: [Shares(l.Alice, "1"), Shares(l.Bob, "1")]);
+
+        Assert.Contains("every share must be a whole number", await response.Content.ReadAsStringAsync());
+        Assert.Empty(await ExpensesOf(l.Group.Id));
+    }
+
+    [Theory]
+    [InlineData("shares")]
+    [InlineData("exact")]
+    public async Task S23_nobody_checked_is_rejected_by_deciding_in_every_mode(string mode)
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+
+        var response = await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Flat", amount: "10", mode: mode,
+            participants: []);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+
+        Assert.Contains("at least one participant is required", html);
+        Assert.Contains($"""<input type="radio" name="mode" value="{mode}" checked />""", html);
+        Assert.Empty(await ExpensesOf(l.Group.Id));
+    }
+
+    [Fact]
+    public async Task S10_records_an_exact_split_and_the_payer_need_not_share()
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+
+        var response = await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Steak night", amount: "50", mode: "exact",
+            payer: l.Carol, participants: [l.Alice, l.Bob], extra: [Owes(l.Alice, "20"), Owes(l.Bob, "30.00"), Owes(l.Carol, "garbage")]);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var recorded = Assert.Single(await ExpensesOf(l.Group.Id));
+        Assert.Equal(new ExactSplit([new MemberAmount(l.Alice, 2000), new MemberAmount(l.Bob, 3000)]), recorded.Split);
+        Assert.Equal([new Split(l.Alice, 2000), new Split(l.Bob, 3000)], recorded.Splits);
+        Assert.Equal(l.Carol, recorded.PayerMemberId);
+    }
+
+    [Theory]
+    [InlineData("12.50", "12,50")]
+    [InlineData("12,5", "12.5")]
+    [InlineData(" 12.50 ", "12.50")]
+    public async Task Exact_amounts_are_typed_in_the_currencys_units_like_the_amount(string first, string second)
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+
+        await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Lunch", amount: "25", mode: "exact",
+            participants: [l.Alice, l.Bob], extra: [Owes(l.Alice, first), Owes(l.Bob, second)]);
+
+        Assert.Equal([new Split(l.Alice, 1250), new Split(l.Bob, 1250)], Assert.Single(await ExpensesOf(l.Group.Id)).Splits);
+    }
+
+    [Fact]
+    public async Task A_yen_exact_amount_has_no_decimals()
+    {
+        var l = await SeedLisbon("JPY");
+        var browser = app.BrowserFor(_alice);
+
+        var rejected = await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Lunch", amount: "1000", mode: "exact",
+            participants: [l.Alice, l.Bob], extra: [Owes(l.Alice, "400.5"), Owes(l.Bob, "600")]);
+        await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Lunch", amount: "1000", mode: "exact",
+            participants: [l.Alice, l.Bob], extra: [Owes(l.Alice, "400"), Owes(l.Bob, "600")]);
+
+        Assert.Contains("every exact amount must be a number", await rejected.Content.ReadAsStringAsync());
+        Assert.Equal([new Split(l.Alice, 400), new Split(l.Bob, 600)], Assert.Single(await ExpensesOf(l.Group.Id)).Splits);
+    }
+
+    [Fact]
+    public async Task A_zero_exact_amount_is_allowed()
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+
+        await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Steak night", amount: "50", mode: "exact",
+            participants: [l.Alice, l.Bob], extra: [Owes(l.Alice, "50"), Owes(l.Bob, "0")]);
+
+        Assert.Equal([new Split(l.Alice, 5000), new Split(l.Bob, 0)], Assert.Single(await ExpensesOf(l.Group.Id)).Splits);
+    }
+
+    [Fact]
+    public async Task S11_exact_amounts_that_do_not_add_up_are_rejected_and_shown_back_as_typed()
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+
+        var response = await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Steak night", amount: "50", mode: "exact",
+            participants: [l.Alice, l.Bob], extra: [Owes(l.Alice, "20"), Owes(l.Bob, "29.99")]);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("exact amounts must add up to the total", html);
+        Assert.Contains("""<input type="radio" name="mode" value="exact" checked />""", html);
+        Assert.Contains($"""name="amount-{l.Alice}" value="20" """, html);
+        Assert.Contains($"""name="amount-{l.Bob}" value="29.99" """, html);
+        Assert.Empty(await ExpensesOf(l.Group.Id));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("abc")]
+    [InlineData("1.234")]
+    [InlineData("-5")]
+    [InlineData("1,234.50")]
+    public async Task An_exact_amount_that_is_not_an_amount_is_shown_back_as_typed_and_nothing_is_recorded(string typed)
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+
+        var response = await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Steak night", amount: "50", mode: "exact",
+            participants: [l.Alice, l.Bob], extra: [Owes(l.Alice, "20"), Owes(l.Bob, typed)]);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("""<p class="error" role="alert">every exact amount must be a number</p>""", html);
+        Assert.Contains($"""name="amount-{l.Bob}" value="{typed}" """, html);
+        Assert.Empty(await ExpensesOf(l.Group.Id));
+    }
+
+    [Fact]
+    public async Task A_negative_exact_amount_is_unreadable_not_a_server_error()
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+
+        var response = await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Steak night", amount: "50", mode: "exact",
+            participants: [l.Alice, l.Bob], extra: [Owes(l.Alice, "60"), Owes(l.Bob, "-10")]);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Empty(await ExpensesOf(l.Group.Id));
+    }
+
+    [Fact]
+    public async Task A_shape_error_hides_nothing_about_the_rest_of_the_form()
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+
+        var response = await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Steak night", amount: "50", mode: "exact",
+            payer: l.Bob, participants: [l.Alice, l.Carol], paidOn: "2026-06-15",
+            extra: [Owes(l.Alice, "20"), Owes(l.Carol, "oops"), Shares(l.Alice, "3"), Shares(l.Bob, "4")]);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+
+        Assert.Contains("""name="description" value="Steak night" """, html);
+        Assert.Contains("""name="amount" value="50" """, html);
+        Assert.Contains($"""<option value="{l.Bob}" selected>Bob</option>""", html);
+        Assert.Contains($"""<input type="checkbox" name="participants" value="{l.Alice}" checked />""", html);
+        Assert.DoesNotContain($"""<input type="checkbox" name="participants" value="{l.Bob}" checked />""", html);
+        Assert.Contains($"""name="shares-{l.Alice}" value="3" """, html);
+        Assert.Contains($"""name="shares-{l.Bob}" value="4" """, html);
+        Assert.Contains($"""name="amount-{l.Carol}" value="oops" """, html);
+        Assert.Contains("""name="paidOn" value="2026-06-15" """, html);
+    }
+
+    [Fact]
+    public async Task A_rejected_equal_form_keeps_what_was_typed_in_the_other_modes()
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+
+        var response = await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "", amount: "50", mode: "equal",
+            extra: [Shares(l.Bob, "5"), Owes(l.Bob, "12.34")]);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+
+        Assert.Contains("description is required", html);
+        Assert.Contains("""<input type="radio" name="mode" value="equal" checked />""", html);
+        Assert.Contains($"""name="shares-{l.Bob}" value="5" """, html);
+        Assert.Contains($"""name="amount-{l.Bob}" value="12.34" """, html);
+    }
+
+    [Fact]
+    public async Task A_shape_error_never_reaches_the_group_stream_as_a_half_made_expense()
+    {
+        var l = await SeedLisbon();
+        var browser = app.BrowserFor(_alice);
+        var form = await FormPage(browser, l.Group.Id);
+
+        await Submit(browser, form, l, description: "Flat", amount: "10", mode: "shares", extra: [Shares(l.Alice, "x")]);
+        var fixedUp = await Submit(browser, form, l, description: "Flat", amount: "10", mode: "shares",
+            extra: [Shares(l.Alice, "1"), Shares(l.Bob, "1"), Shares(l.Carol, "1")]);
+
+        Assert.Equal(HttpStatusCode.Redirect, fixedUp.StatusCode);
+        Assert.Single(await ExpensesOf(l.Group.Id));
     }
 
     // ── Submitting twice ──────────────────────────────────────────────────────────
@@ -368,7 +700,8 @@ public partial class RecordExpenseIntegrationTests(AppFixture app)
     /// <summary>Submits <paramref name="form"/> as shown — its token and expense id — with these values; what is left out is what the form offered.</summary>
     private Task<HttpResponseMessage> Submit(
         HttpClient browser, string form, Lisbon l, string description, string amount, MemberId? payer = null,
-        MemberId[]? participants = null, string? paidOn = null, string mode = "equal") =>
+        MemberId[]? participants = null, string? paidOn = null, string mode = "equal",
+        params (string Name, string Value)[] extra) =>
         Forms.Post(browser, $"/groups/{l.Group.Id}/expenses", Forms.TokenIn(form)!,
         [
             ("expenseId", ExpenseIdIn(form).ToString()),
@@ -378,6 +711,7 @@ public partial class RecordExpenseIntegrationTests(AppFixture app)
             ("payer", (payer ?? l.Alice).ToString()),
             .. (participants ?? [l.Alice, l.Bob, l.Carol]).Select(p => ("participants", p.ToString())),
             ("paidOn", paidOn ?? Today),
+            .. extra,
         ]);
 
     private static ExpenseId ExpenseIdIn(string html) =>

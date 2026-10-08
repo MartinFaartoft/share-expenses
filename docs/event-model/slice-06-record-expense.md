@@ -4,7 +4,7 @@ Type: **State Change**. Screen → command → events.
 
 | | |
 |---|---|
-| Screen | Add expense — the form to record one, reached from the group page. Equal split only for now (see The screen) |
+| Screen | Add expense — the form to record one, reached from the group page. Equal, shares and exact splits (see The screen) |
 | Command | `RecordExpense(expenseId, description, amountMinor, payerMemberId, split, paidOn, now, by)`; `splits` computed by deciding |
 | Events | `ExpenseRecorded` |
 | Code | `src/SplitIt/Slices/RecordExpense/` |
@@ -246,9 +246,11 @@ defaults: `paidOn = 2026-10-01`.
   - **Paid by** — a `<select>` of the group's member slots in member-added order,
     **the signed-in user's own slot preselected**, marked "(you)". Placeholders are
     listed like anyone (scenario 2).
-  - **Shared between** — one checkbox per slot, in member-added order, **all
-    checked**. Equal split (scenarios 1–6). Unchecking everyone is rejected by
-    deciding (scenario 23), not prevented by the page.
+  - **Split** — *Equally*, *By shares* or *Exact amounts* (see The split modes on
+    the form), **Equally preselected**.
+  - **Shared between** — one row per slot, in member-added order, **all checked**:
+    a checkbox, the name, and the mode's field (scenarios 1–12). Unchecking
+    everyone is rejected by deciding (scenario 23), not prevented by the page.
   - **Date** — `<input type="date">`, preselected to today (UTC) and capped at
     tomorrow (UTC), as deciding is (scenario 27). A person east of UTC late in the
     evening sees yesterday preselected and changes it; a browser-local default would
@@ -262,24 +264,58 @@ defaults: `paidOn = 2026-10-01`.
 - **A non-member, a missing group and a malformed id** get the one not-found page
   (404), on the form and on the submit alike.
 
-### Prepared for the other split modes
+### The split modes on the form
 
-Only equal is offered now. The seams are in place so shares and exact add to the
-screen rather than reshape it:
+All three modes are offered, on this form and on Edit expense's (slice-12), in the
+same markup. Equal is the preselected one.
 
-- **The form carries its mode** (a hidden `mode` field, `equal`). The endpoint turns
-  mode plus the form's fields into an `ExpenseSplit` in one function that `switch`es
-  on mode; a mode it does not build yet — a forged post, or a later client — is
-  answered as a rejection ("split mode not supported"), never a 500.
-- **The form reads its fields by name from the posted form,** not as one parameter
-  per field, so a mode's own fields (`shares-<memberId>`, `amount-<memberId>`,
-  one per slot) join without changing the endpoint's signature.
-- **The split section is its own component** (`EqualSplitFields.razor`), chosen by
-  mode, so another mode is another component beside it.
-- **Not decided yet,** left to the slice that builds the second mode: how the user
-  switches mode (radios that swap the section in with htmx, falling back to a
-  full-page reload without script), and how an exact split shows the running
-  total against the amount.
+- **One list of members, one row each.** A checkbox (is in the split — "Shared
+  between") and the name, as now; the mode adds a field to the row:
+  - *Equally* — nothing more.
+  - *By shares* — a whole number, preset to `1` ("a couple counts as 2"):
+    `shares-<memberId>`, a text input with `inputmode="numeric"` (a numeric keypad,
+    but no `type="number"`, `min` or `step`: a hidden field that fails its own
+    constraint blocks the whole submit, and cannot say why).
+  - *Exact amounts* — an amount in the currency's units, as the Amount field is read:
+    `amount-<memberId>`, `inputmode="decimal"`, blank at first.
+  A member who is not checked is not in the split, whatever their row holds.
+- **The mode is three radio buttons** (`mode`: `equal`, `shares`, `exact`; "Equally",
+  "By shares", "Exact amounts") in a fieldset under *Split*, replacing the hidden
+  field. **Switching is CSS, not a round trip:** every mode's fields are in the page,
+  and `form:has(input[name=mode][value=shares]:checked)` shows the shares inputs, and
+  so on for the others. No script, no htmx, nothing to fall back from; values typed
+  under one mode stay there if the user switches away and back. A browser without
+  `:has` shows every field, which is ugly but works: the endpoint reads the selected
+  mode's fields and ignores the rest. Mode-only fields carry no `required` and no other
+  constraint, for the reason above; deciding checks them. A member who is not checked has
+  their field dimmed: it is ignored.
+- **The endpoint reads the fields by name** (the seam slice-06 left): one function
+  turns mode plus the posted form into an `ExpenseSplit`, or says why it cannot.
+  - Equal: the checked members.
+  - Shares: the checked members with their `shares-<id>`, read as a whole number
+    (a leading `-` allowed, so `-1` and `0` reach deciding, which rejects them,
+    scenario 25).
+  - Exact: the checked members with their `amount-<id>`, read by `Money.TryParse`.
+  - **A field that cannot be read is a shape error, answered by the form before
+    deciding, like an unknown mode:** the form again with what was typed, 200, and
+    "every share must be a whole number" or "every exact amount must be a number" —
+    for a blank, a decimal share, text. Not a domain rule; a split with an unreadable
+    entry is not a split (see Shape errors above). An unknown or missing mode is
+    "split mode not supported", as now.
+  - A shape error replaces deciding's reason, as "split mode not supported" always
+    has: the form says the first thing to fix about the split.
+- **Exact shows its running total,** from a few lines of script
+  (`wwwroot/js/exact-total.js`, the app's second): under the exact rows, "Assigned
+  £45.00 of £50.00 · £5.00 left" (or "£5.00 over"), updated as amounts or the Amount
+  change, in the currency's decimals (`data-places` on the line). Without script the
+  line is absent, and deciding's "exact amounts must add up to the total" is the
+  check, shown with the entered values. Nothing is filled in for the user.
+- **After a rejection** the form shows everything as typed: the mode, the checked
+  members, every share and every amount, including those of a mode not selected.
+- **Edit expense starts from the expense:** its mode selected, its members checked,
+  its shares or amounts filled in. The fields of the other modes start from what is
+  useful: shares `1`, exact the expense's recorded amounts, so turning an equal
+  expense into an exact one begins from what each person owes now.
 
 ## Notes on the screen
 

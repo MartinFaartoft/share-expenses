@@ -9,7 +9,13 @@ namespace SplitIt.Slices.EditExpense;
 
 /// <summary>An expense as it stands: as recorded, with every edit since folded in.</summary>
 public sealed record CurrentExpense(
-    string Description, long AmountMinor, MemberId PayerMemberId, ExpenseSplit Split, DateOnly PaidOn);
+    string Description, long AmountMinor, MemberId PayerMemberId, ExpenseSplit Split, IReadOnlyList<Split> Splits, DateOnly PaidOn)
+{
+    /// <summary>Whether an edit's inputs are what the expense already is. The splits follow from them, so are not compared.</summary>
+    public bool Is(string description, long amountMinor, MemberId payer, ExpenseSplit split, DateOnly paidOn) =>
+        Description == description && AmountMinor == amountMinor && PayerMemberId == payer
+        && Equals(Split, split) && PaidOn == paidOn;
+}
 
 /// <summary>
 /// What EditExpense needs to know about a group: who may edit, the slots a payer or
@@ -52,10 +58,10 @@ public sealed record State(
     public State Apply(MemberClaimed e) => this with { Members = Members.SetItem(e.UserId, e.MemberId) };
 
     public State Apply(ExpenseRecorded e) =>
-        this with { Expenses = Expenses.SetItem(e.ExpenseId, new CurrentExpense(e.Description, e.AmountMinor, e.PayerMemberId, e.Split, e.PaidOn)) };
+        this with { Expenses = Expenses.SetItem(e.ExpenseId, new CurrentExpense(e.Description, e.AmountMinor, e.PayerMemberId, e.Split, e.Splits, e.PaidOn)) };
 
     public State Apply(ExpenseEdited e) =>
-        this with { Expenses = Expenses.SetItem(e.ExpenseId, new CurrentExpense(e.Description, e.AmountMinor, e.PayerMemberId, e.Split, e.PaidOn)) };
+        this with { Expenses = Expenses.SetItem(e.ExpenseId, new CurrentExpense(e.Description, e.AmountMinor, e.PayerMemberId, e.Split, e.Splits, e.PaidOn)) };
 
     public State Apply(ExpenseRemoved e) => this with { Expenses = Expenses.Remove(e.ExpenseId) };
 }
