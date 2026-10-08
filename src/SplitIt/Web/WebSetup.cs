@@ -57,8 +57,16 @@ public static class WebSetup
     /// </summary>
     public static void UseWebForwardedHeaders(this WebApplication app) => app.UseForwardedHeaders();
 
-    /// <summary>Static files, before authentication: the stylesheet and htmx are public.</summary>
-    public static void UseWebStaticFiles(this WebApplication app) => app.UseStaticFiles();
+    /// <summary>
+    /// Static files, before authentication: the stylesheet and htmx are public. Always
+    /// revalidated (ETag, so a 304 when unchanged): the stylesheet has no version in its
+    /// address, and a browser left to guess how long to keep it shows new markup in old
+    /// styles after a deploy.
+    /// </summary>
+    public static void UseWebStaticFiles(this WebApplication app) => app.UseStaticFiles(new StaticFileOptions
+    {
+        OnPrepareResponse = context => context.Context.Response.Headers.CacheControl = "no-cache",
+    });
 
     /// <summary>Antiforgery for form posts, after authentication (the token is tied to the user).</summary>
     public static void UseWebAntiforgery(this WebApplication app)

@@ -63,11 +63,18 @@ public class RemoveExpenseIntegrationTests(AppFixture app)
     }
 
     [Fact]
-    public async Task The_group_page_links_each_expense_to_its_confirm_page()
+    public async Task The_confirm_page_shows_the_expense_as_last_edited()
     {
-        var (group, _, dinner) = await Lisbon();
+        var (group, bob, dinner) = await Lisbon();
+        await group.Seed.Append(group.Id, new SplitIt.Slices.EditExpense.ExpenseEdited(
+            dinner, "Team dinner", 12050, bob, new EqualSplit([group.You, bob]),
+            [new Split(group.You, 6025), new Split(bob, 6025)], new DateOnly(2026, 9, 28), _bob));
 
-        Assert.Contains($"""<a href="{Path(group.Id, dinner)}">Remove</a>""", await GroupPage(group.Id, _alice));
+        var html = await ConfirmPage(app.BrowserFor(_alice), group.Id, dinner);
+
+        Assert.Contains("<strong>Team dinner</strong>", html);
+        Assert.Contains("£120.50", html);
+        Assert.Contains("Bob paid · 28 Sep 2026", html);
     }
 
     [Fact]

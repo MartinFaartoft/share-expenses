@@ -1,0 +1,37 @@
+@* The expense, in a sheet or on a page (slice-13-view-expense.md): what it was, who shares it, and its actions. *@
+@using SplitIt.Shared
+@using SplitIt.Web
+<div class="expense-head">
+    <h2 id="expense-title">@Model.Description</h2>
+    <span class="amount">@Money.Format(Model.AmountMinor, Model.Currency)</span>
+</div>
+<p class="hint">@(Model.PayerMemberId == Model.You ? "You" : Model.PayerName) paid · @Model.PaidOn.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</p>
+<h3>@Heading</h3>
+<ul class="shares">
+    @foreach (var share in Model.Shares)
+    {
+        <li>
+            <span>@share.Name@(share.MemberId == Model.You ? " (you)" : "")@(share.Weight is { } weight ? $" ×{weight}" : "")</span>
+            <span class="amount">@Money.Format(share.AmountMinor, Model.Currency)</span>
+        </li>
+    }
+</ul>
+<div class="sheet-actions">
+    <a class="icon-button" href="/groups/@Model.GroupId/expenses/@Model.ExpenseId/edit" aria-label="Edit expense" title="Edit">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" /></svg>
+    </a>
+    <a class="icon-button danger" href="/groups/@Model.GroupId/expenses/@Model.ExpenseId/remove" aria-label="Remove expense" title="Remove">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" /></svg>
+    </a>
+</div>
+
+@code {
+    [Parameter] public ExpenseReadModel Model { get; set; } = default!;
+
+    private string Heading => Model.Mode switch
+    {
+        "shares" => "By shares",
+        "exact" => "Exact amounts",
+        _ => "Shared equally",
+    };
+}

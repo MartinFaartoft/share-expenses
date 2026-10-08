@@ -154,11 +154,13 @@ And over many random balance sets, always:
   balances are as if it had never been recorded, and each pair that shared it
   loses that one from its shared-history score, so the plan, and its tie-breaks,
   are what they would have been.
+- **An edited expense counts as edited** (`ExpenseEdited`, Edit expense): the
+  balances are as if it had been recorded that way, and its old pairs lose that
+  one from their shared-history score while the new pairs gain it.
 
 ## Deferred to the slices that introduce the events
 
 - **Removed settlements** stop counting — with `SettlementRemoved`.
-- **Corrected expenses** — with the correction events.
 - **Renamed members** show their new names — with `MemberRenamed`.
 - **Removed members** — with `MemberRemoved`: a member is removed only at zero
   balance (spec §8), so never in a plan.

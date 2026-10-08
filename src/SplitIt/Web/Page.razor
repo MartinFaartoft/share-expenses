@@ -1,4 +1,4 @@
-@* The shell every screen renders inside: one stylesheet, htmx, a phone-first viewport. *@
+@* The shell every screen renders inside: one stylesheet, htmx and the sheet script, a phone-first viewport. *@
 <!doctype html>
 <html lang="en">
 <head>
@@ -12,7 +12,10 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180x180.png">
 
+    @* htmx's defaults, plus a 404 swapped in: a card whose expense is gone answers with a sheet saying so. *@
+    <meta name="htmx-config" content="@HtmxConfig" />
     <script src="/js/htmx-2.0.4.min.js" defer></script>
+    <script src="/js/sheet.js" defer></script>
 </head>
 <body>
     @if (TopBar is not null)
@@ -37,6 +40,8 @@
 </html>
 
 @code {
+    private const string HtmxConfig = """{"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"404","swap":true,"error":false},{"code":"[45]..","swap":false,"error":true},{"code":"...","swap":true}]}""";
+
     [Parameter] public string Title { get; set; } = "";
     /// <summary>Where "back" goes: shows a sticky bar with a back chevron and the title.</summary>
     [Parameter] public string? BackHref { get; set; }

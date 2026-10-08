@@ -1,0 +1,11 @@
+@* The Expense screen as a bottom sheet (slice-13-view-expense.md): swapped into the group page by htmx, then opened as a modal by sheet.js. It arrives open, so without the script it is still a sheet. *@
+<dialog class="sheet" open aria-labelledby="expense-title">
+    <div class="panel">
+        <SheetClose />
+        <ExpenseDetails Model="Model" />
+    </div>
+</dialog>
+
+@code {
+    [Parameter] public ExpenseReadModel Model { get; set; } = default!;
+}

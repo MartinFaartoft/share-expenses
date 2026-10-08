@@ -11,6 +11,7 @@ using MemberInvited = SplitIt.Slices.AddMember.MemberInvited;
 using RecordExpenseCommand = SplitIt.Slices.RecordExpense.Command;
 using RecordExpenseDecider = SplitIt.Slices.RecordExpense.Decider;
 using RecordExpenseState = SplitIt.Slices.RecordExpense.State;
+using ExpenseEdited = SplitIt.Slices.EditExpense.ExpenseEdited;
 using ExpenseRemoved = SplitIt.Slices.RemoveExpense.ExpenseRemoved;
 using SettlementRecorded = SplitIt.Slices.RecordSettlement.SettlementRecorded;
 
@@ -268,6 +269,100 @@ public class ViewBalancesSpecs
                     id, "Spend", total, slots[random.Next(slots.Length)],
                     new EqualSplit(sharers), [.. sharers.Select((m, j) => new Split(m, j == 0 ? total : 0))], Oct1, Alice));
                 if (random.Next(3) == 0)
+                    history.Add(new ExpenseRemoved(expenses[random.Next(expenses.Count)], Alice));
+            }
+
+            var balances = View(history).Members.ToDictionary(m => m.MemberId, m => m.BalanceMinor);
+            Assert.Equal(0, balances.Values.Sum());
+            var group = SplitIt.Slices.ViewGroup.Reader.Read(
+                Fold.Of<SplitIt.Slices.ViewGroup.State>(history), new SplitIt.Slices.ViewGroup.Query(Alice));
+            Assert.Equal(balances[M1], group!.BalanceMinor);
+        }
+    }
+
+    private static ExpenseEdited Edit(ExpenseId id, long amount, MemberId payer, params (MemberId Member, long Amount)[] splits) =>
+        new(id, "Spend", amount, payer, new EqualSplit([.. splits.Select(s => s.Member)]),
+            [.. splits.Select(s => new Split(s.Member, s.Amount))], Oct1, Bob);
+
+    [Fact]
+    public void An_edited_expense_counts_as_edited()
+    {
+        var balances = View(
+        [
+            .. Lisbon,
+            Expense(E1, "Dinner", 9000, M1, [(M1, 3000), (M2, 3000), (M3, 3000)]),
+            Edit(E1, 6000, M2, (M1, 3000), (M2, 3000)),
+        ]);
+
+        Assert.Equal(
+            [("Alice", "joined", -3000L), ("Bob", "joined", 3000L), ("Carol", "placeholder", 0L)],
+            Members(balances));
+    }
+
+    [Fact]
+    public void An_edited_expense_leaves_the_others_and_settlements_counting()
+    {
+        var balances = View(
+        [
+            .. Lisbon,
+            Expense(E1, "Dinner", 9000, M1, [(M1, 3000), (M2, 3000), (M3, 3000)]),
+            Expense(E2, "Taxi", 3000, M2, [(M2, 1500), (M3, 1500)]),
+            new SettlementRecorded(S1, M2, M1, 1000, Oct1, Bob),
+            Edit(E1, 12000, M1, (M1, 4000), (M2, 4000), (M3, 4000)),
+        ]);
+
+        Assert.Equal(
+            [("Alice", "joined", 7000L), ("Bob", "joined", -1500L), ("Carol", "placeholder", -5500L)],
+            Members(balances));
+    }
+
+    [Fact]
+    public void Editing_an_unknown_expense_changes_nothing() =>
+        Assert.Equal(
+            Members(View([.. Lisbon, Expense(E1, "Dinner", 9000, M1, [(M1, 9000)])])),
+            Members(View([.. Lisbon, Expense(E1, "Dinner", 9000, M1, [(M1, 9000)]), Edit(E2, 500, M2, (M2, 500))])));
+
+    [Fact]
+    public void An_edit_of_a_removed_expense_does_not_bring_it_back() =>
+        Assert.Equal(
+            [("Alice", "joined", 0L), ("Bob", "joined", 0L), ("Carol", "placeholder", 0L)],
+            Members(View(
+            [
+                .. Lisbon,
+                Expense(E1, "Dinner", 9000, M1, [(M1, 3000), (M2, 3000), (M3, 3000)]),
+                new ExpenseRemoved(E1, Alice),
+                Edit(E1, 12000, M1, (M1, 4000), (M2, 4000), (M3, 4000)),
+            ])));
+
+    [Fact]
+    public void Balances_still_agree_with_view_group_and_sum_to_zero_after_edits()
+    {
+        var random = new Random(20261007);
+        MemberId[] slots = [M1, M2, M3];
+
+        ExpenseRecorded Spend(ExpenseId id)
+        {
+            var sharers = slots.Where(_ => random.Next(2) == 0).DefaultIfEmpty(M1).ToList();
+            var total = random.NextInt64(1, 1_000_000);
+            return new ExpenseRecorded(id, "Spend", total, slots[random.Next(slots.Length)],
+                new EqualSplit(sharers), [.. sharers.Select((m, j) => new Split(m, j == 0 ? total - (sharers.Count - 1) * (total / sharers.Count) : total / sharers.Count))], Oct1, Alice);
+        }
+
+        for (var run = 0; run < 200; run++)
+        {
+            List<object> history = [.. Lisbon];
+            var expenses = new List<ExpenseId>();
+            for (var i = 0; i < random.Next(1, 15); i++)
+            {
+                var id = ExpenseId.New();
+                expenses.Add(id);
+                history.Add(Spend(id));
+                if (random.Next(2) == 0)
+                {
+                    var next = Spend(expenses[random.Next(expenses.Count)]);
+                    history.Add(new ExpenseEdited(next.ExpenseId, next.Description, next.AmountMinor, next.PayerMemberId, next.Split, next.Splits, next.PaidOn, Bob));
+                }
+                if (random.Next(4) == 0)
                     history.Add(new ExpenseRemoved(expenses[random.Next(expenses.Count)], Alice));
             }
 

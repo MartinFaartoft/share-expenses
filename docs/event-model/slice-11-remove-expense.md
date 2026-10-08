@@ -4,7 +4,7 @@ Type: **State Change**. Screen → command → events.
 
 | | |
 |---|---|
-| Screen | Remove expense — a confirm page for one expense, reached from its row in the group's history |
+| Screen | Remove expense — a confirm page for one expense, reached from the expense's sheet (View expense) |
 | Command | `RemoveExpense(expenseId, by)` |
 | Events | `ExpenseRemoved` |
 | Code | `src/SplitIt/Slices/RemoveExpense/` |
@@ -14,8 +14,8 @@ Removes a mistaken expense. Nothing is deleted (spec §7): `ExpenseRecorded` sta
 the stream, and `ExpenseRemoved` is a second fact beside it. Every read model that
 folds the expense then folds its removal, and the expense stops counting: it leaves
 the group's history, and the balances and the settle-up plan are as if it had never
-been recorded. A wrong amount or split is fixed by removing and recording again until
-the correction events exist (spec §11).
+been recorded. A wrong amount or split is fixed by Edit expense, not by removing and
+recording again (spec §11).
 
 Any member may remove any expense — the payer, someone in its split, or neither
 (spec §5: flat trust, backed by the log).
@@ -85,7 +85,8 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
   expense id and an expense not in the group are the same 404. Removed, or already
   removed (a double tap, or two phones): back to the group page, one event. A
   conflicting save answers 409; the client retries.
-- **The confirm page** shows the expense (description, amount, who paid, the day),
+- **The confirm page** shows the expense as it stands (description, amount, who paid,
+  the day — after any `ExpenseEdited`),
   says balances will update, and has one button. A plain form with an antiforgery
   token; no script. For an expense already removed, the page is the 404: the group
   page no longer lists it.

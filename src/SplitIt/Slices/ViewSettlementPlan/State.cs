@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using Marten.Schema;
 using SplitIt.Shared;
 using SplitIt.Slices.CreateGroup;
+using SplitIt.Slices.EditExpense;
 using SplitIt.Slices.RecordExpense;
 using SplitIt.Slices.RecordSettlement;
 using SplitIt.Slices.RemoveExpense;
@@ -26,7 +27,6 @@ internal sealed record Slot(MemberId MemberId, string Name, UserId? ClaimedBy, l
 /// FOLD CHECKLIST — when these slices are built, fold their events here and add the
 /// deferred specs in slice-10-view-settlement-plan.md:
 ///   SettlementRemoved                  → undo the balance effect
-///   the expense corrections            → undo, then redo
 ///   MemberRenamed                      → rename
 ///   MemberClaimReleased                → clear ClaimedBy
 ///
@@ -65,6 +65,12 @@ internal sealed record State(
             Expenses = Expenses.SetItem(e.ExpenseId, new Booked(e.PayerMemberId, e.AmountMinor, e.Splits)),
         };
     }
+
+    public State Apply(ExpenseEdited e) =>
+        !Expenses.ContainsKey(e.ExpenseId)
+            ? this
+            : Apply(new ExpenseRemoved(e.ExpenseId, e.By))
+                .Apply(new ExpenseRecorded(e.ExpenseId, e.Description, e.AmountMinor, e.PayerMemberId, e.Split, e.Splits, e.PaidOn, e.By));
 
     public State Apply(ExpenseRemoved e)
     {

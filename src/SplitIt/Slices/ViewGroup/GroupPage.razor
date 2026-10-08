@@ -48,9 +48,12 @@
                     {
                         case ActivityExpense e:
                             <li class="@Side(e.PayerMemberId) expense">
-                                <span class="what">@e.Description</span>
-                                <span class="amount">@Money.Format(e.AmountMinor, ReadModel.Currency)</span>
-                                <span class="meta">@Who(e.PayerMemberId, e.PayerName) paid · @Day(e.PaidOn) · <a href="/groups/@ReadModel.GroupId/expenses/@e.ExpenseId/remove">Remove</a></span>
+                                <a class="card" href="/groups/@ReadModel.GroupId/expenses/@e.ExpenseId"
+                                   hx-get="/groups/@ReadModel.GroupId/expenses/@e.ExpenseId" hx-target="#sheet" hx-swap="innerHTML">
+                                    <span class="what">@e.Description</span>
+                                    <span class="amount">@Money.Format(e.AmountMinor, ReadModel.Currency)</span>
+                                    <span class="meta">@Who(e.PayerMemberId, e.PayerName) paid · @Day(e.PaidOn)</span>
+                                </a>
                             </li>
                             break;
                         case ActivitySettlement s:
@@ -65,6 +68,9 @@
             </ol>
         }
     </section>
+
+    @* Where an expense's sheet is swapped in (View expense): this slice knows its address and this id. *@
+    <div id="sheet"></div>
 
     <a class="fab" href="/groups/@ReadModel.GroupId/expenses/new" aria-label="Add expense">+</a>
     </ChildContent>

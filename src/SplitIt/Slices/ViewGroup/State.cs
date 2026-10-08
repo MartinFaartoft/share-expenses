@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using Marten.Schema;
 using SplitIt.Shared;
 using SplitIt.Slices.CreateGroup;
+using SplitIt.Slices.EditExpense;
 using SplitIt.Slices.RecordExpense;
 using SplitIt.Slices.RecordSettlement;
 using SplitIt.Slices.RemoveExpense;
@@ -51,7 +52,6 @@ internal sealed record Settlement(
 /// FOLD CHECKLIST — when these slices are built, fold their events here and add the
 /// deferred specs in slice-07-view-group.md:
 ///   SettlementRemoved                      → undo the entry's effect
-///   the expense corrections                → undo, then redo an expense's effect
 ///   MemberRenamed / GroupRenamed           → rename
 ///   MemberClaimReleased                    → clear ClaimedBy
 ///   MemberRemoved, GroupArchived           → decide how they show
@@ -113,6 +113,31 @@ internal sealed record State(
             Settlements = Settlements.Add(new Settlement(
                 Entries, e.SettlementId, e.FromMemberId, e.ToMemberId, e.AmountMinor, e.PaidOn)),
         };
+    }
+
+    public State Apply(ExpenseEdited e)
+    {
+        if (Expenses.FirstOrDefault(x => x.ExpenseId == e.ExpenseId) is not { } expense)
+            return this;
+
+        var before = expense.Splits.ToDictionary(s => s.MemberId, s => s.AmountMinor);
+        var after = e.Splits.ToDictionary(s => s.MemberId, s => s.AmountMinor);
+        var slots = Slots.Select(slot => slot with
+        {
+            BalanceMinor = slot.BalanceMinor
+                           - (slot.MemberId == expense.PayerMemberId ? expense.AmountMinor : 0)
+                           + before.GetValueOrDefault(slot.MemberId)
+                           + (slot.MemberId == e.PayerMemberId ? e.AmountMinor : 0)
+                           - after.GetValueOrDefault(slot.MemberId),
+        });
+
+        // In place: an edit keeps where the expense was recorded in the history.
+        var edited = expense with
+        {
+            Description = e.Description, AmountMinor = e.AmountMinor, PayerMemberId = e.PayerMemberId,
+            Split = e.Split, Splits = e.Splits, PaidOn = e.PaidOn,
+        };
+        return this with { Slots = [.. slots], Expenses = Expenses.Replace(expense, edited) };
     }
 
     public State Apply(ExpenseRemoved e)

@@ -44,6 +44,13 @@ public static partial class Money
             NumberStyles.None, CultureInfo.InvariantCulture, out minor);
     }
 
+    /// <summary>An amount as <see cref="TryParse"/> reads it back: the currency's decimals, no thousands separators.</summary>
+    public static string Plain(long minor, string currency)
+    {
+        var places = Currency.MinorUnitsOf(currency);
+        return (minor / (decimal)Math.Pow(10, places)).ToString("F" + places, CultureInfo.InvariantCulture);
+    }
+
     [GeneratedRegex(@"^(?<whole>\d+)(?:[.,](?<fraction>\d+))?$")]
     private static partial Regex Typed();
 

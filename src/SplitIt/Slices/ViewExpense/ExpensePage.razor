@@ -1,0 +1,8 @@
+@* The Expense screen as a page (slice-13-view-expense.md): the sheet's content, without htmx. *@
+<Page Title="Expense" BackHref="@($"/groups/{Model.GroupId}")">
+    <ExpenseDetails Model="Model" />
+</Page>
+
+@code {
+    [Parameter] public ExpenseReadModel Model { get; set; } = default!;
+}

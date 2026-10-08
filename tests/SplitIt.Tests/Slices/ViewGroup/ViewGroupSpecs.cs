@@ -7,6 +7,7 @@ using ExpenseRecorded = SplitIt.Slices.RecordExpense.ExpenseRecorded;
 using GroupCreated = SplitIt.Slices.CreateGroup.GroupCreated;
 using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
+using ExpenseEdited = SplitIt.Slices.EditExpense.ExpenseEdited;
 using ExpenseRemoved = SplitIt.Slices.RemoveExpense.ExpenseRemoved;
 using SettlementRecorded = SplitIt.Slices.RecordSettlement.SettlementRecorded;
 
@@ -192,4 +193,73 @@ public class ViewGroupSpecs
 
         public int GetHashCode(GroupActivityReadModel obj) => 0;
     }
+
+    private static ExpenseEdited Edit(ExpenseId id, string description, long amount, MemberId payer, (MemberId Member, long Amount)[] splits, DateOnly? paidOn = null) =>
+        new(id, description, amount, payer, new EqualSplit([.. splits.Select(s => s.Member)]),
+            [.. splits.Select(s => new Split(s.Member, s.Amount))], paidOn ?? Oct1, Bob);
+
+    [Fact]
+    public void An_edited_expense_shows_its_new_values_and_your_standing_moves_to_them()
+    {
+        var group = View([.. Lisbon, Expense(E1, "Dinner", 9000, M1, Dinner),
+            Edit(E1, "Team dinner", 12000, M1, [(M1, 4000), (M2, 4000), (M3, 4000)], new DateOnly(2026, 9, 28))]);
+
+        var edited = Assert.IsType<ActivityExpense>(Assert.Single(group.History));
+        Assert.Equal((E1, "Team dinner", 12000L, new DateOnly(2026, 9, 28)), (edited.ExpenseId, edited.Description, edited.AmountMinor, edited.PaidOn));
+        Assert.Equal([new Split(M1, 4000), new Split(M2, 4000), new Split(M3, 4000)], edited.Splits);
+        Assert.Equal(8000, group.BalanceMinor);
+    }
+
+    [Fact]
+    public void An_edit_can_change_the_payer_and_who_shares_it()
+    {
+        var group = View([.. Lisbon, Expense(E1, "Dinner", 9000, M1, Dinner), Edit(E1, "Dinner", 6000, M2, [(M1, 3000), (M2, 3000)])]);
+
+        Assert.Equal(-3000, group.BalanceMinor);
+    }
+
+    [Fact]
+    public void An_edited_expense_keeps_its_place_in_the_history()
+    {
+        var group = View(
+        [
+            .. Lisbon,
+            Expense(E1, "Dinner", 9000, M1, Dinner),
+            Expense(E2, "Taxi", 3000, M1, [(M1, 3000)]),
+            Edit(E1, "Team dinner", 9000, M1, Dinner),
+        ]);
+
+        Assert.Equal(["Taxi", "Team dinner"], group.History.Select(h => ((ActivityExpense)h).Description));
+    }
+
+    [Fact]
+    public void An_edited_expense_moves_to_the_day_it_is_now_paid_on()
+    {
+        var group = View(
+        [
+            .. Lisbon,
+            Expense(E1, "Dinner", 9000, M1, Dinner),
+            Expense(E2, "Taxi", 3000, M1, [(M1, 3000)]),
+            Edit(E1, "Dinner", 9000, M1, Dinner, new DateOnly(2026, 10, 2)),
+        ]);
+
+        Assert.Equal(["Dinner", "Taxi"], group.History.Select(h => ((ActivityExpense)h).Description));
+    }
+
+    [Fact]
+    public void An_edited_expense_can_still_be_removed_and_leaves_nothing_behind()
+    {
+        var group = View([.. Lisbon, Expense(E1, "Dinner", 9000, M1, Dinner),
+            Edit(E1, "Team dinner", 12000, M1, [(M1, 4000), (M2, 4000), (M3, 4000)]), new ExpenseRemoved(E1, Alice)]);
+
+        Assert.Empty(group.History);
+        Assert.Equal(0, group.BalanceMinor);
+    }
+
+    [Fact]
+    public void Editing_an_unknown_expense_changes_nothing() =>
+        Assert.Equal(
+            View([.. Lisbon, Expense(E1, "Dinner", 9000, M1, Dinner)]),
+            View([.. Lisbon, Expense(E1, "Dinner", 9000, M1, Dinner), Edit(E2, "Taxi", 3000, M1, [(M1, 3000)])]),
+            new ReadModelComparer());
 }

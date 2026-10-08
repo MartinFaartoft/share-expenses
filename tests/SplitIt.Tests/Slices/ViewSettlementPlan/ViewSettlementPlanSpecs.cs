@@ -9,6 +9,7 @@ using LedgerState = SplitIt.Slices.ViewBalances.State;
 using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
 using MemberInvited = SplitIt.Slices.AddMember.MemberInvited;
+using ExpenseEdited = SplitIt.Slices.EditExpense.ExpenseEdited;
 using ExpenseRemoved = SplitIt.Slices.RemoveExpense.ExpenseRemoved;
 using SettlementRecorded = SplitIt.Slices.RecordSettlement.SettlementRecorded;
 
@@ -169,5 +170,31 @@ public class ViewSettlementPlanSpecs
         var state = Fold.Of<State>([.. Lisbon, Dinner, Expense(E2, M1, 1000, (M1, 500), (M2, 500)), new ExpenseRemoved(E1, Alice)])!;
 
         Assert.Equal((1, 0), (state.Score(M1, M2), state.Score(M1, M3)));
+    }
+
+    private static ExpenseEdited Edit(ExpenseId id, MemberId payer, long amount, params (MemberId Member, long Amount)[] splits) =>
+        new(id, "Spend", amount, payer, new EqualSplit([.. splits.Select(s => s.Member)]),
+            [.. splits.Select(s => new Split(s.Member, s.Amount))], Oct1, Bob);
+
+    [Fact]
+    public void An_edited_expense_leaves_the_plan_as_if_recorded_that_way() =>
+        Assert.Equal(["Bob → Alice 4500"], Transfers([.. Lisbon, Dinner, Edit(E1, M1, 9000, (M1, 4500), (M2, 4500))]));
+
+    [Fact]
+    public void An_edited_expense_moves_its_shared_history_to_the_pairs_it_now_has()
+    {
+        var state = Fold.Of<State>([.. Lisbon, Dinner, Edit(E1, M1, 9000, (M1, 4500), (M2, 4500))])!;
+
+        Assert.Equal((1, 0, 0), (state.Score(M1, M2), state.Score(M1, M3), state.Score(M2, M3)));
+    }
+
+    [Fact]
+    public void An_edited_expense_agrees_with_the_ledgers_balances()
+    {
+        List<object> history = [.. Lisbon, Dinner, Expense(E2, M2, 1000, (M2, 500), (M3, 500)), Edit(E1, M3, 6000, (M1, 2000), (M2, 2000), (M3, 2000))];
+
+        Assert.Equal(
+            Fold.Of<LedgerState>(history)!.Slots.Select(s => (s.MemberId, s.BalanceMinor)),
+            Fold.Of<State>(history)!.Slots.Select(s => (s.MemberId, s.BalanceMinor)));
     }
 }

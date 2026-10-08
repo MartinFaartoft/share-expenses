@@ -66,8 +66,8 @@ public class ViewGroupIntegrationTests(AppFixture app)
 
         var html = await PageOf(group.Id);
 
-        Assert.Contains("""<li class="mine expense"><span class="what">Dinner</span>""", html);
-        Assert.Contains("""<li class="theirs expense"><span class="what">Taxi</span>""", html);
+        Assert.Matches("""<li class="mine expense">\s*<a class="card"[^>]*>\s*<span class="what">Dinner</span>""", html);
+        Assert.Matches("""<li class="theirs expense">\s*<a class="card"[^>]*>\s*<span class="what">Taxi</span>""", html);
         Assert.Contains("You paid · 1 Oct 2026", html);
         Assert.Contains("Bob paid · 2 Oct 2026", html);
         Assert.Contains("""<li class="theirs settlement"><span class="what">Bob paid you</span>""", html);

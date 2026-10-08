@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using Marten.Schema;
 using SplitIt.Shared;
 using SplitIt.Slices.CreateGroup;
+using SplitIt.Slices.EditExpense;
 using SplitIt.Slices.RecordExpense;
 
 namespace SplitIt.Slices.RemoveExpense;
@@ -39,6 +40,9 @@ public sealed record State(
     public State Apply(MemberClaimed e) => this with { Members = Members.SetItem(e.UserId, e.MemberId) };
 
     public State Apply(ExpenseRecorded e) =>
+        this with { Expenses = Expenses.SetItem(e.ExpenseId, new RecordedExpense(e.Description, e.AmountMinor, e.PayerMemberId, e.PaidOn)) };
+
+    public State Apply(ExpenseEdited e) =>
         this with { Expenses = Expenses.SetItem(e.ExpenseId, new RecordedExpense(e.Description, e.AmountMinor, e.PayerMemberId, e.PaidOn)) };
 
     public State Apply(ExpenseRemoved e) => this with { Removed = Removed.Add(e.ExpenseId) };

@@ -121,13 +121,21 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 - **A removed expense leaves the history and stops counting** (`ExpenseRemoved`,
   Remove expense): its row goes, and the balances of everyone in it move back, as if
   it had never been recorded. Entries keep their order when something is recorded
-  after a removal. Each expense row links to its Remove expense page.
+  after a removal.
+- **An edited expense is changed where it stands** (`ExpenseEdited`, Edit expense):
+  its row shows the new description, amount, payer, date, split and amounts, in the
+  place it was recorded — a later edit does not move it to the end of its day — and
+  the balances of everyone in it move to the new amounts.
+- **An expense's card is a link to its sheet** (View expense): the card says what,
+  how much, who paid and when, and nothing more; Edit and Remove are on the sheet,
+  where the split is too. The link is an address, and an empty `#sheet` container at
+  the end of the page is where the sheet appears: the address and the id are all this
+  slice knows of it.
 
 ## Deferred to the slices that introduce the events
 
 - **A removed settlement** leaves the history and stops counting — with
   `SettlementRemoved`.
-- **Corrected expenses** — with the correction events (§11).
 - **Renamed members and groups** show their new names — with `MemberRenamed`, `GroupRenamed`.
 - **A released claim** — the user loses access — with `MemberClaimReleased`.
 - **An archived group** — read-only marker — with `GroupArchived`.

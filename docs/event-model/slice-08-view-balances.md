@@ -115,11 +115,13 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 
 - **A removed expense stops counting** (`ExpenseRemoved`, Remove expense): every
   balance is as if it had never been recorded, and they still sum to zero.
+- **An edited expense counts as edited** (`ExpenseEdited`, Edit expense): the old
+  amounts are taken back and the new ones booked, so every balance is as if the
+  expense had been recorded that way, and they still sum to zero.
 
 ## Deferred to the slices that introduce the events
 
 - **A removed settlement** stops counting — with `SettlementRemoved`.
-- **Corrected expenses** — with the correction events (§11).
 - **Renamed members** show their new names — with `MemberRenamed`.
 - **A released claim** returns the slot to placeholder — with `MemberClaimReleased`.
 - **Removed members** — shown or not — with `MemberRemoved`.

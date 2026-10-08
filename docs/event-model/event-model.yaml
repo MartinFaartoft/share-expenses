@@ -321,15 +321,16 @@ slices:
         currency: { type: string, source: [GroupCreated] }
         you: { type: MemberId, source: [MemberClaimed] }   # the caller's own slot
         # the caller's balance (spec §9)
-        balance: { type: long, source: [ExpenseRecorded, ExpenseRemoved, SettlementRecorded] }
+        balance: { type: long, source: [ExpenseRecorded, ExpenseEdited, ExpenseRemoved, SettlementRecorded] }
         # the money: expenses and settlements in one list, each marked by kind and
         # named, newest first; an expense with its split as entered and its amounts
-        history: { type: "ActivityEntry[]", source: [MemberAdded, ExpenseRecorded, ExpenseRemoved, SettlementRecorded] }
+        history: { type: "ActivityEntry[]", source: [MemberAdded, ExpenseRecorded, ExpenseEdited, ExpenseRemoved, SettlementRecorded] }
       reads:
         - GroupCreated
         - MemberAdded
         - MemberClaimed
         - ExpenseRecorded
+        - ExpenseEdited
         - ExpenseRemoved
         - SettlementRecorded   # emitted in Record settlement: drawn dashed
 
@@ -362,13 +363,14 @@ slices:
         currency: { type: string, source: [GroupCreated] }
         you: { type: MemberId, source: [MemberClaimed] }   # the caller's own slot
         # each slot with its name, status (joined, invited, placeholder) and balance
-        members: { type: "MemberBalance[]", source: [MemberAdded, MemberInvited, MemberClaimed, ExpenseRecorded, ExpenseRemoved, SettlementRecorded] }
+        members: { type: "MemberBalance[]", source: [MemberAdded, MemberInvited, MemberClaimed, ExpenseRecorded, ExpenseEdited, ExpenseRemoved, SettlementRecorded] }
       reads:
         - GroupCreated
         - MemberAdded
         - MemberInvited
         - MemberClaimed
         - ExpenseRecorded
+        - ExpenseEdited
         - ExpenseRemoved
         - SettlementRecorded   # emitted in Record settlement: drawn dashed
 
@@ -422,12 +424,13 @@ slices:
         currency: { type: string, source: [GroupCreated] }
         you: { type: MemberId, source: [MemberClaimed] }   # the caller's own slot
         # who pays whom, with names, ordered by payer then recipient (member-added)
-        transfers: { type: "Transfer[]", source: [MemberAdded, ExpenseRecorded, ExpenseRemoved, SettlementRecorded] }
+        transfers: { type: "Transfer[]", source: [MemberAdded, ExpenseRecorded, ExpenseEdited, ExpenseRemoved, SettlementRecorded] }
       reads:
         - GroupCreated
         - MemberAdded
         - MemberClaimed
         - ExpenseRecorded
+        - ExpenseEdited
         - ExpenseRemoved
         - SettlementRecorded
 
@@ -455,3 +458,90 @@ slices:
         fields:
           expenseId: ExpenseId
           by: UserId
+
+  - slice: Edit expense
+    type: State Change
+    screen:
+      name: Edit expense
+      fields:
+        groupId: GroupId
+        expenseId: ExpenseId
+        description: string
+        amountMinor: long                                  # typed in the currency's units, as in Add expense
+        payerMemberId: MemberId
+        split: ExpenseSplit
+        paidOn: DateOnly
+      wireframe:
+        - "< Lisbon trip     Edit expense"
+        - "What for          [ Dinner   ]"
+        - "Amount (GBP £)    [ 120.00   ]"
+        - "Paid by           [ Alice v  ]"
+        - "Shared equally between"
+        - "  [x] Alice  [x] Bob  [ ] Carol"
+        - "Date              [ 2 Oct    ]"
+        - ""
+        - "         [ Save changes ]"
+    command:
+      name: EditExpense
+      fields:
+        expenseId: ExpenseId
+        description: string
+        amountMinor: long
+        payerMemberId: MemberId
+        split: ExpenseSplit                                # the inputs, as entered
+        paidOn: DateOnly
+        now: { type: DateTimeOffset, source: system }      # the clock: paidOn is not in the future
+        by: { type: UserId, source: system }               # the signed-in user: any member
+        # recomputed on every edit, as in Record expense (spec §6)
+        splits: { type: "Split[]", source: stream }
+    events:
+      - name: ExpenseEdited
+        fields:
+          expenseId: ExpenseId
+          description: string
+          amountMinor: long
+          payerMemberId: MemberId
+          split: ExpenseSplit
+          splits: "Split[]"
+          paidOn: DateOnly
+          by: UserId
+
+  - slice: View expense
+    type: State Read
+    screen:
+      name: Expense
+      fields:
+        groupId: GroupId
+        expenseId: ExpenseId
+      # a bottom sheet over the group page; its own page without script
+      wireframe:
+        - "Dinner            £90.00  [x]"
+        - "You paid · 1 Oct 2026"
+        - "Shared equally"
+        - "  Alice (you)    £30.00"
+        - "  Bob            £30.00"
+        - "  Carol          £30.00"
+        - ""
+        - "           [pencil] [bin]"
+    readModel:
+      # live: the group stream folded per request, nothing stored (spec §11)
+      name: ExpenseReadModel
+      fields:
+        userId: { type: UserId, source: system }           # the signed-in user: members only
+        groupId: { type: GroupId, source: [GroupCreated] }
+        expenseId: { type: ExpenseId, source: [ExpenseRecorded] }
+        currency: { type: string, source: [GroupCreated] }
+        you: { type: MemberId, source: [MemberClaimed] }   # the caller's own slot
+        # the expense as it stands: recorded, with every edit since folded in
+        expense: { type: Expense, source: [ExpenseRecorded, ExpenseEdited] }
+        # who shares it, with names, and what each owes: the amounts recorded, in
+        # member-added order, with the weight where the split is by shares
+        shares: { type: "ExpenseShare[]", source: [MemberAdded, ExpenseRecorded, ExpenseEdited] }
+      reads:
+        - GroupCreated
+        - MemberAdded
+        - MemberClaimed
+        - ExpenseRecorded
+        - ExpenseEdited
+        - ExpenseRemoved
+

@@ -576,7 +576,7 @@ attributed to two different members, so this is a **merge** — and unlike claim
 reversal, it moves money.
 
 **Decision: out of scope for v1.** If it happens, correct the affected expenses by
-hand with `ExpenseSplitChanged`, then remove the emptied slot.
+hand with `ExpenseEdited`, then remove the emptied slot.
 
 Noted for later, because it is the most instructive idea in this area: a
 `MemberMergedInto(loserMemberId, winnerMemberId)` event would change how
@@ -862,9 +862,7 @@ built in v1; revisit when a real stream actually gets long.
 CreateGroup, RenameGroup, ArchiveGroup, UnarchiveGroup
 AddMember, InviteMember, AcceptInvite, ReleaseMemberClaim, RenameMember,
   RemoveMember
-RecordExpense, RemoveExpense
-CorrectExpenseDescription, CorrectExpenseAmount, CorrectExpensePayer,
-  ChangeExpenseSplit, CorrectExpenseDate
+RecordExpense, EditExpense, RemoveExpense
 RecordSettlement, RemoveSettlement
 ```
 
@@ -978,32 +976,43 @@ SettlementRecorded(settlementId, fromMemberId, toMemberId, amountMinor, paidOn, 
 SettlementRemoved(settlementId, by)
 ```
 
-Corrections — **decision: intention-revealing, one event per kind of change**:
+Corrections — **decision: one event, `ExpenseEdited`, carrying the expense's new
+values in full**:
 ```
-ExpenseDescriptionCorrected(expenseId, description, by)
-ExpenseAmountCorrected(expenseId, amountMinor, splits[], by)
-ExpensePayerCorrected(expenseId, payerMemberId, by)
-ExpenseSplitChanged(expenseId, split, splits[], by)
-ExpenseDateCorrected(expenseId, paidOn, by)
+ExpenseEdited(expenseId, description, amountMinor, payerMemberId, split,
+              splits[memberId, amountMinor], paidOn, by)
 ```
 
-Rationale: the stream records *why* something changed, not merely *that* it did,
-which is what makes the activity feed readable — "Bob corrected the amount of
-Dinner: £140 → £120" instead of "Bob updated Dinner". Under flat-trust editing
-(§5) the quality of that feed is the entire accountability mechanism, so it earns
-the extra event types.
+Rationale: the Edit expense screen is one form with every field, submitted once. One
+event per kind of change would make deciding diff the form against the expense and
+emit up to five events, and every read model fold five more `Apply`s — to record
+which fields moved, which the fold can see for itself. A projection holds the
+expense as it was when the event arrives, so it can render "Bob changed Dinner:
+£140 → £120" by comparing the two; the feed's wording is derived, and the event
+carries only new values, never old ones. Storing before-values is a common reflex
+worth resisting.
 
-Two consequences worth stating explicitly:
+Reconsidered from an earlier decision of five intention-revealing events
+(`ExpenseDescriptionCorrected`, `ExpenseAmountCorrected`, `ExpensePayerCorrected`,
+`ExpenseSplitChanged`, `ExpenseDateCorrected`), which recorded *why* rather than
+*that*. They also had a gap: `ExpensePayerCorrected` carried no `splits[]`, yet the
+rounding leftover goes to the payer first (§6), so changing the payer can change
+what each person owes. With one event the splits are always recomputed and always
+carried.
 
-- Any correction that changes the amount, the participants or the mode **must
-  carry the recomputed per-person splits**, per §6. Splits are recorded facts,
-  not derivations. For an equal or shares split, correcting the amount re-splits
-  by the recorded inputs; an exact split cannot be re-split, so correcting its
-  amount requires new amounts (§7).
-- Correction events carry only the **new** value, never the old one. A projection
-  is a fold that already holds current state when the event arrives, so it can
-  render "£140 → £120" without the payload duplicating history. Storing
-  before-values is a common reflex worth resisting.
+Rejected: editing as `ExpenseRemoved` + `ExpenseRecorded`. The two events belong to
+two other slices, and an edit slice could not emit them without breaking that;
+the removed expense's id stays "already recorded", so the copy needs a new one; and
+the history would show a removal and a new expense where one expense changed.
+
+- **Splits are recomputed on every edit** from the split as entered, by the same
+  pure function as recording, and recorded in the event (§6). An unchanged amount
+  and split can still re-split differently if the payer changed.
+- **Last write wins.** An edit replaces whatever the expense was when it is saved,
+  including an edit made after the form was opened. Trust is flat (§5), and both
+  edits are in the log. Only two saves at the same instant conflict (409, as ever).
+- **An edit that changes nothing** appends nothing: it is answered as saved.
+- **A removed expense cannot be edited**, and nothing brings it back.
 
 **Settlements have no correction events.** A wrong settlement is removed and
 re-recorded. Rationale: it has five fields, and "that transfer never happened" is
@@ -1018,6 +1027,7 @@ the truthful statement anyway.
 | `ActivityFeed` | **inline** | who did what, when |
 | `HomepageReadModel` | groups **async** — the stored `UserGroups`, one document per group; invites **live** | the home screen: a user's groups, and invites waiting |
 | `SettlementPlanReadModel` | **live** — computed per request (§10) | the settle-up plan: who pays whom |
+| `ExpenseReadModel` | **live** — folded per request | one expense: who shares it and what each owes; the sheet that holds Edit and Remove |
 
 **One read model, two lifecycles.** The home screen's two parts are each kept the
 way their data needs. Its groups cannot be computed per request — "every group I am
@@ -1819,10 +1829,24 @@ a documentation tool, not application code.
   modes"). **Add member** (Add member, with an optional invite) is built:
   `/groups/{group}/members/new`, from the group page and the Add expense form
   (slice-02-add-member.md).
-  **Remove expense** is designed, not built (slice-11-remove-expense.md): a confirm
-  page per expense, linked from its row in the group's history; any member may
+  **Remove expense** is built (slice-11-remove-expense.md): a confirm
+  page per expense, linked from the expense's sheet; any member may
   remove any expense (§5); the removal is an event beside the original (§7), and
   the group history, balances and settle-up plan fold it.
+  **Edit expense** is built (slice-12-edit-expense.md): `/groups/{group}/expenses/{expense}/edit`,
+  the Add expense form again, filled in, from the expense's sheet;
+  one `ExpenseEdited` event carrying the new values (§11), last write wins, and the same
+  three views and Remove expense fold it.
+  **View expense** is built (slice-13-view-expense.md): an expense's card on the
+  group page links to `/groups/{group}/expenses/{expense}`, which answers htmx with a
+  **bottom sheet** (a `<dialog>` swapped into the page and opened as a modal by
+  `wwwroot/js/sheet.js`, the app's only script of its own) and anything else with a
+  page. It
+  shows the split and holds the rarely used Edit and Remove, so the cards carry
+  neither. First use of a fragment that is not a form's answer; the conventions
+  above hold (one address, `request.IsHtmx()`, works without script), plus
+  `Vary: HX-Request`, and a `404` swapped in as a sheet (`htmx-config` in the page
+  shell) so a tap on a card whose expense was removed elsewhere is not silent.
 - **OPEN** Default currency from the browser's locale. The New group form
   preselects DKK for everyone. Better: guess from the request — the
   `Accept-Language` header's first region (`da-DK` → DKK, `en-GB` → GBP), mapped
@@ -1872,7 +1896,7 @@ a documentation tool, not application code.
     the transactional outbox and delivery status on `Invite` (deferred above), and a
     relay that reports bounces (§4). Typos often surface only as a bounce, minutes
     later.
-  - **Corrections need the old value**, which correction events deliberately do not
+  - **Corrections need the old value**, which `ExpenseEdited` deliberately does not
     carry (§11): the notification is composed from the fold, which holds the state
     before the event — as the activity feed does.
 - **OPEN** Give State Read screens the fields they show. Today the read slices'

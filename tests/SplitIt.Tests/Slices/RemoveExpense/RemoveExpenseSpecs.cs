@@ -1,6 +1,7 @@
 using SplitIt.Shared;
 using SplitIt.Slices.RemoveExpense;
 using SplitIt.Tests.Specs;
+using ExpenseEdited = SplitIt.Slices.EditExpense.ExpenseEdited;
 using ExpenseRecorded = SplitIt.Slices.RecordExpense.ExpenseRecorded;
 using GroupCreated = SplitIt.Slices.CreateGroup.GroupCreated;
 using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
@@ -69,6 +70,23 @@ public class RemoveExpenseSpecs
         Spec.Given([.. Lisbon, new SettlementRecorded(S1, M2, M1, 3000, new DateOnly(2026, 10, 2), Bob)])
             .When(new Command(E1, Alice))
             .Then(new ExpenseRemoved(E1, Alice));
+
+    [Fact]
+    public void An_edited_expense_can_be_removed() =>
+        Spec.Given([.. Lisbon,
+                new ExpenseEdited(E1, "Team dinner", 12000, M1, new EqualSplit([M1, M2, M3]),
+                    [new Split(M1, 4000), new Split(M2, 4000), new Split(M3, 4000)], Oct1, Bob)])
+            .When(new Command(E1, Alice))
+            .Then(new ExpenseRemoved(E1, Alice));
+
+    [Fact]
+    public void The_confirm_page_knows_an_expense_as_last_edited() =>
+        Assert.Equal(
+            new RecordedExpense("Team dinner", 12000, M2, new DateOnly(2026, 9, 28)),
+            Fold.Of<State>([.. Lisbon,
+                new ExpenseEdited(E1, "Team dinner", 12000, M2, new EqualSplit([M1, M2, M3]),
+                    [new Split(M1, 4000), new Split(M2, 4000), new Split(M3, 4000)], new DateOnly(2026, 9, 28), Bob)],
+                ignoring: typeof(SettlementRecorded))!.Expenses[E1]);
 
     [Fact]
     public void S5_the_group_must_exist() =>

@@ -1,0 +1,45 @@
+@* The Edit expense screen (slice-12-edit-expense.md): a plain form; saved, it goes back to the group. *@
+@using SplitIt.Shared
+@using SplitIt.Web
+<Page Title="Edit expense" BackHref="@($"/groups/{Form.GroupId}")">
+    <form method="post" action="/groups/@Form.GroupId/expenses/@Form.ExpenseId/edit">
+        <AntiforgeryToken />
+        <input type="hidden" name="mode" value="@Form.Mode" />
+        <label>
+            What for
+            <input name="description" value="@Form.Description" maxlength="100" required autofocus />
+        </label>
+        <label>
+            Amount (@Money.Label(Form.Currency))
+            <input name="amount" value="@Form.Amount" inputmode="decimal" autocomplete="off" required />
+        </label>
+        <label>
+            Paid by
+            <select name="payer">
+                @foreach (var member in Form.Members)
+                {
+                    <option value="@member.MemberId" selected="@(member.MemberId == Form.Payer)">@member.Name@(member.IsYou ? " (you)" : "")</option>
+                }
+            </select>
+        </label>
+        @switch (Form.Mode)
+        {
+            default:
+                <EqualSplitFields Form="Form" />
+                break;
+        }
+        <label>
+            Date
+            <input type="date" name="paidOn" value="@Form.PaidOn" max="@Form.LatestPaidOn" required />
+        </label>
+        @if (Form.Error is not null)
+        {
+            <p class="error" role="alert">@Form.Error</p>
+        }
+        <button type="submit">Save changes</button>
+    </form>
+</Page>
+
+@code {
+    [Parameter] public ExpenseForm Form { get; set; } = default!;
+}

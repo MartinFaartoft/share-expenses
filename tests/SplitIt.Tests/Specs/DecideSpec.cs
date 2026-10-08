@@ -25,6 +25,9 @@ internal sealed class DecideSpec<TCommand>(Func<IReadOnlyList<object>, TCommand,
 
     internal sealed class WhenStage(Decision decision)
     {
+        /// <summary>For a slice's own assertions, where <see cref="Then"/>'s equality is not enough.</summary>
+        public Decision Decision => decision;
+
         public void Then(params object[] expected)
         {
             if (decision is Decision.Rejected rejected)
@@ -41,6 +44,8 @@ internal sealed class DecideSpec<TCommand>(Func<IReadOnlyList<object>, TCommand,
         public void ThenAlreadyRecorded(string reason) => ThenRefused(reason, Rejection.AlreadyRecorded);
 
         public void ThenAlreadyRemoved(string reason) => ThenRefused(reason, Rejection.AlreadyRemoved);
+
+        public void ThenUnchanged(string reason) => ThenRefused(reason, Rejection.Unchanged);
 
         private void ThenRefused(string reason, Rejection kind)
         {
