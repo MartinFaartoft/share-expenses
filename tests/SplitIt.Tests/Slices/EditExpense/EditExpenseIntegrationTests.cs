@@ -485,6 +485,18 @@ public class EditExpenseIntegrationTests(AppFixture app)
     }
 
     [Fact]
+    public async Task The_form_opens_the_expense_as_it_is_not_as_the_groups_default_would_split_it()
+    {
+        var l = await SeedLisbon();
+        await l.Group.DefaultSplit("shares", (l.Alice, 2), (l.Carol, 0));
+
+        var html = await FormPage(app.BrowserFor(_alice), l);
+
+        Assert.Contains("""<input type="radio" name="mode" value="equal" checked />""", html);
+        Assert.Contains($"""<input type="checkbox" name="participants" value="{l.Carol}" checked />""", html);
+    }
+
+    [Fact]
     public async Task The_form_of_a_shares_expense_has_its_mode_and_weights()
     {
         var l = await SeedLisbon();

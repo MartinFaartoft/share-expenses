@@ -279,6 +279,7 @@ label.check input { width: 1.5rem; height: 1.5rem; flex: none; }
 /* ── The split: the mode, and one row per member (slice-06) ─────────────────── */
 
 .modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+.modes.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 label.mode {
   display: flex;
   align-items: center;

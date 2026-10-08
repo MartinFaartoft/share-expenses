@@ -1,0 +1,30 @@
+@* The split section of the Default split form (slice-16-change-default-split.md): Add expense's, without exact (slice-06, "The split modes on the form"; copied, not shared). Both modes' fields are in the page; CSS shows the selected mode's. *@
+@using SplitIt.Shared
+<fieldset>
+    <legend>Split</legend>
+    <div class="modes two">
+        <label class="mode"><input type="radio" name="mode" value="equal" checked="@(Form.Mode == DefaultSplit.Equal)" /> Equally</label>
+        <label class="mode"><input type="radio" name="mode" value="shares" checked="@(Form.Mode == DefaultSplit.SharesMode)" /> By shares</label>
+    </div>
+</fieldset>
+<fieldset>
+    <legend>Shared by default between</legend>
+    @foreach (var member in Form.Members)
+    {
+        var name = member.Name + (member.IsYou ? " (you)" : "");
+        <div class="split-row">
+            <label class="check">
+                <input type="checkbox" name="participants" value="@member.MemberId" checked="@Form.Participants.Contains(member.MemberId)" />
+                @name
+            </label>
+            <input class="only-shares" name="shares-@member.MemberId" value="@Form.Shares.GetValueOrDefault(member.MemberId, "")"
+                   inputmode="numeric" autocomplete="off" aria-label="Shares for @member.Name" />
+        </div>
+    }
+    <p class="hint only-shares">A couple counts as 2 shares.</p>
+    <p class="hint">Not checked means left out of new expenses by default. Anyone can still be added to one.</p>
+</fieldset>
+
+@code {
+    [Parameter] public DefaultSplitForm Form { get; set; } = default!;
+}

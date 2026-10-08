@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Marten.Schema;
 using SplitIt.Shared;
+using SplitIt.Slices.ChangeDefaultSplit;
 using SplitIt.Slices.CreateGroup;
 using SplitIt.Slices.RenameGroup;
 
@@ -27,6 +28,8 @@ namespace SplitIt.Slices.RecordExpense;
 /// </summary>
 /// <param name="Members">The slot each user holds.</param>
 /// <param name="Expenses">The ids recorded, so a form submitted twice records once.</param>
+/// <param name="DefaultMode">The group's default split mode, <c>equal</c> until it changes it (slice-16).</param>
+/// <param name="DefaultShares">The default's shares that are not 1; 0 is left out, and a member not listed counts as 1.</param>
 [DocumentAlias("record_expense_state")]
 public sealed record State(
     string GroupName,
@@ -34,14 +37,19 @@ public sealed record State(
     ImmutableList<MemberId> Slots,
     ImmutableDictionary<MemberId, string> Names,
     ImmutableDictionary<UserId, MemberId> Members,
-    ImmutableHashSet<ExpenseId> Expenses)
+    ImmutableHashSet<ExpenseId> Expenses,
+    string DefaultMode,
+    ImmutableDictionary<MemberId, int> DefaultShares)
 {
     /// <summary>The stream id, set by Marten; Wolverine needs it to type the aggregate's identity.</summary>
     public GroupId Id { get; init; }
 
     public static State Create(GroupCreated e) =>
         new(e.Name, e.Currency, [], ImmutableDictionary<MemberId, string>.Empty,
-            ImmutableDictionary<UserId, MemberId>.Empty, []);
+            ImmutableDictionary<UserId, MemberId>.Empty, [], ExpenseForm.EqualMode, ImmutableDictionary<MemberId, int>.Empty);
+
+    public State Apply(GroupDefaultSplitChanged e) =>
+        this with { DefaultMode = e.Mode, DefaultShares = e.Shares.ToImmutableDictionary(s => s.MemberId, s => s.Shares) };
 
     public State Apply(GroupRenamed e) => this with { GroupName = e.Name };
 

@@ -1,0 +1,17 @@
+@* The Default split screen (slice-16-change-default-split.md): a plain form; saved, it goes back to the group. *@
+<Page Title="Default split" BackHref="@($"/groups/{Form.GroupId}")">
+    <form method="post" action="/groups/@Form.GroupId/default-split">
+        <AntiforgeryToken />
+        <p class="hint">How a new expense is split, unless you change it on the form.</p>
+        <SplitFields Form="Form" />
+        @if (Form.Error is not null)
+        {
+            <p class="error" role="alert">@Form.Error</p>
+        }
+        <button type="submit">Save</button>
+    </form>
+</Page>
+
+@code {
+    [Parameter] public DefaultSplitForm Form { get; set; } = default!;
+}

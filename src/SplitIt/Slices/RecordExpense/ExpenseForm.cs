@@ -42,15 +42,28 @@ public sealed record ExpenseForm(
 
     public static bool IsMode(string mode) => mode is EqualMode or SharesMode or ExactMode;
 
+    /// <summary>
+    /// The form as it first opens: the group's default split (slice-16) — its mode, the members
+    /// left out unchecked, and the shares typed in, 1 for anyone not listed, so a member added
+    /// later starts in. Exact is never the default. Until the group sets one, that is Equally,
+    /// everyone, shares 1.
+    /// </summary>
     public static ExpenseForm Blank(State state, GroupId groupId, ExpenseId expenseId, UserId user, DateOnly today)
     {
         var members = MembersOf(state, user);
+        int ShareOf(MemberId member)
+        {
+            var share = state.DefaultShares.TryGetValue(member, out var listed) ? listed : 1;
+            return state.DefaultMode == EqualMode ? Math.Min(share, 1) : share;
+        }
+
         return new ExpenseForm(
-            groupId, state.GroupName, state.Currency, expenseId, members, EqualMode,
+            groupId, state.GroupName, state.Currency, expenseId, members, state.DefaultMode,
             Description: "", Amount: "",
             Payer: members.FirstOrDefault(m => m.IsYou)?.MemberId,
-            Participants: members.Select(m => m.MemberId).ToHashSet(),
-            Shares: members.ToDictionary(m => m.MemberId, _ => "1"),
+            Participants: members.Where(m => ShareOf(m.MemberId) > 0).Select(m => m.MemberId).ToHashSet(),
+            Shares: members.ToDictionary(m => m.MemberId,
+                m => (ShareOf(m.MemberId) is > 0 and var share ? share : 1).ToString(System.Globalization.CultureInfo.InvariantCulture)),
             Amounts: members.ToDictionary(m => m.MemberId, _ => ""),
             PaidOn: Day(today), LatestPaidOn: Day(today.AddDays(1)), Error: null);
     }

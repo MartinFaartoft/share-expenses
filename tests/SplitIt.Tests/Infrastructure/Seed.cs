@@ -8,6 +8,7 @@ using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
 using MemberInvited = SplitIt.Slices.AddMember.MemberInvited;
 using ExpenseRemoved = SplitIt.Slices.RemoveExpense.ExpenseRemoved;
+using GroupDefaultSplitChanged = SplitIt.Slices.ChangeDefaultSplit.GroupDefaultSplitChanged;
 using GroupRenamed = SplitIt.Slices.RenameGroup.GroupRenamed;
 using SettlementRecorded = SplitIt.Slices.RecordSettlement.SettlementRecorded;
 
@@ -104,6 +105,10 @@ public sealed record SeededGroup(Seed Seed, GroupId Id, UserId By, MemberId You)
             Splits.SplitEqually(amountMinor, payer, sharers), paidOn ?? new DateOnly(2026, 10, 1), By));
         return expenseId;
     }
+
+    /// <summary>A default split, as ChangeDefaultSplit records it: only the shares that are not 1.</summary>
+    public Task DefaultSplit(string mode, params (MemberId Member, int Shares)[] shares) =>
+        Seed.Append(Id, new GroupDefaultSplitChanged(mode, [.. shares.Select(s => new MemberShares(s.Member, s.Shares))], By));
 
     public Task Rename(string name, UserId? by = null) => Seed.Append(Id, new GroupRenamed(name, by ?? By));
 

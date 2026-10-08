@@ -1872,7 +1872,10 @@ a documentation tool, not application code.
   **Rename group** is built (slice-14-rename-group.md): `/groups/{group}/rename`, from
   **Rename group** in the group page's `⋯` menu, beside Add member; every slice that holds
   the name folds `GroupRenamed`. **Archive group** and **Change default split** are designed,
-  not built (slice-15, slice-16), each its own slice with a small screen in the same menu.
+  not built (slice-15), with a small screen in the same menu.
+  **Change default split** is built (slice-16-change-default-split.md): `/groups/{group}/default-split`,
+  from **Default split** in the same menu. `GroupDefaultSplitChanged` records the mode and only the
+  shares that are not 1 (0 left out); Add expense folds it and its form opens with it.
   Rename is folded by every slice that shows the name; archive adds `group is archived` right after membership in the deciders of every
   command slice (Record, Edit and Remove expense, Record settlement, Add member, Invite
   member, Accept invite, Rename, Change default split), and makes the group page and the

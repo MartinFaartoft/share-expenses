@@ -1,5 +1,6 @@
 using Marten;
 using SplitIt.Slices.AddMember;
+using SplitIt.Slices.ChangeDefaultSplit;
 using SplitIt.Slices.CreateGroup;
 using SplitIt.Slices.EditExpense;
 using SplitIt.Slices.RecordExpense;
@@ -24,6 +25,7 @@ public static class AllSlices
     {
         CreateGroupSlice.Register(opts);
         AddMemberSlice.Register(opts);
+        ChangeDefaultSplitSlice.Register(opts);
         RecordExpenseSlice.Register(opts);
         EditExpenseSlice.Register(opts);
         RecordSettlementSlice.Register(opts);

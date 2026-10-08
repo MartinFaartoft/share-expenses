@@ -7,6 +7,7 @@ using GroupCreated = SplitIt.Slices.CreateGroup.GroupCreated;
 using MemberAdded = SplitIt.Slices.CreateGroup.MemberAdded;
 using MemberClaimed = SplitIt.Slices.CreateGroup.MemberClaimed;
 using GroupRenamed = SplitIt.Slices.RenameGroup.GroupRenamed;
+using GroupDefaultSplitChanged = SplitIt.Slices.ChangeDefaultSplit.GroupDefaultSplitChanged;
 
 namespace SplitIt.Tests.Slices.RecordExpense;
 
@@ -311,4 +312,17 @@ public class RecordExpenseSpecs
     [Fact]
     public void A_renamed_group_is_folded_under_its_new_name() =>
         Assert.Equal("Porto trip", Fold.Of<State>([.. Lisbon, new GroupRenamed("Porto trip", Bob)])!.GroupName);
+
+    [Fact]
+    public void The_state_starts_with_the_original_default_and_follows_the_latest_change()
+    {
+        Assert.Equal(("equal", 0), (Fold.Of<State>(Lisbon)!.DefaultMode, Fold.Of<State>(Lisbon)!.DefaultShares.Count));
+
+        var state = Fold.Of<State>([.. Lisbon,
+            new GroupDefaultSplitChanged("shares", [new MemberShares(M1, 2), new MemberShares(M3, 0)], Alice)])!;
+
+        Assert.Equal("shares", state.DefaultMode);
+        Assert.Equal(2, state.DefaultShares[M1]);
+        Assert.Equal(0, state.DefaultShares[M3]);
+    }
 }

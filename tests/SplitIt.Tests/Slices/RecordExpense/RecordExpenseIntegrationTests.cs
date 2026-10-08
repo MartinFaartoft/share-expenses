@@ -605,6 +605,106 @@ public partial class RecordExpenseIntegrationTests(AppFixture app)
         Assert.Single(await ExpensesOf(l.Group.Id));
     }
 
+    // ── The group's default split (slice-16) ─────────────────────────────────────
+
+    [Fact]
+    public async Task The_form_opens_with_the_groups_equal_default_and_the_left_out_unchecked()
+    {
+        var l = await SeedLisbon();
+        await l.Group.DefaultSplit("equal", (l.Carol, 0));
+
+        var html = await FormPage(app.BrowserFor(_alice), l.Group.Id);
+
+        Assert.Contains("""<input type="radio" name="mode" value="equal" checked />""", html);
+        Assert.Contains($"""<input type="checkbox" name="participants" value="{l.Alice}" checked />""", html);
+        Assert.Contains($"""<input type="checkbox" name="participants" value="{l.Bob}" checked />""", html);
+        Assert.DoesNotContain($"""<input type="checkbox" name="participants" value="{l.Carol}" checked />""", html);
+    }
+
+    [Fact]
+    public async Task The_form_opens_with_the_groups_shares_default_mode_and_weights()
+    {
+        var l = await SeedLisbon();
+        await l.Group.DefaultSplit("shares", (l.Alice, 2), (l.Carol, 0));
+
+        var html = await FormPage(app.BrowserFor(_alice), l.Group.Id);
+
+        Assert.Contains("""<input type="radio" name="mode" value="shares" checked />""", html);
+        Assert.Contains($"""name="shares-{l.Alice}" value="2" """, html);
+        Assert.Contains($"""name="shares-{l.Bob}" value="1" """, html);
+        Assert.Contains($"""name="shares-{l.Carol}" value="1" """, html);
+        Assert.DoesNotContain($"""<input type="checkbox" name="participants" value="{l.Carol}" checked />""", html);
+        Assert.Contains($"""name="amount-{l.Alice}" value="" """, html);
+    }
+
+    [Fact]
+    public async Task A_member_added_after_the_default_starts_in_it()
+    {
+        var l = await SeedLisbon();
+        await l.Group.DefaultSplit("shares", (l.Alice, 2), (l.Carol, 0));
+        var dave = await l.Group.Member("Dave");
+
+        var html = await FormPage(app.BrowserFor(_alice), l.Group.Id);
+
+        Assert.Contains($"""<input type="checkbox" name="participants" value="{dave}" checked />""", html);
+        Assert.Contains($"""name="shares-{dave}" value="1" """, html);
+    }
+
+    [Fact]
+    public async Task The_latest_default_is_the_one_the_form_opens_with()
+    {
+        var l = await SeedLisbon();
+        await l.Group.DefaultSplit("shares", (l.Alice, 2));
+        await l.Group.DefaultSplit("equal");
+
+        var html = await FormPage(app.BrowserFor(_alice), l.Group.Id);
+
+        Assert.Contains("""<input type="radio" name="mode" value="equal" checked />""", html);
+        Assert.Contains($"""<input type="checkbox" name="participants" value="{l.Carol}" checked />""", html);
+    }
+
+    [Fact]
+    public async Task The_form_posted_as_it_opened_records_the_default_split()
+    {
+        var l = await SeedLisbon();
+        await l.Group.DefaultSplit("shares", (l.Alice, 2), (l.Carol, 0));
+        var browser = app.BrowserFor(_alice);
+        var form = await FormPage(browser, l.Group.Id);
+
+        await Submit(browser, form, l, description: "Flat", amount: "9.00", mode: "shares",
+            participants: [l.Alice, l.Bob], extra: [Shares(l.Alice, "2"), Shares(l.Bob, "1"), Shares(l.Carol, "1")]);
+
+        var recorded = Assert.Single(await ExpensesOf(l.Group.Id));
+        Assert.Equal(new SharesSplit([new MemberShares(l.Alice, 2), new MemberShares(l.Bob, 1)]), recorded.Split);
+        Assert.Equal([new Split(l.Alice, 600), new Split(l.Bob, 300)], recorded.Splits);
+    }
+
+    [Fact]
+    public async Task A_default_is_not_a_rule_anyone_can_be_added_to_an_expense_by_checking_them()
+    {
+        var l = await SeedLisbon();
+        await l.Group.DefaultSplit("equal", (l.Carol, 0));
+        var browser = app.BrowserFor(_alice);
+
+        await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "Dinner", amount: "90");
+
+        Assert.Equal(new EqualSplit([l.Alice, l.Bob, l.Carol]), Assert.Single(await ExpensesOf(l.Group.Id)).Split);
+    }
+
+    [Fact]
+    public async Task A_rejected_form_shows_what_was_typed_not_the_default()
+    {
+        var l = await SeedLisbon();
+        await l.Group.DefaultSplit("shares", (l.Alice, 2), (l.Carol, 0));
+        var browser = app.BrowserFor(_alice);
+
+        var response = await Submit(browser, await FormPage(browser, l.Group.Id), l, description: "", amount: "9", mode: "equal");
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+
+        Assert.Contains("""<input type="radio" name="mode" value="equal" checked />""", html);
+        Assert.Contains($"""<input type="checkbox" name="participants" value="{l.Carol}" checked />""", html);
+    }
+
     // ── Submitting twice ──────────────────────────────────────────────────────────
 
     [Fact]

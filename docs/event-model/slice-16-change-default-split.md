@@ -102,7 +102,7 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
     WHEN   ChangeDefaultSplit(equal, [m3×0], mallory)
     THEN   rejected (not found) - group not found
 
-13 - an archived group cannot change its default
+13 - an archived group cannot change its default (built with Archive group, slice-15)
     GIVEN  ... AND GroupArchived(alice)
     WHEN   ChangeDefaultSplit(equal, [m3×0], alice)
     THEN   rejected - group is archived
@@ -158,8 +158,18 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
   - **Filled in with the default in force:** its mode, the members left out unchecked,
     the shares of the others.
   - **The command is built from the rows:** a member not checked is `0`; a member checked
-    has the number typed (equal ignores it). A share that cannot be read as a whole number is
-    a shape error, answered by the form before deciding, as in Add expense.
+    has the number typed (equal reads it as `1`). A checked member typed `0` is left out, like
+    an unchecked one. A share that cannot be read as a whole number — blank, a decimal, text,
+    too large — is a shape error, answered by the form before deciding, as in Add expense:
+    "every share must be a whole number", with everything as typed. It is answered only to a
+    member, and **never decided**: an empty list of shares is a valid default, so a form with an
+    unreadable share must not reach deciding, where it would be saved as "everyone at 1". Only
+    a member is told what is wrong; a non-member gets the not-found page.
+  - **The shares field** is a text input with a numeric keypad (`inputmode="numeric"`), no
+    `type="number"`, as in Add expense, and for the same reason. A member not checked has
+    their field dimmed: it is ignored, even when it holds text.
+  - **A member who is not a slot of the group** posted as checked is ignored: the rows are the
+    group's slots, nothing else.
 - **Reached from the group page:** **Default split** in the `⋯` menu, an address, not a
   dependency on this slice.
 - **Save** posts it: a plain form, with antiforgery. Saved, or nothing to save: back to
