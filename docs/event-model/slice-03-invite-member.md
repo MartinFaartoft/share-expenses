@@ -100,6 +100,11 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
     WITH   emailHolder(carol@example.com) = carol
     WHEN   InviteMember(m2, "carol@example.com", alice)
     THEN   MemberInvited(m2, i1, t0+30d, alice)
+
+13 - an archived group sends no invites
+    GIVEN  ... AND GroupArchived(alice)
+    WHEN   InviteMember(m3, "carol@example.com", alice)
+    THEN   rejected - group is archived
 ```
 
 Scenario 11 is a stale lookup: claiming deletes the slot's `Invite`, so normally
@@ -118,7 +123,7 @@ either way.
   case-insensitive); `invitedTo` is the slots whose `Invite` is addressed to it
   (case-insensitive). Deciding ignores invites for slots that have since been
   claimed.
-- **Order of checks:** membership, then the slot, then the email. A non-member
+- **Order of checks:** membership, then archived, then the slot, then the email. A non-member
   gets `group not found` whatever else is wrong. Over HTTP: 404 for a missing
   group, a non-member and a malformed group id alike; `member not found` (404)
   only once membership is established.
@@ -146,7 +151,6 @@ either way.
 
 ## Deferred to the slices that introduce the events
 
-- **Archived group** rejects the command — with `GroupArchived`.
 - **A removed slot** cannot be invited — with `MemberRemoved`.
 - **A released claim** makes a slot invitable again — with `MemberClaimReleased`.
 - **A renamed slot** appears under its new name in rejections — with `MemberRenamed`.

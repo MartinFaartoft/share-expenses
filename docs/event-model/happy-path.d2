@@ -72,6 +72,12 @@ dvN11: "" { class: divN }
 n11: "12 - Edit expense                       " { class: slicename }
 dvN12: "" { class: divN }
 n12: "13 - View expense                       " { class: slicename }
+dvN13: "" { class: divN }
+n13: "14 - Rename group                       " { class: slicename }
+dvN14: "" { class: divN }
+n14: "15 - Archive group                      " { class: slicename }
+dvN15: "" { class: divN }
+n15: "16 - Change default split               " { class: slicename }
 
 # ===== row 2: screens =====
 l2: "SCREENS" { class: lanelabel }
@@ -84,9 +90,9 @@ gp2_1_1: "" { class: gap }
 dv2_2: "" { class: div }
 s2: "Invite member                          \n                                       \n- groupId: GroupId                     \n- memberId: MemberId                   \n- email: string                        \n                                       " { class: screen }
 dv2_3: "" { class: div }
-s3: "Home                                   \n                                       \nAlice invited you to                   \nLisbon trip as Bob  [Join]             \n                                       \nYour groups                            \n  Lisbon trip                          \n  Porto                                \n[New group]                            " { class: screen }
+s3: "Home                                   \n                                       \nAlice invited you to                   \nLisbon trip as Bob  [Join]             \n                                       \nYour groups                            \n  Lisbon trip                          \n  Porto                                \n  Archived (1) >                       \n[New group]                            " { class: screen }
 dv2_4: "" { class: div }
-s4: "Home                                   \n                                       \nAlice invited you to                   \nLisbon trip as Bob  [Join]             \n                                       \nYour groups                            \n  Lisbon trip                          \n  Porto                                \n[New group]                            " { class: screen }
+s4: "Home                                   \n                                       \nAlice invited you to                   \nLisbon trip as Bob  [Join]             \n                                       \nYour groups                            \n  Lisbon trip                          \n  Porto                                \n  Archived (1) >                       \n[New group]                            " { class: screen }
 dv2_5: "" { class: div }
 s5: "Add expense                            \n                                       \n< Lisbon trip     Add expense          \nWhat for          [ Dinner   ]         \nAmount (GBP £)    [ 120.00   ]         \nPaid by           [ Alice v  ]         \nSplit  (o) Equally ( ) Shares ( ) Exact\nShared between                         \n  [x] Alice  [x] Bob  [ ] Carol        \nDate              [ 2 Oct    ]         \n                                       \n         [ Add expense ]               " { class: screen }
 dv2_6: "" { class: div }
@@ -103,6 +109,12 @@ dv2_11: "" { class: div }
 s11: "Edit expense                           \n                                       \n< Lisbon trip     Edit expense         \nWhat for          [ Dinner   ]         \nAmount (GBP £)    [ 120.00   ]         \nPaid by           [ Alice v  ]         \nSplit  (o) Equally ( ) Shares ( ) Exact\nShared between                         \n  [x] Alice  [x] Bob  [ ] Carol        \nDate              [ 2 Oct    ]         \n                                       \n         [ Save changes ]              " { class: screen }
 dv2_12: "" { class: div }
 s12: "Expense                                \n                                       \nDinner            £90.00  [x]          \nYou paid · 1 Oct 2026                  \nShared equally                         \n  Alice (you)    £30.00                \n  Bob            £30.00                \n  Carol          £30.00                \n                                       \n           [pencil] [bin]              " { class: screen }
+dv2_13: "" { class: div }
+s13: "Rename group                           \n                                       \n< Lisbon trip     Rename group         \nGroup name        [ Lisbon trip ]      \n                                       \n         [ Save ]                      " { class: screen }
+dv2_14: "" { class: div }
+s14: "Archive group                          \n                                       \n< Lisbon trip     Archive group        \nNobody will be able to add             \nexpenses or change the group.          \nThis can't be undone yet.              \n                                       \nNot everyone is settled up:            \nBob owes £30.00. Archive anyway?       \n       [ Archive group ]               " { class: screen }
+dv2_15: "" { class: div }
+s15: "Default split                          \n                                       \n< Lisbon trip     Default split        \nSplit  (o) Equally ( ) Shares          \nShared between                         \n  [x] Alice  [x] Bob  [ ] Dave         \n                                       \n         [ Save ]                      " { class: screen }
 
 # ===== row 3: read models =====
 l3: "READ MODELS" { class: lanelabel }
@@ -115,13 +127,13 @@ gp3_1_1: "" { class: gap }
 dv3_2: "" { class: div }
 gp3_2: "" { class: gap }
 dv3_3: "" { class: div }
-rm3: "HomepageReadModel                      \n                                       \n- userId: UserId (sys)                 \n- invitedAs: InviteId[] (lku)          \n- now: DateTimeOffset (sys)            \n- invites: PendingInvite[]             \n- groups: GroupSummary[]               " { class: view }
+rm3: "HomepageReadModel                      \n                                       \n- userId: UserId (sys)                 \n- invitedAs: InviteId[] (lku)          \n- now: DateTimeOffset (sys)            \n- invites: PendingInvite[]             \n- groups: GroupSummary[]               \n- archived: GroupSummary[]             " { class: view }
 dv3_4: "" { class: div }
 gp3_4: "" { class: gap }
 dv3_5: "" { class: div }
 gp3_5: "" { class: gap }
 dv3_6: "" { class: div }
-rm6: "GroupActivityReadModel                 \n                                       \n- userId: UserId (sys)                 \n- groupId: GroupId                     \n- groupName: string                    \n- currency: string                     \n- you: MemberId                        \n- balance: long                        \n- history: ActivityEntry[]             " { class: view }
+rm6: "GroupActivityReadModel                 \n                                       \n- userId: UserId (sys)                 \n- groupId: GroupId                     \n- groupName: string                    \n- currency: string                     \n- you: MemberId                        \n- archived: bool                       \n- balance: long                        \n- history: ActivityEntry[]             " { class: view }
 dv3_7: "" { class: div }
 rm7: "GroupBalancesReadModel                 \n                                       \n- userId: UserId (sys)                 \n- now: DateTimeOffset (sys)            \n- groupId: GroupId                     \n- groupName: string                    \n- currency: string                     \n- you: MemberId                        \n- members: MemberBalance[]             " { class: view }
 dv3_8: "" { class: div }
@@ -133,7 +145,13 @@ gp3_10: "" { class: gap }
 dv3_11: "" { class: div }
 gp3_11: "" { class: gap }
 dv3_12: "" { class: div }
-rm12: "ExpenseReadModel                       \n                                       \n- userId: UserId (sys)                 \n- groupId: GroupId                     \n- expenseId: ExpenseId                 \n- currency: string                     \n- you: MemberId                        \n- expense: Expense                     \n- shares: ExpenseShare[]               " { class: view }
+rm12: "ExpenseReadModel                       \n                                       \n- userId: UserId (sys)                 \n- groupId: GroupId                     \n- expenseId: ExpenseId                 \n- currency: string                     \n- you: MemberId                        \n- archived: bool                       \n- expense: Expense                     \n- shares: ExpenseShare[]               " { class: view }
+dv3_13: "" { class: div }
+gp3_13: "" { class: gap }
+dv3_14: "" { class: div }
+gp3_14: "" { class: gap }
+dv3_15: "" { class: div }
+gp3_15: "" { class: gap }
 
 # ===== row 4: commands =====
 l4: "COMMANDS" { class: lanelabel }
@@ -165,6 +183,12 @@ dv4_11: "" { class: div }
 c11: "EditExpense                            \n                                       \n- expenseId: ExpenseId                 \n- description: string                  \n- amountMinor: long                    \n- payerMemberId: MemberId              \n- split: ExpenseSplit                  \n- paidOn: DateOnly                     \n- now: DateTimeOffset (sys)            \n- by: UserId (sys)                     \n- splits: Split[] (str)                " { class: command }
 dv4_12: "" { class: div }
 gp4_12: "" { class: gap }
+dv4_13: "" { class: div }
+c13: "RenameGroup                            \n                                       \n- name: string                         \n- by: UserId (sys)                     \n                                       \n                                       " { class: command }
+dv4_14: "" { class: div }
+c14: "ArchiveGroup                           \n                                       \n- by: UserId (sys)                     \n                                       \n                                       \n                                       " { class: command }
+dv4_15: "" { class: div }
+c15: "ChangeDefaultSplit                     \n                                       \n- mode: string                         \n- shares: MemberShares[]               \n- by: UserId (sys)                     \n                                       " { class: command }
 
 # ===== row 5: event stream =====
 l5: "EVENT STREAM" { class: lanelabel }
@@ -196,6 +220,12 @@ dv5_11: "" { class: div }
 e11_0: "ExpenseEdited                          \n                                       \n- expenseId: ExpenseId                 \n- description: string                  \n- amountMinor: long                    \n- payerMemberId: MemberId              \n- split: ExpenseSplit                  \n- splits: Split[]                      \n- paidOn: DateOnly                     \n- by: UserId                           " { class: event }
 dv5_12: "" { class: div }
 gp5_12: "" { class: gap }
+dv5_13: "" { class: div }
+e13_0: "GroupRenamed                           \n                                       \n- name: string                         \n- by: UserId                           \n                                       \n                                       " { class: event }
+dv5_14: "" { class: div }
+e14_0: "GroupArchived                          \n                                       \n- by: UserId                           \n                                       \n                                       \n                                       " { class: event }
+dv5_15: "" { class: div }
+e15_0: "GroupDefaultSplitChanged               \n                                       \n- mode: string                         \n- shares: MemberShares[]               \n- by: UserId                           \n                                       " { class: event }
 
 # --- State Change slices: screen -> command -> event(s)
 s0 -> c0
@@ -217,9 +247,17 @@ s10 -> c10
 c10 -> e10_0
 s11 -> c11
 c11 -> e11_0
+s13 -> c13
+c13 -> e13_0
+s14 -> c14
+c14 -> e14_0
+s15 -> c15
+c15 -> e15_0
 
 # --- State Read slices: events -> read model -> screen
 e0_0 -> rm3
+e13_0 -> rm3: "loops back" { style.stroke-dash: 4 }
+e14_0 -> rm3: "loops back" { style.stroke-dash: 4 }
 e1_0 -> rm3
 e2_0 -> rm3
 e0_2 -> rm3
@@ -231,8 +269,11 @@ e5_0 -> rm6
 e11_0 -> rm6: "loops back" { style.stroke-dash: 4 }
 e10_0 -> rm6: "loops back" { style.stroke-dash: 4 }
 e8_0 -> rm6: "loops back" { style.stroke-dash: 4 }
+e13_0 -> rm6: "loops back" { style.stroke-dash: 4 }
+e14_0 -> rm6: "loops back" { style.stroke-dash: 4 }
 rm6 -> s6
 e0_0 -> rm7
+e13_0 -> rm7: "loops back" { style.stroke-dash: 4 }
 e1_0 -> rm7
 e2_0 -> rm7
 e4_0 -> rm7
@@ -255,4 +296,5 @@ e4_0 -> rm12
 e5_0 -> rm12
 e11_0 -> rm12
 e10_0 -> rm12
+e14_0 -> rm12: "loops back" { style.stroke-dash: 4 }
 rm12 -> s12

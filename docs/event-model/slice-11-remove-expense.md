@@ -75,12 +75,17 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
     GIVEN  ... AND ExpenseRemoved(e1, bob)
     WHEN   RemoveExpense(e1, alice)
     THEN   rejected (already removed) - expense already removed
+
+9 - an archived group removes no expense
+    GIVEN  ... AND GroupArchived(alice)
+    WHEN   RemoveExpense(e1, alice)
+    THEN   rejected - group is archived
 ```
 
 ## Notes
 
-- **Order of checks:** membership, then the expense is known, then not already
-  removed. A non-member gets `group not found` whatever the expense id is.
+- **Order of checks:** membership, then archived, then the expense is known, then not
+  already removed. A non-member gets `group not found` whatever the expense id is.
 - **Over HTTP:** a non-member, a missing group, a malformed group id, a malformed
   expense id and an expense not in the group are the same 404. Removed, or already
   removed (a double tap, or two phones): back to the group page, one event. A
@@ -95,7 +100,8 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 - **Not undone by re-recording the same form:** the expense's id stays recorded
   (Record expense), so an Add expense form submitted again after the removal is
   still "already recorded" and does not bring the expense back.
-- **No special case for archived groups** until `GroupArchived` exists.
+- **An archived group** rejects the command (scenario 9). Its confirm page, posted, answers
+  with the group page, where the archived banner says why.
 
 ## Read by
 
@@ -105,5 +111,4 @@ recorded).
 
 ## Deferred to the slices that introduce the events
 
-- **Archived group** rejects the command — with `GroupArchived`.
 - **A removed member's expenses** — with `MemberRemoved`.

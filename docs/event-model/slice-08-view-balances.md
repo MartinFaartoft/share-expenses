@@ -85,6 +85,11 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 11 - only members may view
     WHEN   ViewBalances(mallory)
     THEN   not found
+
+12 - a renamed group shows its current name
+    GIVEN  ... AND GroupRenamed("Porto trip", bob)
+    WHEN   ViewBalances(alice)
+    THEN   { g1, "Porto trip", … }
 ```
 
 ## The screen
@@ -123,5 +128,8 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 
 - **A removed settlement** stops counting — with `SettlementRemoved`.
 - **Renamed members** show their new names — with `MemberRenamed`.
+- **An archived group** still offers Settle up here; the plan's Paid is rejected by
+  Record settlement (`group is archived`), back on Settle up with the reason. Hiding
+  it here is polish, not needed for the rule.
 - **A released claim** returns the slot to placeholder — with `MemberClaimReleased`.
 - **Removed members** — shown or not — with `MemberRemoved`.

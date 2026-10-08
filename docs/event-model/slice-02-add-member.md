@@ -115,6 +115,11 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
     GIVEN  ... AND MemberAdded(m2, "Bob", alice)
     WHEN   AddMember(m2, "Bob", alice)
     THEN   rejected (already recorded) - member already added
+
+18 - an archived group takes no new members
+    GIVEN  ... AND GroupArchived(alice)
+    WHEN   AddMember("Dave", alice)
+    THEN   rejected - group is archived
 ```
 
 `i0`, `i1` are invite ids (`i1` the new invite's, chosen by the endpoint); every
@@ -162,7 +167,7 @@ chose for the new member; scenario 17 passes the same one twice.
   to 50 visible characters after trimming. Rejection wording is per context:
   "name" here, "your name" in CreateGroup.
 - `by` is the signed-in user, never a member slot (spec §12).
-- **Order of checks:** membership, then the id (already added), then the name, then —
+- **Order of checks:** membership, then archived, then the id (already added), then the name, then —
   only when an email is given — the email and its guards. A non-member gets `group not
   found` whatever else is wrong.
 - **Why a rejected invite adds no one.** The alternative, adding the placeholder and
@@ -196,7 +201,6 @@ chose for the new member; scenario 17 passes the same one twice.
 
 ## Deferred to the slices that introduce the events
 
-- **Archived group** rejects the command (R3) — with `GroupArchived`.
 - **A released claim ends membership** (R2) — with `MemberClaimReleased`.
 - **A removed member's name may be reused** (R5) — with `MemberRemoved`.
 - **A renamed member's old name is free and new name taken** (R5) — with

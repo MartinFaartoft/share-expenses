@@ -754,7 +754,10 @@ stream.
   settle first. Removed members remain in history forever, because their
   expenses do. A removed member cannot be a payer or participant in new expenses.
 - **Archiving a group:** makes it read-only and drops it out of the main list.
-  Reversible. Warns if balances are not zero, but does not block.
+  Warns if balances are not zero, but does not block. Reversible in principle:
+  `UnarchiveGroup` is deferred until a screen can hold it, and until then archiving is
+  one-way, which the confirm page says. A read-only group still opens, with its history,
+  its standing and its balances; what it takes is no command (§11).
 
 ---
 
@@ -859,7 +862,7 @@ built in v1; revisit when a real stream actually gets long.
 ### Commands
 
 ```
-CreateGroup, RenameGroup, ArchiveGroup, UnarchiveGroup
+CreateGroup, RenameGroup, ChangeDefaultSplit, ArchiveGroup, UnarchiveGroup (deferred)
 AddMember, InviteMember, AcceptInvite, ReleaseMemberClaim, RenameMember,
   RemoveMember
 RecordExpense, EditExpense, RemoveExpense
@@ -877,7 +880,8 @@ Group and membership:
 ```
 GroupCreated(name, currency, createdBy)
 GroupRenamed(name, by)
-GroupArchived(by) / GroupUnarchived(by)
+GroupDefaultSplitChanged(mode, shares[memberId, shares], by)
+GroupArchived(by) / GroupUnarchived(by)    -- GroupUnarchived is deferred
 MemberAdded(memberId, displayName, by)
 MemberInvited(memberId, inviteId, expiresAt, by)
 MemberClaimed(memberId, userId)
@@ -885,6 +889,22 @@ MemberClaimReleased(memberId, userId, releasedBy)
 MemberRenamed(memberId, displayName, by)
 MemberRemoved(memberId, by)
 ```
+
+**Decision: a group has a default split, and changing it is one event.**
+`GroupDefaultSplitChanged(mode, shares, by)`: how the Add expense form opens. The mode is
+`equal` or `shares` (exact is amounts, not an intention, so it has no default); `shares`
+lists the members whose share is **not 1**, with `0` meaning left out; a member not listed
+counts as `1`. For `equal`, only the `0`s matter. Recorded normalised — ones dropped, in
+member-added order — so "the same default" is a plain comparison and the log holds no list of
+ones. Before the first change the default is equal, nobody left out.
+
+Rationale: a group splits the same way most of the time, and the exceptions (the couple,
+the one who skips dinners) are what a default is for. **"Unlisted counts as one"** is the
+point: a member added later joins the default without anyone visiting the setting, and a
+member left out stays out. It is a default, not a rule: it changes what the form starts
+with and nothing recorded, and Edit expense opens an expense as it is. At least one member
+must share by default, or the form would open with nobody in it. Rejected: storing the whole
+split, which cannot tell "left out" from "added since".
 
 **Decision: `CreateGroup` emits three events** — `GroupCreated`, `MemberAdded`
 and `MemberClaimed` — seating the creator as an already-claimed member.
@@ -1849,6 +1869,14 @@ a documentation tool, not application code.
   above hold (one address, `request.IsHtmx()`, works without script), plus
   `Vary: HX-Request`, and a `404` swapped in as a sheet (`htmx-config` in the page
   shell) so a tap on a card whose expense was removed elsewhere is not silent.
+  **Group changes are designed, not built** (slice-14, slice-15, slice-16): **Rename
+  group**, **Archive group** and **Change default split**, each its own slice with a small
+  screen in the group page's `⋯` menu. Rename is folded by every slice that shows the
+  name; archive adds `group is archived` right after membership in the deciders of every
+  command slice (Record, Edit and Remove expense, Record settlement, Add member, Invite
+  member, Accept invite, Rename, Change default split), and makes the group page and the
+  expense sheet read-only; the default split is folded by Record expense, whose form opens
+  with it. Archive warns, never blocks, and is one-way until `UnarchiveGroup` (deferred).
 - **OPEN** Default currency from the browser's locale. The New group form
   preselects DKK for everyone. Better: guess from the request — the
   `Accept-Language` header's first region (`da-DK` → DKK, `en-GB` → GBP), mapped

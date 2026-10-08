@@ -83,6 +83,22 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 9 - an unclaimed placeholder confers no access
     WHEN   ViewGroup(carol)
     THEN   not found
+
+10 - a renamed group shows its current name
+    GIVEN  ... AND GroupRenamed("Porto trip", bob)
+    WHEN   ViewGroup(alice)
+    THEN   { g1, "Porto trip", … }
+
+11 - an archived group is shown as archived, with its history and standing as before
+    GIVEN  ... AND ExpenseRecorded(e1, "Dinner", 9000, m1, …, {m1: 3000, m2: 3000, m3: 3000}, …)
+           AND GroupArchived(bob)
+    WHEN   ViewGroup(alice)
+    THEN   { g1, "Lisbon trip", GBP, you: m1, balance: +6000, archived: true,
+             history: [expense e1 "Dinner" …] }
+
+12 - a group is not archived until it is
+    WHEN   ViewGroup(alice)
+    THEN   { …, archived: false }
 ```
 
 ## The screen
@@ -99,6 +115,23 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
   back home.
 - **Amounts** are shown with the currency's decimals and symbol (`Web/Money`).
 - **Not a member, no such group, malformed id:** the same "not found" page, 404.
+
+## Archived groups
+
+An archived group (slice-15) stays readable and is marked, not hidden:
+
+- **A banner** under the top bar — "This group is archived." — in place of the actions.
+- **No Add expense button, no Settle up button,** and **no `⋯` menu**: nothing on the page
+  leads to a form that would be rejected. The cards still open their sheets (View expense),
+  without Edit and Remove.
+- **Your standing** and **Balances** stay, as before.
+
+The `⋯` menu of a group that is not archived offers **Add member** (slice-02),
+**Rename group** (slice-14), **Default split** (slice-16) and **Archive group** (slice-15):
+addresses, not dependencies on those slices.
+
+The read model gains `archived`, from `GroupArchived`; the stored `GroupActivity`
+must be rebuilt (`just rebuild-projections`).
 
 ## Notes
 
@@ -136,6 +169,5 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 
 - **A removed settlement** leaves the history and stops counting — with
   `SettlementRemoved`.
-- **Renamed members and groups** show their new names — with `MemberRenamed`, `GroupRenamed`.
+- **Renamed members** show their new names — with `MemberRenamed`.
 - **A released claim** — the user loses access — with `MemberClaimReleased`.
-- **An archived group** — read-only marker — with `GroupArchived`.

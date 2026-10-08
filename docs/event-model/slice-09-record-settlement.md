@@ -96,6 +96,11 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
     GIVEN  ... AND SettlementRecorded(s1, m2, m1, 3000, 2026-10-01, bob)
     WHEN   RecordSettlement(m2, m1, 3000, bob)
     THEN   rejected (already recorded) - settlement already recorded
+
+16 - an archived group records no settlement
+    GIVEN  ... AND GroupArchived(alice)
+    WHEN   RecordSettlement(m2, m1, 3000, bob)
+    THEN   rejected - group is archived
 ```
 
 ## Notes
@@ -114,7 +119,7 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 - **The date** is the day the money moved, a domain fact (`DateOnly`), recorded
   often days later; when it was recorded is Marten metadata (spec §11). Same
   window as an expense: up to a day ahead of UTC, any earlier date.
-- **Order of checks:** membership, then payer, recipient, not to themselves,
+- **Order of checks:** membership, then archived, then payer, recipient, not to themselves,
   amount, date. A non-member gets `group not found` whatever else is wrong.
 - **From the plan:** "Paid" on a plan line sends exactly its from, to and amount.
   The plan may have shifted since it was shown; that costs nothing — the payment
@@ -127,7 +132,6 @@ balances (it moves `from`'s balance up and `to`'s down), and View settlement pla
 
 ## Deferred to the slices that introduce the events
 
-- **Archived group** rejects the command — with `GroupArchived`.
 - **A removed member** cannot pay or be paid — with `MemberRemoved`.
 
 ## Concurrency

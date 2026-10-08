@@ -185,6 +185,11 @@ defaults: `paidOn = 2026-10-01`.
                                    {m1: 3000, m2: 3000, m3: 3000}, 2026-10-01, alice)
     WHEN   RecordExpense(e1, "Dinner", 9000, m1, equal [m1, m2, m3], alice)
     THEN   rejected (already recorded) - expense already recorded
+
+33 - an archived group records no expense
+    GIVEN  ... AND GroupArchived(alice)
+    WHEN   RecordExpense("Dinner", 9000, m1, equal [m1, m2, m3], alice)
+    THEN   rejected - group is archived
 ```
 
 ## Notes
@@ -205,7 +210,7 @@ defaults: `paidOn = 2026-10-01`.
   or a share or amount missing from its entry, is not a split at all: the request
   fails to read and is answered 400 before anything is decided. What deciding
   checks is what a well-formed split can still get wrong (scenarios 21–26).
-- **Order of checks:** membership, then the id (already recorded), description, amount, payer, the split
+- **Order of checks:** membership, then archived, then the id (already recorded), description, amount, payer, the split
   (present, members, not empty, no duplicates, then the mode's own rule), the date.
   A non-member gets `group not found` whatever else is wrong. Once a member,
   rejections may name what is wrong — including that a slot is not in the group:
@@ -247,7 +252,7 @@ defaults: `paidOn = 2026-10-01`.
     **the signed-in user's own slot preselected**, marked "(you)". Placeholders are
     listed like anyone (scenario 2).
   - **Split** — *Equally*, *By shares* or *Exact amounts* (see The split modes on
-    the form), **Equally preselected**.
+    the form), **the group's default** (slice-16), Equally until one is set.
   - **Shared between** — one row per slot, in member-added order, **all checked**:
     a checkbox, the name, and the mode's field (scenarios 1–12). Unchecking
     everyone is rejected by deciding (scenario 23), not prevented by the page.
@@ -267,7 +272,7 @@ defaults: `paidOn = 2026-10-01`.
 ### The split modes on the form
 
 All three modes are offered, on this form and on Edit expense's (slice-12), in the
-same markup. Equal is the preselected one.
+same markup. Equal is the preselected one until the group sets a default.
 
 - **One list of members, one row each.** A checkbox (is in the split — "Shared
   between") and the name, as now; the mode adds a field to the row:
@@ -310,6 +315,11 @@ same markup. Equal is the preselected one.
   change, in the currency's decimals (`data-places` on the line). Without script the
   line is absent, and deciding's "exact amounts must add up to the total" is the
   check, shown with the entered values. Nothing is filled in for the user.
+- **The form opens with the group's default split** (slice-16): the mode, the members
+  left out unchecked, the shares typed in — `1` for anyone not listed, so a member added
+  later starts in. Until a default is set, that is Equally, everyone checked, shares `1`,
+  as before. Exact is never the default. After a rejection the form shows what was typed,
+  not the default.
 - **After a rejection** the form shows everything as typed: the mode, the checked
   members, every share and every amount, including those of a mode not selected.
 - **Edit expense starts from the expense:** its mode selected, its members checked,
@@ -344,7 +354,6 @@ same markup. Equal is the preselected one.
 
 ## Deferred to the slices that introduce the events
 
-- **Archived group** rejects the command — with `GroupArchived`.
 - **A removed member** cannot pay or share — with `MemberRemoved`.
 
 ## Concurrency

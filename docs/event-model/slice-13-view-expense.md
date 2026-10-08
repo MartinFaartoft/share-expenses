@@ -88,6 +88,11 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
     GIVEN  ... AND ExpenseRemoved(e1, bob)
     WHEN   ViewExpense(e1, alice)
     THEN   not found
+
+12 - an archived group's expense is shown, marked archived
+    GIVEN  ... AND GroupArchived(bob)
+    WHEN   ViewExpense(e1, alice)
+    THEN   { …, "Dinner", 9000, …, archived: true }
 ```
 
 ## The screen
@@ -153,10 +158,14 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 - **No authorship yet.** Who recorded or last edited the expense is in the events
   (`by`), and belongs with the activity feed (spec §11, `ActivityFeed`).
 
+## Archived groups
+
+The read model gains `archived`, from `GroupArchived`. For an archived group the sheet
+shows the expense as before, **without Edit and Remove**: the forms would reject them.
+Nothing else changes (scenario 12).
+
 ## Deferred to the slices that introduce the events
 
 - **Renamed members** show their new names — with `MemberRenamed`.
 - **A released claim** — the user loses access — with `MemberClaimReleased`.
-- **An archived group** — read-only marker, hiding Edit and Remove — with
-  `GroupArchived`.
 - **Authorship and history of the expense** — with `ActivityFeed`.

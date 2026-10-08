@@ -90,6 +90,11 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
     WITH   invitedAs = {i1, i2}
     WHEN   AcceptInvite(bob)  at t0+1d
     THEN   MemberClaimed(m3, bob)
+
+10 - an invite into an archived group is dead
+    GIVEN  ... AND GroupArchived(alice)
+    WHEN   AcceptInvite(bob)  at t0+1d
+    THEN   rejected - invite not found
 ```
 
 ## Notes
@@ -108,7 +113,7 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
   an address with an open invite — but the guard works from a lookup and may be
   stale. Rather than refuse, deciding takes the newest invite: the most recent
   intention of the group.
-- **Order of checks:** group exists, then membership, then the invites. Every
+- **Order of checks:** group exists, then archived (an archived group takes no members: its invites are dead), then membership, then the invites. Every
   dead invite — unknown group, another address, superseded, used, expired,
   malformed group id — is the same `invite not found`: Join sends the user back
   home, whose invites are live, so it shows the truth.
@@ -125,7 +130,6 @@ GIVEN  GroupCreated(g1, "Lisbon trip", "GBP", alice)
 
 ## Deferred to the slices that introduce the events
 
-- **Archived group** rejects the claim — with `GroupArchived`.
 - **A removed slot's** invite is dead — with `MemberRemoved`.
 - **A released claim** frees the user to claim again, and the slot to be re-invited —
   with `MemberClaimReleased`.

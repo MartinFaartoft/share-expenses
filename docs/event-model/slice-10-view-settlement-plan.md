@@ -158,6 +158,13 @@ And over many random balance sets, always:
   balances are as if it had been recorded that way, and its old pairs lose that
   one from their shared-history score while the new pairs gain it.
 
+## Renamed and archived groups
+
+- **A renamed group** shows its current name where the screen names it (the back link): the
+  fold takes `GroupRenamed`, as View balances does (slice-08, scenario 12).
+- **An archived group** still shows its plan; Paid on a line is rejected by Record
+  settlement (`group is archived`, back on this screen with the reason).
+
 ## Deferred to the slices that introduce the events
 
 - **Removed settlements** stop counting — with `SettlementRemoved`.

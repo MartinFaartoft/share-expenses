@@ -241,6 +241,11 @@ is `("Dinner", 12000, m1, equal [m1, m2, m3], paidOn 2026-10-01)`.
 43 - an edit is validated before it is compared
     WHEN   EditExpense(e1, split equal [m1, m2, m3, m9], alice)
     THEN   rejected - participant is not a member of the group
+
+44 - an archived group edits no expense
+    GIVEN  ... AND GroupArchived(alice)
+    WHEN   EditExpense(e1, amount 12000, alice)
+    THEN   rejected - group is archived
 ```
 
 ## Notes
@@ -249,7 +254,7 @@ is `("Dinner", 12000, m1, equal [m1, m2, m3], paidOn 2026-10-01)`.
   copied, not shared: slices stay independent. Scenarios 20–37 repeat them here so
   an edit cannot get past a rule the original had to meet. The splitting itself is
   the same pure function in `Shared/`, so an edit rounds exactly as the recording did.
-- **Order of checks:** membership, then the expense is known and not removed, then
+- **Order of checks:** membership, then archived, then the expense is known and not removed, then
   description, amount, payer, the split (present, members, not empty, no duplicates,
   then the mode's own rule), the date — Record expense's order — and last, whether
   anything changed. A non-member gets `group not found` whatever else is wrong
@@ -321,7 +326,6 @@ plan (balances, and the shared-history score), Remove expense (its confirm page)
 
 ## Deferred to the slices that introduce the events
 
-- **Archived group** rejects the command — with `GroupArchived`.
 - **A removed member** cannot become payer or participant; an existing expense that
   has one can still be edited if they are taken out — with `MemberRemoved`.
 - **The activity feed's wording** ("Bob changed Dinner: £140 → £120") — with

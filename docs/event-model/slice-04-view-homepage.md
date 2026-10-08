@@ -86,6 +86,18 @@ WITH   invites(bob) = { g1: i1 }
     WITH   invites(bob) = { g1: i1, g2: i2 }
     WHEN   ViewHomepage(bob)  at t0+1d
     THEN   [ { g2, "Porto", "Bob", "Carol" }, { g1, "Lisbon trip", "Bob", "Alice" } ]
+
+10 - an invite names the group by its current name
+    GIVEN  g1: ... AND GroupRenamed("Porto trip", alice)
+    WITH   invites(bob) = { g1: i1 }
+    WHEN   ViewHomepage(bob)
+    THEN   invites: [{ g1, "Porto trip", "Bob", "Alice" }]
+
+11 - an invite into an archived group is not shown
+    GIVEN  g1: ... AND GroupArchived(alice)
+    WITH   invites(bob) = { g1: i1 }
+    WHEN   ViewHomepage(bob)
+    THEN   invites: []
 ```
 
 ## Specifications — groups
@@ -127,6 +139,22 @@ G6 - other people's groups are not listed
     GIVEN  g1: GroupCreated(g1, "Lisbon trip", …, alice) …claimed by alice
     WHEN   ViewHomepage(carol)
     THEN   groups: []
+
+G7 - a renamed group is listed by its current name
+    GIVEN  g1: ... AND GroupRenamed("Porto trip", bob)
+    WHEN   ViewHomepage(alice)
+    THEN   groups: [{ g1, "Porto trip" }]
+
+G8 - an archived group leaves the main list and is listed as archived
+    GIVEN  g1: ... AND GroupArchived(alice)
+           g3: GroupCreated(g3, "Porto", …, alice) …claimed by alice
+    WHEN   ViewHomepage(alice)
+    THEN   groups: [{ g3, "Porto" }], archived: [{ g1, "Lisbon trip" }]
+
+G9 - archiving moves a group for everyone in it
+    GIVEN  g1: ... AND MemberAdded(m2, "Bob", alice) AND MemberClaimed(m2, bob) AND GroupArchived(alice)
+    WHEN   ViewHomepage(bob)
+    THEN   groups: [], archived: [{ g1, "Lisbon trip" }]
 ```
 
 ## Notes
@@ -165,14 +193,25 @@ G6 - other people's groups are not listed
 - **The inviter** is the slot the inviting user held when inviting, named as that
   slot is named now.
 
+## Renamed and archived groups
+
+- **A renamed group** shows its current name, in the list and in an invite (scenarios 10
+  and G7): `UserGroups` folds `GroupRenamed`, and the live invites read the name from the
+  group's stream as it now is.
+- **An archived group** leaves the main list for an **Archived** list under it — a
+  collapsed `<details>` headed "Archived (1)", shown only when there is one — where each
+  group still opens its (read-only) group page. It is archived for everyone in it
+  (scenario G9). No Unarchive is offered (slice-15).
+- **An invite into an archived group** is not shown (scenario 11): Accept invite treats
+  it as dead.
+- **Rebuild the projection** after this change (`just rebuild-projections`): `UserGroups`
+  is stored, and now folds two more events.
+
 ## Deferred to the slices that introduce the events
 
 - **A released claim** removes the group from the list — with `MemberClaimReleased`.
-- **A renamed group** shows its new name — with `GroupRenamed`.
-- **An archived group** leaves the main list (spec §8) — with `GroupArchived`.
 - **A declined invite** disappears — with `InviteDeclined` (spec §14).
 
 - **A removed slot's** invite is dead — with `MemberRemoved`.
-- **A renamed slot or group** shows its new name — with `MemberRenamed`, `GroupRenamed`.
-- **An archived group's** invites: shown or not — with `GroupArchived`.
+- **A renamed slot** shows its new name — with `MemberRenamed`.
 - **A released claim** leaves its old invites dead — with `MemberClaimReleased`.
